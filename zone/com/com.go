@@ -14,13 +14,13 @@ const (
 )
 
 type Config struct {
-	Addr     string
-	Username string
-	Password string
+	Addr     string `yaml:"addr"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
 }
 
 type com struct {
-	client zone.FtpClient
+	client FtpClient
 	cache  store.Cache
 	seen   map[string]interface{}
 }
@@ -55,7 +55,7 @@ func (zone *com) Process(f zone.DomainFunc) error {
 	return nil
 }
 
-func NewCom(conf Config, cache store.Cache, client zone.FtpClient) (zone.Zone, error) {
+func NewCom(conf Config, cache store.Cache, client FtpClient) (zone.Zone, error) {
 	if client == nil {
 		client, err := ftp.Dial(conf.Addr)
 		if err != nil {

@@ -1,0 +1,8 @@
+com:
+    addr: rz.verisign-grs.com
+    username: <username>
+    password: <password>
+net:
+    zone: net
+    username: <username>
+    password <password>

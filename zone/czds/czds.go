@@ -8,9 +8,9 @@ import (
 )
 
 type Config struct {
-	Zone     string
-	Username string
-	Password string
+	Zone     string `yaml:"zone"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
 }
 
 type czds struct {

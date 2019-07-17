@@ -1,4 +1,5 @@
 .idea
+/config/config.yml
 
 ### Go ###
 # Binaries for programs and plugins
