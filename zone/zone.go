@@ -1,6 +1,7 @@
 package zone
 
+type DomainFunc func(string) error
+
 type Zone interface {
-	Download() error
-	Process(func(domainName string) error) error
+	Process(DomainFunc) error
 }

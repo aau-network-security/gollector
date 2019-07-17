@@ -22,10 +22,6 @@ func NewCzds(conf Config) (zone.Zone, error) {
 	return &zone, nil
 }
 
-func (zone *czds) Download() error {
-	panic("implement me")
-}
-
-func (zone *czds) Process(f func(domainName string) error) error {
+func (zone *czds) Process(f zone.DomainFunc) error {
 	return nil
 }

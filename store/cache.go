@@ -16,3 +16,10 @@ func (c *cache) GetApex(domain string) (models.Apex, bool) {
 	d, ok := c.apexes[domain]
 	return d, ok
 }
+
+func NewCache() Cache {
+	c := cache{
+		apexes: make(map[string]models.Apex),
+	}
+	return &c
+}

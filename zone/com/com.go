@@ -2,14 +2,10 @@ package com
 
 import (
 	"compress/gzip"
-	"errors"
 	"github.com/jlaffaye/ftp"
 	"github.com/kdhageman/go-domains/store"
 	"github.com/kdhageman/go-domains/zone"
 	"github.com/miekg/dns"
-	"io"
-	"io/ioutil"
-	"os"
 	"strings"
 )
 
@@ -24,39 +20,23 @@ type Config struct {
 }
 
 type com struct {
-	file  *os.File
-	conn  *ftp.ServerConn
-	cache store.Cache
-	seen  map[string]interface{}
+	client zone.FtpClient
+	cache  store.Cache
+	seen   map[string]interface{}
 }
 
-func (zone *com) Download() error {
-	f, err := ioutil.TempFile("com", "")
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	resp, err := zone.conn.Retr(zoneFileName)
+func (zone *com) Process(f zone.DomainFunc) error {
+	resp, err := zone.client.Retr(zoneFileName)
 	if err != nil {
 		return err
 	}
 
-	w := gzip.NewWriter(f)
-
-	n, err := io.Copy(w, resp)
+	r, err := gzip.NewReader(resp)
 	if err != nil {
 		return err
 	}
-	if n == 0 {
-		return errors.New(".com zone file was empty")
-	}
 
-	return nil
-}
-
-func (zone *com) Process(f func(domainName string) error) error {
-	for t := range dns.ParseZone(zone.file, "", "") {
+	for t := range dns.ParseZone(r, "", "") {
 		if t.Error != nil {
 			return t.Error
 		}
@@ -75,20 +55,22 @@ func (zone *com) Process(f func(domainName string) error) error {
 	return nil
 }
 
-func NewCom(conf Config, cache store.Cache) (zone.Zone, error) {
-	conn, err := ftp.Dial(conf.Addr)
-	if err != nil {
-		return nil, err
-	}
+func NewCom(conf Config, cache store.Cache, client zone.FtpClient) (zone.Zone, error) {
+	if client == nil {
+		client, err := ftp.Dial(conf.Addr)
+		if err != nil {
+			return nil, err
+		}
 
-	if err := conn.Login(conf.Username, conf.Password); err != nil {
-		return nil, err
+		if err := client.Login(conf.Username, conf.Password); err != nil {
+			return nil, err
+		}
 	}
 
 	c := com{
-		conn:  conn,
-		cache: cache,
-		seen:  map[string]interface{}{},
+		client: client,
+		cache:  cache,
+		seen:   map[string]interface{}{},
 	}
 	return &c, nil
 }
