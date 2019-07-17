@@ -12,16 +12,24 @@ import (
 )
 
 const (
-	baseApiUrl       = "https://account-api.icann.org"
-	authenticatePath = "/api/authenticate"
+	authUrl = "https://account-api.icann.org/api/authenticate"
+	apiUrl  = "https://czds-api.icann.org/czds/downloads/%s.zone"
 )
 
 var (
 	JwtTokenErr = errors.New("error while parsing JWT token")
 )
 
+type HttpErr struct {
+	code int
+}
+
+func (err *HttpErr) Error() string {
+	return fmt.Sprintf("Failed to retrieve zone file: status code %d", err.code)
+}
+
 type Client interface {
-	GetZone(tld string, output io.Writer) error
+	GetZone(tld string) (io.ReadCloser, error)
 }
 
 type authRequest struct {
@@ -85,14 +93,16 @@ func (c *client) ensureAuthenticated() error {
 }
 
 func (c *client) authenticate() error {
-	postBody := authRequest{}
+	postBody := authRequest{
+		Username: c.conf.Username,
+		Password: c.conf.Password,
+	}
 	marshalled, err := json.Marshal(postBody)
 	if err != nil {
 		return err
 	}
 
-	url := baseApiUrl + authenticatePath
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(marshalled))
+	req, err := http.NewRequest("POST", authUrl, bytes.NewBuffer(marshalled))
 	if err != nil {
 		return err
 	}
@@ -115,31 +125,28 @@ func (c *client) authenticate() error {
 	return nil
 }
 
-func (c *client) GetZone(tld string, output io.Writer) error {
+func (c *client) GetZone(tld string) (io.ReadCloser, error) {
 	if err := c.ensureAuthenticated(); err != nil {
-		return err
+		return nil, err
 	}
 
-	url := fmt.Sprintf("%s/czds/downloads/%s.zone", baseApiUrl, tld)
+	url := fmt.Sprintf(apiUrl, tld)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	req.Header.Set("Authentication", fmt.Sprintf("Bearer %s", c.auth.AccessToken))
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", c.auth.AccessToken))
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	n, err := io.Copy(output, resp.Body)
-	if err != nil {
-		return err
-	}
-	if n == 0 {
-		return fmt.Errorf("%s was empty", url)
+		return nil, err
 	}
 
-	return nil
+	switch resp.StatusCode {
+	case 200:
+		return resp.Body, nil
+	default:
+		resp.Body.Close()
+		return nil, &HttpErr{resp.StatusCode}
+	}
 }

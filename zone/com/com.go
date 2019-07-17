@@ -70,7 +70,7 @@ func NewCom(conf Config, cache store.Cache, client zone.FtpClient) (zone.Zone, e
 	c := com{
 		client: client,
 		cache:  cache,
-		seen:   map[string]interface{}{},
+		seen:   make(map[string]interface{}),
 	}
 	return &c, nil
 }
