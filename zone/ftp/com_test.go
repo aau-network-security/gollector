@@ -1,7 +1,8 @@
-package com
+package ftp
 
 import (
 	"github.com/kdhageman/go-domains/store"
+	"github.com/kdhageman/go-domains/zone"
 	"io"
 	"os"
 	"testing"
@@ -16,11 +17,12 @@ func (c *testFtpClient) Retr(string) (io.Reader, error) {
 func TestProcess(t *testing.T) {
 	conf := Config{}
 	cache := store.NewCache()
+	store := store.NewStore(cache)
 	ftpClient := testFtpClient{}
 
-	c, err := NewCom(conf, cache, &ftpClient)
+	z, err := New(conf, store, &ftpClient)
 	if err != nil {
-		t.Fatalf("Error while creating .com zone parser: %s", err)
+		t.Fatalf("Error while creating .ftpZone zone parser: %s", err)
 	}
 
 	domainMap := make(map[string]interface{})
@@ -28,8 +30,9 @@ func TestProcess(t *testing.T) {
 		domainMap[domain] = nil
 		return nil
 	}
-	if err := c.Process(f); err != nil {
-		t.Fatalf("Error while processing .com zone file: %s", err)
+
+	if err := zone.Process(z, f); err != nil {
+		t.Fatalf("Error while processing .ftpZone zone file: %s", err)
 	}
 
 	expected := 6

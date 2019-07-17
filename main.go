@@ -2,15 +2,18 @@ package main
 
 import (
 	"flag"
-	"github.com/kdhageman/go-domains/zone/com"
+	"github.com/kdhageman/go-domains/generic"
+	"github.com/kdhageman/go-domains/store"
 	"github.com/kdhageman/go-domains/zone/czds"
+	"github.com/kdhageman/go-domains/zone/ftp"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
+	"time"
 )
 
 type config struct {
-	Com com.Config  `yaml:"com"`
+	Com ftp.Config  `yaml:"com"`
 	Net czds.Config `yaml:"net"`
 }
 
@@ -36,7 +39,8 @@ func main() {
 		log.Fatal().Msgf("Error while reading configuration: %s", err)
 	}
 
-	_ = conf
+	c := store.NewCache()
+	s := store.NewStore(c)
 
 	// todo: do something with configuration
 }
