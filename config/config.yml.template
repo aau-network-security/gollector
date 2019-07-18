@@ -1,8 +1,11 @@
 com:
-    addr: rz.verisign-grs.com
-    username: <username>
-    password: <password>
+  host: rz.verisign-grs.com
+  username: <username>
+  password: <password>
 net:
-    zone: net
-    username: <username>
-    password <password>
+  zone: net
+  username: <username>
+  password: <password>
+store:
+  driver: sqlite3
+  filename: test.db

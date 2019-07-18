@@ -1,32 +1,26 @@
 package models
 
-import "time"
+import (
+	"time"
+)
 
 type Apex struct {
-	Id           int64 // pk
-	PublicSuffix string
-	Root         string
-}
-
-func (a *Apex) Equals(other Apex) bool {
-	return a.PublicSuffix == other.PublicSuffix && a.Root == other.Root
+	ID   uint `gorm:"primary_key"`
+	Apex string
 }
 
 type Subdomain struct {
-	Id     int64 // pk
+	ID     uint `gorm:"primary_key"`
 	Sub    string
-	ApexId int64 // fk
+	Apex   Apex
+	ApexID uint
 }
 
-type Zone struct {
-	Id   int64
-	Name string
-}
-
-type ZoneEntry struct {
-	Id        int64
-	FirstSeen *time.Time
-	LastSeen  *time.Time
-	ApexId    int64 // fk
-	ZoneId    int64 // fk
+type ZonefileEntry struct {
+	ID        uint `gorm:"primary_key"`
+	FirstSeen time.Time
+	LastSeen  time.Time
+	Apex      Apex
+	ApexID    uint
+	Active    bool
 }

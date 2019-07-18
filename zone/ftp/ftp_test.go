@@ -1,7 +1,6 @@
 package ftp
 
 import (
-	"github.com/kdhageman/go-domains/store"
 	"github.com/kdhageman/go-domains/zone"
 	"io"
 	"os"
@@ -16,11 +15,9 @@ func (c *testFtpClient) Retr(string) (io.Reader, error) {
 
 func TestProcess(t *testing.T) {
 	conf := Config{}
-	cache := store.NewCache()
-	store := store.NewStore(cache)
 	ftpClient := testFtpClient{}
 
-	z, err := New(conf, store, &ftpClient)
+	z, err := New(conf, &ftpClient)
 	if err != nil {
 		t.Fatalf("Error while creating .ftpZone zone parser: %s", err)
 	}

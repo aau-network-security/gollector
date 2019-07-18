@@ -4,17 +4,20 @@ import (
 	"flag"
 	"github.com/kdhageman/go-domains/generic"
 	"github.com/kdhageman/go-domains/store"
+	"github.com/kdhageman/go-domains/zone"
 	"github.com/kdhageman/go-domains/zone/czds"
 	"github.com/kdhageman/go-domains/zone/ftp"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
+	"sync"
 	"time"
 )
 
 type config struct {
-	Com ftp.Config  `yaml:"com"`
-	Net czds.Config `yaml:"net"`
+	Com   ftp.Config   `yaml:"com"`
+	Net   czds.Config  `yaml:"net"`
+	Store store.Config `yaml:"store"`
 }
 
 func readConfig(path string) (config, error) {
@@ -36,11 +39,49 @@ func main() {
 
 	conf, err := readConfig(*confFile)
 	if err != nil {
-		log.Fatal().Msgf("Error while reading configuration: %s", err)
+		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
-	c := store.NewCache()
-	s := store.NewStore(c)
+	s, err := store.NewStore(conf.Store, time.Hour*36)
+	if err != nil {
+		log.Fatal().Msgf("error while creating store: %s", err)
+	}
+	_ = s
 
-	// todo: do something with configuration
+	f := func(t time.Time) error {
+		wg := sync.WaitGroup{}
+
+		//net := czds.New(conf.Net)
+		com, err := ftp.New(conf.Com)
+		if err != nil {
+			log.Fatal().Msgf("failed to create .com zone retriever: %s", err)
+		}
+		//zones := []zone.Zone{com, net}
+		zones := []zone.Zone{com}
+
+		domainFunc := func(domain string) error {
+			//_, err := s.StoreZoneEntry(t, domain)
+			//return err
+			log.Debug().Msgf("%s", domain)
+			return nil
+		}
+
+		for _, z := range zones {
+			go func() {
+				wg.Add(1)
+				defer wg.Done()
+
+				if err := zone.Process(z, domainFunc); err != nil {
+					log.Debug().Msgf("error while processing zone file: %s", err)
+				}
+			}()
+		}
+
+		wg.Wait()
+		return nil
+	}
+
+	if err := generic.Repeat(f, time.Now(), time.Hour*24, -1); err != nil {
+		log.Fatal().Msgf("error while retrieving zone files: %s", err)
+	}
 }
