@@ -19,7 +19,7 @@ func TestProcess(t *testing.T) {
 
 	z, err := New(conf, &ftpClient)
 	if err != nil {
-		t.Fatalf("Error while creating .ftpZone zone parser: %s", err)
+		t.Fatalf("Error while creating ftp zone parser: %s", err)
 	}
 
 	domainMap := make(map[string]interface{})
@@ -29,7 +29,7 @@ func TestProcess(t *testing.T) {
 	}
 
 	if err := zone.Process(z, f); err != nil {
-		t.Fatalf("Error while processing .ftpZone zone file: %s", err)
+		t.Fatalf("Error while processing ftp zone file: %s", err)
 	}
 
 	expected := 6
