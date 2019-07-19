@@ -29,6 +29,7 @@ func (opts *ProcessOpts) isValid() bool {
 	return opts.DomainFunc != nil
 }
 
+// this handler reads files that fulfill the zone file standard
 func ZoneFileHandler(str io.Reader, f DomainFunc) error {
 	seen := make(map[string]interface{})
 
@@ -51,6 +52,7 @@ func ZoneFileHandler(str io.Reader, f DomainFunc) error {
 	return nil
 }
 
+// this handler reads files that contains a list of domain names
 func ListHandler(str io.Reader, f DomainFunc) error {
 	scanner := bufio.NewScanner(str)
 	for scanner.Scan() {

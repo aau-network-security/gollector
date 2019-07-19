@@ -7,6 +7,8 @@ import (
 	"github.com/aau-network-security/go-domains/zone"
 	"github.com/aau-network-security/go-domains/zone/czds"
 	"github.com/aau-network-security/go-domains/zone/ftp"
+	"github.com/aau-network-security/go-domains/zone/http"
+	"github.com/aau-network-security/go-domains/zone/ssh"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
@@ -14,9 +16,24 @@ import (
 	"time"
 )
 
+type Com struct {
+	Ftp ftp.Config `yaml:"ftp"`
+	Ssh ssh.Config `yaml:"ssh"`
+}
+
+type Dk struct {
+	Http http.Config `yaml:"http"`
+	Ssh  ssh.Config  `yaml:"ssh"`
+}
+
+type Net struct {
+	Czds czds.Config `yaml:"czds""`
+}
+
 type config struct {
-	Com   ftp.Config   `yaml:"com"`
+	Com   Com          `yaml:"com"`
 	Net   czds.Config  `yaml:"net"`
+	Dk    Dk           `yaml:"dk"`
 	Store store.Config `yaml:"store"`
 }
 
@@ -52,28 +69,47 @@ func main() {
 		wg := sync.WaitGroup{}
 
 		net := czds.New(conf.Net)
-		com, err := ftp.New(conf.Com)
+
+		sshDialFunc, err := ssh.DialFunc(conf.Com.Ssh)
+		com, err := ftp.New(conf.Com.Ftp, sshDialFunc)
 		if err != nil {
 			log.Fatal().Msgf("failed to create .com zone retriever: %s", err)
 		}
-		zones := []zone.Zone{com, net}
+
+		httpClient, err := ssh.HttpClient(conf.Dk.Ssh)
+		dk, err := http.New(conf.Dk.Http, httpClient)
+		if err != nil {
+			log.Fatal().Msgf("failed to create .dk zone retriever: %s", err)
+		}
 
 		domainFunc := func(domain string) error {
 			_, err := s.StoreZoneEntry(t, domain)
 			return err
 		}
 
-		for _, z := range zones {
+		zoneConfigs := []struct {
+			zone           zone.Zone
+			streamWrappers []zone.StreamWrapper
+			streamHandler  zone.StreamHandler
+		}{
+			{com, []zone.StreamWrapper{zone.GzipWrapper}, zone.ZoneFileHandler},
+			//{net, []zone.StreamWrapper{zone.GzipWrapper}, zone.ZoneFileHandler},
+			//{dk, nil, zone.ListHandler},
+		}
+		_, _ = dk, net
+
+		for _, zc := range zoneConfigs {
 			go func() {
 				wg.Add(1)
 				defer wg.Done()
 
 				opts := zone.ProcessOpts{
 					DomainFunc:     domainFunc,
-					StreamWrappers: []zone.StreamWrapper{zone.GzipWrapper},
+					StreamWrappers: zc.streamWrappers,
+					StreamHandler:  zc.streamHandler,
 				}
 
-				if err := zone.Process(z, opts); err != nil {
+				if err := zone.Process(zc.zone, opts); err != nil {
 					log.Debug().Msgf("error while processing zone file: %s", err)
 				}
 			}()
@@ -83,6 +119,7 @@ func main() {
 		return nil
 	}
 
+	// retrieve all zone files on a daily basis
 	if err := generic.Repeat(f, time.Now(), time.Hour*24, -1); err != nil {
 		log.Fatal().Msgf("error while retrieving zone files: %s", err)
 	}

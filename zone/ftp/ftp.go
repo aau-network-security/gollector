@@ -1,17 +1,17 @@
 package ftp
 
 import (
-	"fmt"
 	"github.com/aau-network-security/go-domains/zone"
 	"github.com/jlaffaye/ftp"
 	"io"
+	"net"
 )
 
 type Config struct {
-	File     string `yaml:"file"`
 	Host     string `yaml:"host"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
+	File     string `yaml:"file"`
 }
 
 type Client interface {
@@ -36,9 +36,15 @@ func (z *ftpZone) Stream() (io.Reader, error) {
 	return z.client.Retr(z.conf.File)
 }
 
-func New(conf Config) (zone.Zone, error) {
-	host := fmt.Sprintf("%s:21", conf.Host)
-	c, err := ftp.Dial(host)
+func New(conf Config, dialFunc func(network, address string) (net.Conn, error)) (zone.Zone, error) {
+	var opts []ftp.DialOption
+	if dialFunc != nil {
+		opts = append(opts, ftp.DialWithDialFunc(dialFunc))
+	}
+
+	host := net.JoinHostPort(conf.Host, "21")
+	c, err := ftp.Dial(host, opts...)
+
 	if err != nil {
 		return nil, err
 	}

@@ -29,6 +29,7 @@ func TestProcess(t *testing.T) {
 	opts := zone.ProcessOpts{
 		DomainFunc:     f,
 		StreamWrappers: []zone.StreamWrapper{zone.GzipWrapper},
+		StreamHandler:  zone.ZoneFileHandler,
 	}
 
 	if err := zone.Process(&z, opts); err != nil {
