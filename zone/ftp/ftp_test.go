@@ -1,7 +1,7 @@
 package ftp
 
 import (
-	"github.com/kdhageman/go-domains/zone"
+	"github.com/aau-network-security/go-domains/zone"
 	"io"
 	"os"
 	"testing"

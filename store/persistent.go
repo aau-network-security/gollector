@@ -2,9 +2,9 @@ package store
 
 import (
 	"fmt"
+	"github.com/aau-network-security/go-domains/models"
 	"github.com/go-sql-driver/mysql"
 	"github.com/jinzhu/gorm"
-	"github.com/kdhageman/go-domains/models"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 	"time"

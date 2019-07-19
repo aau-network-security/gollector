@@ -2,8 +2,8 @@ package ftp
 
 import (
 	"fmt"
+	"github.com/aau-network-security/go-domains/zone"
 	"github.com/jlaffaye/ftp"
-	"github.com/kdhageman/go-domains/zone"
 	"io"
 )
 

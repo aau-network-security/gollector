@@ -1,7 +1,7 @@
 package czds
 
 import (
-	"github.com/kdhageman/go-domains/zone"
+	"github.com/aau-network-security/go-domains/zone"
 	"github.com/rs/zerolog/log"
 	"os"
 	"testing"

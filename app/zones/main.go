@@ -2,11 +2,11 @@ package main
 
 import (
 	"flag"
-	"github.com/kdhageman/go-domains/generic"
-	"github.com/kdhageman/go-domains/store"
-	"github.com/kdhageman/go-domains/zone"
-	"github.com/kdhageman/go-domains/zone/czds"
-	"github.com/kdhageman/go-domains/zone/ftp"
+	"github.com/aau-network-security/go-domains/generic"
+	"github.com/aau-network-security/go-domains/store"
+	"github.com/aau-network-security/go-domains/zone"
+	"github.com/aau-network-security/go-domains/zone/czds"
+	"github.com/aau-network-security/go-domains/zone/ftp"
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
@@ -51,19 +51,16 @@ func main() {
 	f := func(t time.Time) error {
 		wg := sync.WaitGroup{}
 
-		//net := czds.New(conf.Net)
+		net := czds.New(conf.Net)
 		com, err := ftp.New(conf.Com)
 		if err != nil {
 			log.Fatal().Msgf("failed to create .com zone retriever: %s", err)
 		}
-		//zones := []zone.Zone{com, net}
-		zones := []zone.Zone{com}
+		zones := []zone.Zone{com, net}
 
 		domainFunc := func(domain string) error {
-			//_, err := s.StoreZoneEntry(t, domain)
-			//return err
-			log.Debug().Msgf("%s", domain)
-			return nil
+			_, err := s.StoreZoneEntry(t, domain)
+			return err
 		}
 
 		for _, z := range zones {
