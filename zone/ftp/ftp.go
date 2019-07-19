@@ -28,6 +28,10 @@ func (z *ftpZone) Stream() (io.Reader, error) {
 	return z.client.Retr(z.conf.File)
 }
 
+func (z *ftpZone) GzipRequired() bool {
+	return true
+}
+
 func New(conf Config) (zone.Zone, error) {
 	host := fmt.Sprintf("%s:21", conf.Host)
 	client, err := ftp.Dial(host)
