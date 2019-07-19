@@ -21,7 +21,13 @@ func TestCzds(t *testing.T) {
 		return nil
 	}
 
-	if err := zone.Process(z, f); err != nil {
+	opts := zone.ProcessOpts{
+		DomainFunc:     f,
+		StreamWrappers: []zone.StreamWrapper{zone.GzipWrapper},
+		StreamHandler:  zone.ZoneFileHandler,
+	}
+
+	if err := zone.Process(z, opts); err != nil {
 		t.Fatalf("Error while processing CZDS zone file: %s", err)
 	}
 }

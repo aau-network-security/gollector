@@ -21,10 +21,6 @@ func (z *czdsZone) Stream() (io.Reader, error) {
 	return z.client.GetZone(z.conf.Zone)
 }
 
-func (z *czdsZone) GzipRequired() bool {
-	return true
-}
-
 func New(conf Config) zone.Zone {
 	client := NewClient(conf)
 

@@ -3,10 +3,8 @@ package socks
 import (
 	"github.com/aau-network-security/go-domains/zone"
 	"github.com/rs/zerolog/log"
-	"golang.org/x/crypto/ssh"
 	"golang.org/x/net/proxy"
 	"io"
-	"net"
 	"net/http"
 )
 
@@ -39,10 +37,6 @@ func (z *socksZone) Stream() (io.Reader, error) {
 	return resp.Body, nil
 }
 
-func (z *socksZone) GzipRequired() bool {
-	return false
-}
-
 func New(conf Config) (zone.Zone, error) {
 	//auth := ssh.Password(conf.SSH.Password)
 	//t := NewSSHTunnel(conf.SSH.Host, auth, conf.Host)
@@ -52,18 +46,18 @@ func New(conf Config) (zone.Zone, error) {
 	//	}
 	//}()
 
-	auth := ssh.Password(conf.SSH.Password)
-
-	clientConfig := ssh.ClientConfig{
-		User:            conf.SSH.User,
-		HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error { return nil },
-		Auth:            []ssh.AuthMethod{auth},
-	}
-
-	sshDialer, err := ssh.Dial("tcp", conf.SSH.Host, &clientConfig)
-	if err != nil {
-		return nil, err
-	}
+	//auth := ssh.Password(conf.SSH.Password)
+	//
+	//clientConfig := ssh.ClientConfig{
+	//	User:            conf.SSH.User,
+	//	HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error { return nil },
+	//	Auth:            []ssh.AuthMethod{auth},
+	//}
+	//
+	//sshDialer, err := ssh.Dial("tcp", conf.SSH.Host, &clientConfig)
+	//if err != nil {
+	//	return nil, err
+	//}
 
 	//auth := proxy.Auth{
 	//	User:     conf.SSH.User,
@@ -72,9 +66,10 @@ func New(conf Config) (zone.Zone, error) {
 
 	//dialer, err := proxy.SOCKS5("tcp", host, &auth, nil)
 	//dialer, err := proxy.SOCKS5("tcp", t.Local.String(), nil, nil)
-	address := sshDialer.LocalAddr().String()
+	//address := sshDialer.LocalAddr().String()
+	address := "127.0.0.1:4182"
 	log.Debug().Msgf("local ssh tunnel address: %s", address)
-	dialer, err := proxy.SOCKS5("tcp", address, nil, sshDialer)
+	dialer, err := proxy.SOCKS5("tcp", address, nil, nil)
 	if err != nil {
 		return nil, err
 	}

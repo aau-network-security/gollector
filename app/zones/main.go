@@ -68,7 +68,12 @@ func main() {
 				wg.Add(1)
 				defer wg.Done()
 
-				if err := zone.Process(z, domainFunc); err != nil {
+				opts := zone.ProcessOpts{
+					DomainFunc:     domainFunc,
+					StreamWrappers: []zone.StreamWrapper{zone.GzipWrapper},
+				}
+
+				if err := zone.Process(z, opts); err != nil {
 					log.Debug().Msgf("error while processing zone file: %s", err)
 				}
 			}()

@@ -27,7 +27,13 @@ func TestSocks(t *testing.T) {
 		return nil
 	}
 
-	if err := zone.Process(s, f); err != nil {
+	opts := zone.ProcessOpts{
+		DomainFunc:     f,
+		StreamWrappers: []zone.StreamWrapper{},
+		StreamHandler:  zone.ListHandler,
+	}
+
+	if err := zone.Process(s, opts); err != nil {
 		t.Fatalf("error while processing zone: %s", err)
 	}
 }
