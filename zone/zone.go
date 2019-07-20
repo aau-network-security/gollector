@@ -4,7 +4,9 @@ import (
 	"bufio"
 	"compress/gzip"
 	"errors"
+	"fmt"
 	"github.com/miekg/dns"
+	"github.com/rs/zerolog/log"
 	"io"
 	"strings"
 )
@@ -12,6 +14,15 @@ import (
 var (
 	OptsInvalidErr = errors.New("process options are invalid")
 )
+
+type ZoneErr struct {
+	tld string
+	err error
+}
+
+func (err *ZoneErr) Error() string {
+	return fmt.Sprintf("zone error (%s): %s", err.tld, err.err)
+}
 
 type DomainFunc func(string) error
 
@@ -70,6 +81,7 @@ func GzipWrapper(r io.Reader) (io.Reader, error) {
 
 type Zone interface {
 	Stream() (io.Reader, error)
+	Tld() string
 }
 
 func Process(z Zone, opts ProcessOpts) error {
@@ -79,15 +91,19 @@ func Process(z Zone, opts ProcessOpts) error {
 
 	str, err := z.Stream()
 	if err != nil {
-		return err
+		return &ZoneErr{z.Tld(), err}
 	}
+	log.Info().Msgf("successfully obtained stream for '%s'", z.Tld())
 
 	for _, w := range opts.StreamWrappers {
 		str, err = w(str)
 		if err != nil {
-			return err
+			return &ZoneErr{z.Tld(), err}
 		}
 	}
 
-	return opts.StreamHandler(str, opts.DomainFunc)
+	if err := opts.StreamHandler(str, opts.DomainFunc); err != nil {
+		return &ZoneErr{z.Tld(), err}
+	}
+	return nil
 }

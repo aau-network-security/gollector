@@ -11,7 +11,7 @@ func TestCzds(t *testing.T) {
 	user := os.Getenv("CZDS_USER")
 	pass := os.Getenv("CZDS_PASS")
 	conf := Config{
-		Zone:     "net",
+		Tld:      "net",
 		Username: user,
 		Password: pass,
 	}

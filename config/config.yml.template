@@ -1,5 +1,6 @@
 com:
   ftp:
+    tld: com
     host: rz.verisign-grs.com
     username: <username>
     file: com.zone.gz
@@ -11,10 +12,11 @@ com:
     key: <path to key>
 net:
   czds:
-    zone: net
+    tld: net
     username: <username>
 dk:
   http:
+    tld: dk
     url: <URL>
   ssh:
     host: <host for SSH proxy>

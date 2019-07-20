@@ -6,7 +6,7 @@ import (
 )
 
 type Config struct {
-	Zone     string `yaml:"zone"`
+	Tld      string `yaml:"tld"`
 	Username string `yaml:"username"`
 	Password string
 }
@@ -17,8 +17,12 @@ type czdsZone struct {
 	seen   map[string]interface{}
 }
 
+func (z *czdsZone) Tld() string {
+	return z.conf.Tld
+}
+
 func (z *czdsZone) Stream() (io.Reader, error) {
-	return z.client.GetZone(z.conf.Zone)
+	return z.client.GetZone(z.conf.Tld)
 }
 
 func New(conf Config) zone.Zone {

@@ -8,6 +8,7 @@ import (
 )
 
 type Config struct {
+	Tld      string `yaml:"tld"`
 	Host     string `yaml:"host"`
 	Username string `yaml:"username"`
 	Password string
@@ -30,6 +31,10 @@ type ftpZone struct {
 	conf   Config
 	client Client
 	seen   map[string]interface{}
+}
+
+func (z *ftpZone) Tld() string {
+	return z.conf.Tld
 }
 
 func (z *ftpZone) Stream() (io.Reader, error) {

@@ -16,12 +16,17 @@ func (err NotOkStatusErr) Error() string {
 }
 
 type Config struct {
+	Tld string `yaml:"tld"`
 	Url string `yaml:"url"`
 }
 
 type httpZone struct {
 	conf Config
 	c    *http.Client
+}
+
+func (z *httpZone) Tld() string {
+	return z.conf.Tld
 }
 
 func (z *httpZone) Stream() (io.Reader, error) {
