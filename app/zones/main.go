@@ -12,13 +12,15 @@ import (
 	"github.com/rs/zerolog/log"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
+	"net"
 	"sync"
 	"time"
 )
 
 type Com struct {
-	Ftp ftp.Config `yaml:"ftp"`
-	Ssh ssh.Config `yaml:"ssh"`
+	Ftp        ftp.Config `yaml:"ftp"`
+	SshEnabled bool       `yaml:"ssh-enabled"`
+	Ssh        ssh.Config `yaml:"ssh"`
 }
 
 type Dk struct {
@@ -68,9 +70,15 @@ func main() {
 	f := func(t time.Time) error {
 		wg := sync.WaitGroup{}
 
-		net := czds.New(conf.Net)
+		netZone := czds.New(conf.Net)
 
-		sshDialFunc, err := ssh.DialFunc(conf.Com.Ssh)
+		var sshDialFunc func(network, address string) (net.Conn, error)
+		if conf.Com.SshEnabled {
+			sshDialFunc, err = ssh.DialFunc(conf.Com.Ssh)
+			if err != nil {
+				log.Fatal().Msgf("failed to create SSH dial func: %s", err)
+			}
+		}
 		com, err := ftp.New(conf.Com.Ftp, sshDialFunc)
 		if err != nil {
 			log.Fatal().Msgf("failed to create .com zone retriever: %s", err)
@@ -96,7 +104,7 @@ func main() {
 			//{net, []zone.StreamWrapper{zone.GzipWrapper}, zone.ZoneFileHandler},
 			//{dk, nil, zone.ListHandler},
 		}
-		_, _ = dk, net
+		_, _ = dk, netZone
 
 		for _, zc := range zoneConfigs {
 			go func() {

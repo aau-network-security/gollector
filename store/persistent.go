@@ -54,7 +54,7 @@ func (c *Config) DSN() string {
 		default:
 			dsn = fmt.Sprintf("file:%s", c.FileName)
 		}
-	case POSTGRES, "": // default to postgres
+	case MYSQL: // default to postgres
 		conf := mysql.Config{
 			User:              c.User,
 			Passwd:            c.Password,
@@ -67,6 +67,9 @@ func (c *Config) DSN() string {
 			},
 		}
 		dsn = conf.FormatDSN()
+	case POSTGRES, "": // default to postgres
+		return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+			c.Host, c.Port, c.User, c.Password, c.DBName)
 	}
 	return dsn
 }

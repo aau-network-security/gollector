@@ -1,6 +1,9 @@
 .idea
-/config/config.yml
+/config/*.yml
+!/config/config.yml.template
 *.db
+.env
+_data
 
 ### Go ###
 # Binaries for programs and plugins
@@ -22,5 +25,3 @@
 ### Go Patch ###
 /vendor/
 /Godeps/
-
-# End of https://www.gitignore.io/api/go

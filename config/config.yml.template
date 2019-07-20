@@ -1,11 +1,28 @@
 com:
-  host: rz.verisign-grs.com
-  username: <username>
-  password: <password>
+  ftp:
+    host: rz.verisign-grs.com
+    username: <username>
+    password: <password>
+    file: com.zone.gz
+  ssh-enabled: true
+  ssh:
+    host: <host for SSH proxy>
+    user: <username>
+    authtype: key
+    key: <path to key>
 net:
-  zone: net
-  username: <username>
-  password: <password>
+  czds:
+    zone: net
+    username: <username>
+    password: <password>
+dk:
+  http:
+    url: <URL>
+  ssh:
+    host: <host for SSH proxy>
+    user: <username>
+    authtype: password
+    password: <password>
 store:
   driver: sqlite3
   filename: test.db

@@ -52,3 +52,59 @@ func TestStore(t *testing.T) {
 		}
 	}
 }
+
+func TestDsn(t *testing.T) {
+	tests := []struct {
+		name     string
+		conf     Config
+		expected string
+	}{
+		{
+			"in memory sqlite3",
+			Config{
+				DriverName: SQLITE,
+			},
+			"file::memory:?mode=memory&cache=shared",
+		},
+		{
+			"file sqlite3",
+			Config{
+				DriverName: SQLITE,
+				FileName:   "test.db",
+			},
+			"file:test.db",
+		},
+		{
+			"mysql",
+			Config{
+				DriverName: MYSQL,
+				Host:       "host",
+				Password:   "pass",
+				User:       "user",
+				DBName:     "db",
+				Port:       5901,
+			},
+			"user:pass@tcp(host:5901)/db?allowNativePasswords=false&interpolateParams=true&maxAllowedPacket=0&parseTime=true",
+		},
+		{
+			"postgres",
+			Config{
+				DriverName: POSTGRES,
+				Host:       "host",
+				Password:   "pass",
+				User:       "user",
+				DBName:     "db",
+				Port:       5901,
+			},
+			"host=host port=5901 user=user password=pass dbname=db sslmode=disable",
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			actual := test.conf.DSN()
+			if actual != test.expected {
+				t.Fatalf("expected DSN '%s', but got '%s'", test.expected, actual)
+			}
+		})
+	}
+}
