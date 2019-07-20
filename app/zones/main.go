@@ -41,7 +41,7 @@ type Net struct {
 
 type config struct {
 	Com   Com          `yaml:"com"`
-	Net   czds.Config  `yaml:"net"`
+	Net   Net          `yaml:"net"`
 	Dk    Dk           `yaml:"dk"`
 	Store store.Config `yaml:"store"`
 }
@@ -56,9 +56,15 @@ func readConfig(path string) (config, error) {
 		return conf, err
 	}
 
-	conf.Com.Ftp.Password = os.Getenv(ComFtpPass)
-	conf.Net.Password = os.Getenv(NetCzdsPass)
-	conf.Dk.Ssh.Password = os.Getenv(DkSshPass)
+	if conf.Com.Ftp.Password == "" {
+		conf.Com.Ftp.Password = os.Getenv(ComFtpPass)
+	}
+	if conf.Net.Czds.Password == "" {
+		conf.Net.Czds.Password = os.Getenv(NetCzdsPass)
+	}
+	if conf.Dk.Ssh.Password == "" {
+		conf.Dk.Ssh.Password = os.Getenv(DkSshPass)
+	}
 
 	for _, env := range []string{ComFtpPass, NetCzdsPass, DkSshPass} {
 		os.Setenv(env, "")
@@ -91,7 +97,7 @@ func main() {
 	f := func(t time.Time) error {
 		wg := sync.WaitGroup{}
 
-		netZone := czds.New(conf.Net)
+		netZone := czds.New(conf.Net.Czds)
 
 		var sshDialFunc func(network, address string) (net.Conn, error)
 		if conf.Com.SshEnabled {

@@ -11,16 +11,21 @@ type Config struct {
 	Tld      string `yaml:"tld"`
 	Host     string `yaml:"host"`
 	Username string `yaml:"username"`
-	Password string
+	Password string `yaml:"password"`
 	File     string `yaml:"file"`
 }
 
 type Client interface {
+	Login(user, pass string) error
 	Retr(string) (io.Reader, error)
 }
 
 type client struct {
 	c *ftp.ServerConn
+}
+
+func (c *client) Login(user, pass string) error {
+	return c.Login(user, pass)
 }
 
 func (c *client) Retr(s string) (io.Reader, error) {
@@ -38,6 +43,9 @@ func (z *ftpZone) Tld() string {
 }
 
 func (z *ftpZone) Stream() (io.Reader, error) {
+	if err := z.client.Login(z.conf.Username, z.conf.Password); err != nil {
+		return nil, err
+	}
 	return z.client.Retr(z.conf.File)
 }
 
@@ -51,10 +59,6 @@ func New(conf Config, dialFunc func(network, address string) (net.Conn, error)) 
 	c, err := ftp.Dial(host, opts...)
 
 	if err != nil {
-		return nil, err
-	}
-
-	if err := c.Login(conf.Username, conf.Password); err != nil {
 		return nil, err
 	}
 

@@ -9,13 +9,19 @@ import (
 
 type testFtpClient struct{}
 
+func (c *testFtpClient) Login(user, pass string) error {
+	return nil
+}
+
 func (c *testFtpClient) Retr(string) (io.Reader, error) {
 	return os.Open("fixtures/zone.sample.gz")
 }
 
 func TestProcess(t *testing.T) {
 	z := ftpZone{
-		conf:   Config{},
+		conf: Config{
+			Tld: "com",
+		},
 		client: &testFtpClient{},
 		seen:   make(map[string]interface{}),
 	}

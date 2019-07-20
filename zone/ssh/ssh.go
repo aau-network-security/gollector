@@ -16,7 +16,7 @@ type Config struct {
 	Host     string `yaml:"host"`
 	User     string `yaml:"user"`
 	AuthType string `yaml:"authtype"`
-	Password string
+	Password string `yaml:"password"`
 	Key      string `yaml:"key"`
 }
 
