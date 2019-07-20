@@ -1,7 +1,7 @@
 package ftp
 
 import (
-	"github.com/kdhageman/go-domains/zone"
+	"github.com/aau-network-security/go-domains/zone"
 	"io"
 	"os"
 	"testing"
@@ -14,12 +14,10 @@ func (c *testFtpClient) Retr(string) (io.Reader, error) {
 }
 
 func TestProcess(t *testing.T) {
-	conf := Config{}
-	ftpClient := testFtpClient{}
-
-	z, err := New(conf, &ftpClient)
-	if err != nil {
-		t.Fatalf("Error while creating .ftpZone zone parser: %s", err)
+	z := ftpZone{
+		conf:   Config{},
+		client: &testFtpClient{},
+		seen:   make(map[string]interface{}),
 	}
 
 	domainMap := make(map[string]interface{})
@@ -28,11 +26,17 @@ func TestProcess(t *testing.T) {
 		return nil
 	}
 
-	if err := zone.Process(z, f); err != nil {
-		t.Fatalf("Error while processing .ftpZone zone file: %s", err)
+	opts := zone.ProcessOpts{
+		DomainFunc:     f,
+		StreamWrappers: []zone.StreamWrapper{zone.GzipWrapper},
+		StreamHandler:  zone.ZoneFileHandler,
 	}
 
-	expected := 6
+	if err := zone.Process(&z, opts); err != nil {
+		t.Fatalf("Error while processing ftp zone file: %s", err)
+	}
+
+	expected := 5
 	actual := len(domainMap)
 	if actual != expected {
 		t.Fatalf("Expected %d domains to be processed, but got %d", expected, actual)

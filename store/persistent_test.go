@@ -1,7 +1,7 @@
 package store
 
 import (
-	"github.com/kdhageman/go-domains/models"
+	"github.com/aau-network-security/go-domains/models"
 	"testing"
 	"time"
 )

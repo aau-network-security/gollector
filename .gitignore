@@ -1,5 +1,6 @@
 .idea
 /config/config.yml
+*.db
 
 ### Go ###
 # Binaries for programs and plugins
