@@ -24,7 +24,7 @@ func (err *ZoneErr) Error() string {
 	return fmt.Sprintf("zone error (%s): %s", err.tld, err.err)
 }
 
-type DomainFunc func(string) error
+type DomainFunc func([]byte) error
 
 type StreamWrapper func(io.Reader) (io.Reader, error)
 
@@ -53,7 +53,7 @@ func ZoneFileHandler(str io.Reader, f DomainFunc) error {
 			domain := strings.TrimSuffix(strings.ToLower(v.Header().Name), ".")
 
 			if _, ok := seen[domain]; !ok {
-				if err := f(domain); err != nil {
+				if err := f([]byte(domain)); err != nil {
 					return err
 				}
 				seen[domain] = nil
@@ -67,9 +67,9 @@ func ZoneFileHandler(str io.Reader, f DomainFunc) error {
 func ListHandler(str io.Reader, f DomainFunc) error {
 	scanner := bufio.NewScanner(str)
 	for scanner.Scan() {
-		domain := scanner.Text()
-		if err := f(domain); err != nil {
-			return err
+		b := scanner.Bytes()
+		if err := f(b); err != nil {
+			return nil
 		}
 	}
 	return nil

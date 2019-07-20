@@ -27,8 +27,8 @@ func TestProcess(t *testing.T) {
 	}
 
 	domainMap := make(map[string]interface{})
-	f := func(domain string) error {
-		domainMap[domain] = nil
+	f := func(domain []byte) error {
+		domainMap[string(domain)] = nil
 		return nil
 	}
 

@@ -10,6 +10,8 @@ import (
 	"github.com/aau-network-security/go-domains/zone/http"
 	"github.com/aau-network-security/go-domains/zone/ssh"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"net"
@@ -72,6 +74,7 @@ type zoneConfig struct {
 	zone           zone.Zone
 	streamWrappers []zone.StreamWrapper
 	streamHandler  zone.StreamHandler
+	decoder        *encoding.Decoder
 }
 
 func main() {
@@ -112,20 +115,47 @@ func main() {
 			log.Fatal().Msgf("failed to create .dk zone retriever: %s", err)
 		}
 
-		domainFunc := func(domain string) error {
-			_, err := s.StoreZoneEntry(t, domain)
-			return err
-		}
+		_, _ = netZone, comZone
 
 		zoneConfigs := []zoneConfig{
-			{comZone, []zone.StreamWrapper{zone.GzipWrapper}, zone.ZoneFileHandler},
-			{netZone, []zone.StreamWrapper{zone.GzipWrapper}, zone.ZoneFileHandler},
-			{dkZone, nil, zone.ListHandler},
+			{
+				comZone,
+				[]zone.StreamWrapper{zone.GzipWrapper},
+				zone.ZoneFileHandler,
+				nil,
+			},
+			{netZone,
+				[]zone.StreamWrapper{zone.GzipWrapper},
+				zone.ZoneFileHandler,
+				nil,
+			},
+			{
+				dkZone,
+				nil,
+				zone.ListHandler,
+				charmap.ISO8859_1.NewDecoder(),
+			},
 		}
 		for _, zc := range zoneConfigs {
 			go func(zc zoneConfig) {
 				wg.Add(1)
 				defer wg.Done()
+
+				domainFunc := func(domain []byte) error {
+					if zc.decoder != nil {
+						var err error
+						domain, err = zc.decoder.Bytes(domain)
+						if err != nil {
+							return err
+						}
+					}
+
+					_, err := s.StoreZoneEntry(t, string(domain))
+					if err != nil {
+						log.Debug().Msgf("failed to store domain '%s': %s", domain, err)
+					}
+					return nil
+				}
 
 				opts := zone.ProcessOpts{
 					DomainFunc:     domainFunc,
