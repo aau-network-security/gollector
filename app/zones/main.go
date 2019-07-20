@@ -18,6 +18,12 @@ import (
 	"time"
 )
 
+const (
+	ComFtpPass  = "COM_FTP_PASS"
+	NetCzdsPass = "NET_CZDS_PASS "
+	DkSshPass   = "DK_SSH_PASS"
+)
+
 type Com struct {
 	Ftp        ftp.Config `yaml:"ftp"`
 	SshEnabled bool       `yaml:"ssh-enabled"`
@@ -50,9 +56,13 @@ func readConfig(path string) (config, error) {
 		return conf, err
 	}
 
-	conf.Com.Ftp.Password = os.Getenv("COM_FTP_PASS")
-	conf.Net.Password = os.Getenv("NET_PASS")
-	conf.Dk.Ssh.Password = os.Getenv("DK_SSH_PASS")
+	conf.Com.Ftp.Password = os.Getenv(ComFtpPass)
+	conf.Net.Password = os.Getenv(NetCzdsPass)
+	conf.Dk.Ssh.Password = os.Getenv(DkSshPass)
+
+	for _, env := range []string{ComFtpPass, NetCzdsPass, DkSshPass} {
+		os.Setenv(env, "")
+	}
 
 	return conf, nil
 }

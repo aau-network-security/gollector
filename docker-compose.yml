@@ -7,7 +7,7 @@ services:
     command: [ "--config", "/config/docker.yml" ]
     environment:
       - COM_FTP_PASS=${COM_FTP_PASS?err}
-      - NET_PASS=${NET_PASS?err}
+      - NET_CZDS_PASS=${NET_CZDS_PASS?err}
       - DK_SSH_PASS=${DK_SSH_PASS?err}
     volumes:
       - ./config:/config:ro # configuration files
