@@ -1,10 +1,19 @@
 package http
 
 import (
+	"fmt"
 	"github.com/aau-network-security/go-domains/zone"
 	"io"
 	"net/http"
 )
+
+type NotOkStatusErr struct {
+	code int
+}
+
+func (err NotOkStatusErr) Error() string {
+	return fmt.Sprintf("http error: status code %d", err.code)
+}
 
 type Config struct {
 	Url string `yaml:"url"`
@@ -23,6 +32,10 @@ func (z *httpZone) Stream() (io.Reader, error) {
 	resp, err := z.c.Do(req)
 	if err != nil {
 		return nil, err
+	}
+
+	if resp.StatusCode != 200 {
+		return nil, NotOkStatusErr{resp.StatusCode}
 	}
 	return resp.Body, nil
 }
