@@ -25,7 +25,7 @@ type client struct {
 }
 
 func (c *client) Login(user, pass string) error {
-	return c.Login(user, pass)
+	return c.c.Login(user, pass)
 }
 
 func (c *client) Retr(s string) (io.Reader, error) {
