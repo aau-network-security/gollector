@@ -7,6 +7,7 @@ import (
 	"github.com/jinzhu/gorm"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
+	"sync"
 	"time"
 )
 
@@ -54,7 +55,7 @@ func (c *Config) DSN() string {
 		default:
 			dsn = fmt.Sprintf("file:%s", c.FileName)
 		}
-	case POSTGRES, "": // default to postgres
+	case MYSQL: // default to postgres
 		conf := mysql.Config{
 			User:              c.User,
 			Passwd:            c.Password,
@@ -67,6 +68,9 @@ func (c *Config) DSN() string {
 			},
 		}
 		dsn = conf.FormatDSN()
+	case POSTGRES, "": // default to postgres
+		return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+			c.Host, c.Port, c.User, c.Password, c.DBName)
 	}
 	return dsn
 }
@@ -77,6 +81,7 @@ type Store struct {
 	zoneEntries map[string]*models.ZonefileEntry
 
 	allowedInterval time.Duration
+	apexMutex       *sync.Mutex
 }
 
 func (s *Store) StoreApexDomain(name string) (*models.Apex, error) {
@@ -86,12 +91,16 @@ func (s *Store) StoreApexDomain(name string) (*models.Apex, error) {
 	if err := s.db.Create(&model).Error; err != nil {
 		return nil, err
 	}
+	s.apexMutex.Lock()
 	s.apexes[name] = &model
+	s.apexMutex.Unlock()
 	return &model, nil
 }
 
 func (s *Store) GetApexDomain(domain string) (*models.Apex, error) {
+	s.apexMutex.Lock()
 	res, ok := s.apexes[domain]
+	s.apexMutex.Unlock()
 	if !ok {
 		var err error
 		res, err = s.StoreApexDomain(domain)
@@ -108,7 +117,9 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 		return nil, err
 	}
 
+	s.apexMutex.Lock()
 	existingZoneEntry, ok := s.zoneEntries[domain]
+	s.apexMutex.Unlock()
 	if !ok {
 		// non-active domain, create a new zone entry
 		newZoneEntry := &models.ZonefileEntry{
@@ -121,8 +132,9 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 		if err := s.db.Create(&newZoneEntry).Error; err != nil {
 			return nil, err
 		}
-
+		s.apexMutex.Lock()
 		s.zoneEntries[domain] = newZoneEntry
+		s.apexMutex.Unlock()
 
 		return newZoneEntry, nil
 	}
@@ -145,7 +157,9 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 			return nil, err
 		}
 
+		s.apexMutex.Lock()
 		s.zoneEntries[domain] = newZoneEntry
+		s.apexMutex.Unlock()
 
 		return newZoneEntry, nil
 	}
@@ -172,6 +186,9 @@ func (s *Store) migrate() error {
 }
 
 func (s *Store) init() error {
+	s.apexMutex.Lock()
+	defer s.apexMutex.Unlock()
+
 	var apexes []models.Apex
 	if err := s.db.Find(&apexes).Error; err != nil {
 		return err
@@ -202,6 +219,7 @@ func NewStore(conf Config, allowedInterval time.Duration) (*Store, error) {
 		apexes:          make(map[string]*models.Apex),
 		zoneEntries:     make(map[string]*models.ZonefileEntry),
 		allowedInterval: allowedInterval,
+		apexMutex:       &sync.Mutex{},
 	}
 
 	if err := s.migrate(); err != nil {

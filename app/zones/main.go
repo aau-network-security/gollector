@@ -10,15 +10,26 @@ import (
 	"github.com/aau-network-security/go-domains/zone/http"
 	"github.com/aau-network-security/go-domains/zone/ssh"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
+	"net"
+	"os"
 	"sync"
 	"time"
 )
 
+const (
+	ComFtpPass  = "COM_FTP_PASS"
+	NetCzdsPass = "NET_CZDS_PASS"
+	DkSshPass   = "DK_SSH_PASS"
+)
+
 type Com struct {
-	Ftp ftp.Config `yaml:"ftp"`
-	Ssh ssh.Config `yaml:"ssh"`
+	Ftp        ftp.Config `yaml:"ftp"`
+	SshEnabled bool       `yaml:"ssh-enabled"`
+	Ssh        ssh.Config `yaml:"ssh"`
 }
 
 type Dk struct {
@@ -27,12 +38,12 @@ type Dk struct {
 }
 
 type Net struct {
-	Czds czds.Config `yaml:"czds""`
+	Czds czds.Config `yaml:"czds"`
 }
 
 type config struct {
 	Com   Com          `yaml:"com"`
-	Net   czds.Config  `yaml:"net"`
+	Net   Net          `yaml:"net"`
 	Dk    Dk           `yaml:"dk"`
 	Store store.Config `yaml:"store"`
 }
@@ -47,7 +58,23 @@ func readConfig(path string) (config, error) {
 		return conf, err
 	}
 
+	conf.Com.Ftp.Password = os.Getenv(ComFtpPass)
+	conf.Net.Czds.Password = os.Getenv(NetCzdsPass)
+	conf.Net.Czds.Password = os.Getenv(NetCzdsPass)
+	conf.Dk.Ssh.Password = os.Getenv(DkSshPass)
+
+	for _, env := range []string{ComFtpPass, NetCzdsPass, DkSshPass} {
+		os.Setenv(env, "")
+	}
+
 	return conf, nil
+}
+
+type zoneConfig struct {
+	zone           zone.Zone
+	streamWrappers []zone.StreamWrapper
+	streamHandler  zone.StreamHandler
+	decoder        *encoding.Decoder
 }
 
 func main() {
@@ -68,40 +95,67 @@ func main() {
 	f := func(t time.Time) error {
 		wg := sync.WaitGroup{}
 
-		net := czds.New(conf.Net)
+		netZone := czds.New(conf.Net.Czds)
 
-		sshDialFunc, err := ssh.DialFunc(conf.Com.Ssh)
-		com, err := ftp.New(conf.Com.Ftp, sshDialFunc)
+		var sshDialFunc func(network, address string) (net.Conn, error)
+		if conf.Com.SshEnabled {
+			sshDialFunc, err = ssh.DialFunc(conf.Com.Ssh)
+			if err != nil {
+				log.Fatal().Msgf("failed to create SSH dial func: %s", err)
+			}
+		}
+		comZone, err := ftp.New(conf.Com.Ftp, sshDialFunc)
 		if err != nil {
 			log.Fatal().Msgf("failed to create .com zone retriever: %s", err)
 		}
 
 		httpClient, err := ssh.HttpClient(conf.Dk.Ssh)
-		dk, err := http.New(conf.Dk.Http, httpClient)
+		dkZone, err := http.New(conf.Dk.Http, httpClient)
 		if err != nil {
 			log.Fatal().Msgf("failed to create .dk zone retriever: %s", err)
 		}
 
-		domainFunc := func(domain string) error {
-			_, err := s.StoreZoneEntry(t, domain)
-			return err
-		}
+		_, _ = netZone, comZone
 
-		zoneConfigs := []struct {
-			zone           zone.Zone
-			streamWrappers []zone.StreamWrapper
-			streamHandler  zone.StreamHandler
-		}{
-			{com, []zone.StreamWrapper{zone.GzipWrapper}, zone.ZoneFileHandler},
-			//{net, []zone.StreamWrapper{zone.GzipWrapper}, zone.ZoneFileHandler},
-			//{dk, nil, zone.ListHandler},
+		zoneConfigs := []zoneConfig{
+			{
+				comZone,
+				[]zone.StreamWrapper{zone.GzipWrapper},
+				zone.ZoneFileHandler,
+				nil,
+			},
+			{netZone,
+				[]zone.StreamWrapper{zone.GzipWrapper},
+				zone.ZoneFileHandler,
+				nil,
+			},
+			{
+				dkZone,
+				nil,
+				zone.ListHandler,
+				charmap.ISO8859_1.NewDecoder(),
+			},
 		}
-		_, _ = dk, net
-
 		for _, zc := range zoneConfigs {
-			go func() {
+			go func(zc zoneConfig) {
 				wg.Add(1)
 				defer wg.Done()
+
+				domainFunc := func(domain []byte) error {
+					if zc.decoder != nil {
+						var err error
+						domain, err = zc.decoder.Bytes(domain)
+						if err != nil {
+							return err
+						}
+					}
+
+					_, err := s.StoreZoneEntry(t, string(domain))
+					if err != nil {
+						log.Debug().Msgf("failed to store domain '%s': %s", domain, err)
+					}
+					return nil
+				}
 
 				opts := zone.ProcessOpts{
 					DomainFunc:     domainFunc,
@@ -112,7 +166,7 @@ func main() {
 				if err := zone.Process(zc.zone, opts); err != nil {
 					log.Debug().Msgf("error while processing zone file: %s", err)
 				}
-			}()
+			}(zc)
 		}
 
 		wg.Wait()
