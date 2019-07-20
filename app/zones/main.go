@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"net"
+	"os"
 	"sync"
 	"time"
 )
@@ -29,7 +30,7 @@ type Dk struct {
 }
 
 type Net struct {
-	Czds czds.Config `yaml:"czds""`
+	Czds czds.Config `yaml:"czds"`
 }
 
 type config struct {
@@ -48,6 +49,10 @@ func readConfig(path string) (config, error) {
 	if err := yaml.Unmarshal(f, &conf); err != nil {
 		return conf, err
 	}
+
+	conf.Com.Ftp.Password = os.Getenv("COM_FTP_PASS")
+	conf.Net.Password = os.Getenv("NET_PASS")
+	conf.Dk.Ssh.Password = os.Getenv("DK_SSH_PASS")
 
 	return conf, nil
 }

@@ -5,6 +5,10 @@ services:
       context: .
       dockerfile: app/zones/Dockerfile
     command: [ "--config", "/config/docker.yml" ]
+    environment:
+      - COM_FTP_PASS=${COM_FTP_PASS?err}
+      - NET_PASS=${NET_PASS?err}
+      - DK_SSH_PASS=${DK_SSH_PASS?err}
     volumes:
       - ./config:/config:ro # configuration files
       - ${SSH_DIR}:/ssh:ro  # ssh keys
@@ -12,9 +16,9 @@ services:
     image: postgres
     restart: always
     environment:
-      POSTGRES_PASSWORD: ${POSTGRES_PASS}
+      POSTGRES_PASSWORD: ${POSTGRES_PASS?err}
     volumes:
       - ./db:/docker-entrypoint-initdb.d      # initialization scripts, only executed first time
-      - ${DB_VOLUME}:/var/lib/postgresql/data # persistent storage of database
+      - ${DB_VOLUME?err}:/var/lib/postgresql/data # persistent storage of database
     ports:
-      - "127.0.0.1:${POSTGRES_PORT}:5432"
+      - "127.0.0.1:${POSTGRES_PORT?err}:5432"
