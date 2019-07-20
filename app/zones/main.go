@@ -20,7 +20,7 @@ import (
 
 const (
 	ComFtpPass  = "COM_FTP_PASS"
-	NetCzdsPass = "NET_CZDS_PASS "
+	NetCzdsPass = "NET_CZDS_PASS"
 	DkSshPass   = "DK_SSH_PASS"
 )
 
@@ -56,15 +56,10 @@ func readConfig(path string) (config, error) {
 		return conf, err
 	}
 
-	if conf.Com.Ftp.Password == "" {
-		conf.Com.Ftp.Password = os.Getenv(ComFtpPass)
-	}
-	if conf.Net.Czds.Password == "" {
-		conf.Net.Czds.Password = os.Getenv(NetCzdsPass)
-	}
-	if conf.Dk.Ssh.Password == "" {
-		conf.Dk.Ssh.Password = os.Getenv(DkSshPass)
-	}
+	conf.Com.Ftp.Password = os.Getenv(ComFtpPass)
+	conf.Net.Czds.Password = os.Getenv(NetCzdsPass)
+	conf.Net.Czds.Password = os.Getenv(NetCzdsPass)
+	conf.Dk.Ssh.Password = os.Getenv(DkSshPass)
 
 	for _, env := range []string{ComFtpPass, NetCzdsPass, DkSshPass} {
 		os.Setenv(env, "")

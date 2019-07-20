@@ -8,7 +8,7 @@ import (
 type Config struct {
 	Tld      string `yaml:"tld"`
 	Username string `yaml:"username"`
-	Password string `yaml:"password`
+	Password string
 }
 
 type czdsZone struct {

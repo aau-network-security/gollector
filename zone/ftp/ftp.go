@@ -11,7 +11,7 @@ type Config struct {
 	Tld      string `yaml:"tld"`
 	Host     string `yaml:"host"`
 	Username string `yaml:"username"`
-	Password string `yaml:"password"`
+	Password string
 	File     string `yaml:"file"`
 }
 
