@@ -7,6 +7,7 @@ import (
 	"github.com/jinzhu/gorm"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
+	"sync"
 	"time"
 )
 
@@ -80,6 +81,7 @@ type Store struct {
 	zoneEntries map[string]*models.ZonefileEntry
 
 	allowedInterval time.Duration
+	apexMutex       *sync.Mutex
 }
 
 func (s *Store) StoreApexDomain(name string) (*models.Apex, error) {
@@ -89,7 +91,9 @@ func (s *Store) StoreApexDomain(name string) (*models.Apex, error) {
 	if err := s.db.Create(&model).Error; err != nil {
 		return nil, err
 	}
+	s.apexMutex.Lock()
 	s.apexes[name] = &model
+	s.apexMutex.Unlock()
 	return &model, nil
 }
 
@@ -124,8 +128,9 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 		if err := s.db.Create(&newZoneEntry).Error; err != nil {
 			return nil, err
 		}
-
+		s.apexMutex.Lock()
 		s.zoneEntries[domain] = newZoneEntry
+		s.apexMutex.Unlock()
 
 		return newZoneEntry, nil
 	}
@@ -148,7 +153,9 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 			return nil, err
 		}
 
+		s.apexMutex.Lock()
 		s.zoneEntries[domain] = newZoneEntry
+		s.apexMutex.Unlock()
 
 		return newZoneEntry, nil
 	}
@@ -175,6 +182,9 @@ func (s *Store) migrate() error {
 }
 
 func (s *Store) init() error {
+	s.apexMutex.Lock()
+	defer s.apexMutex.Unlock()
+
 	var apexes []models.Apex
 	if err := s.db.Find(&apexes).Error; err != nil {
 		return err
@@ -205,6 +215,7 @@ func NewStore(conf Config, allowedInterval time.Duration) (*Store, error) {
 		apexes:          make(map[string]*models.Apex),
 		zoneEntries:     make(map[string]*models.ZonefileEntry),
 		allowedInterval: allowedInterval,
+		apexMutex:       &sync.Mutex{},
 	}
 
 	if err := s.migrate(); err != nil {
