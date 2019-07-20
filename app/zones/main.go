@@ -79,13 +79,13 @@ func main() {
 				log.Fatal().Msgf("failed to create SSH dial func: %s", err)
 			}
 		}
-		com, err := ftp.New(conf.Com.Ftp, sshDialFunc)
+		comZone, err := ftp.New(conf.Com.Ftp, sshDialFunc)
 		if err != nil {
 			log.Fatal().Msgf("failed to create .com zone retriever: %s", err)
 		}
 
 		httpClient, err := ssh.HttpClient(conf.Dk.Ssh)
-		dk, err := http.New(conf.Dk.Http, httpClient)
+		dkZone, err := http.New(conf.Dk.Http, httpClient)
 		if err != nil {
 			log.Fatal().Msgf("failed to create .dk zone retriever: %s", err)
 		}
@@ -100,11 +100,11 @@ func main() {
 			streamWrappers []zone.StreamWrapper
 			streamHandler  zone.StreamHandler
 		}{
-			{com, []zone.StreamWrapper{zone.GzipWrapper}, zone.ZoneFileHandler},
-			//{net, []zone.StreamWrapper{zone.GzipWrapper}, zone.ZoneFileHandler},
-			//{dk, nil, zone.ListHandler},
+			{comZone, []zone.StreamWrapper{zone.GzipWrapper}, zone.ZoneFileHandler},
+			{netZone, []zone.StreamWrapper{zone.GzipWrapper}, zone.ZoneFileHandler},
+			{dkZone, nil, zone.ListHandler},
 		}
-		_, _ = dk, netZone
+		_, _ = dkZone, netZone
 
 		for _, zc := range zoneConfigs {
 			go func() {
