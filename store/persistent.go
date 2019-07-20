@@ -98,7 +98,9 @@ func (s *Store) StoreApexDomain(name string) (*models.Apex, error) {
 }
 
 func (s *Store) GetApexDomain(domain string) (*models.Apex, error) {
+	s.apexMutex.Lock()
 	res, ok := s.apexes[domain]
+	s.apexMutex.Unlock()
 	if !ok {
 		var err error
 		res, err = s.StoreApexDomain(domain)
@@ -115,7 +117,9 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 		return nil, err
 	}
 
+	s.apexMutex.Lock()
 	existingZoneEntry, ok := s.zoneEntries[domain]
+	s.apexMutex.Unlock()
 	if !ok {
 		// non-active domain, create a new zone entry
 		newZoneEntry := &models.ZonefileEntry{
