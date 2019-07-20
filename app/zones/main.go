@@ -67,6 +67,12 @@ func readConfig(path string) (config, error) {
 	return conf, nil
 }
 
+type zoneConfig struct {
+	zone           zone.Zone
+	streamWrappers []zone.StreamWrapper
+	streamHandler  zone.StreamHandler
+}
+
 func main() {
 	confFile := flag.String("config", "config/config.yml", "location of configuration file")
 	flag.Parse()
@@ -110,19 +116,13 @@ func main() {
 			return err
 		}
 
-		zoneConfigs := []struct {
-			zone           zone.Zone
-			streamWrappers []zone.StreamWrapper
-			streamHandler  zone.StreamHandler
-		}{
+		zoneConfigs := []zoneConfig{
 			{comZone, []zone.StreamWrapper{zone.GzipWrapper}, zone.ZoneFileHandler},
 			{netZone, []zone.StreamWrapper{zone.GzipWrapper}, zone.ZoneFileHandler},
 			{dkZone, nil, zone.ListHandler},
 		}
-		_, _ = dkZone, netZone
-
 		for _, zc := range zoneConfigs {
-			go func() {
+			go func(zc zoneConfig) {
 				wg.Add(1)
 				defer wg.Done()
 
@@ -135,7 +135,7 @@ func main() {
 				if err := zone.Process(zc.zone, opts); err != nil {
 					log.Debug().Msgf("error while processing zone file: %s", err)
 				}
-			}()
+			}(zc)
 		}
 
 		wg.Wait()
