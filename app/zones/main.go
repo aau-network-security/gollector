@@ -137,14 +137,15 @@ func main() {
 				charmap.ISO8859_1.NewDecoder(),
 			},
 		}
+		wg.Add(len(zoneConfigs))
 		progress := 0
 		for _, zc := range zoneConfigs {
 			go func(zc zoneConfig) {
-				wg.Add(1)
 				defer wg.Done()
 
 				c := 0
 				domainFunc := func(domain []byte) error {
+					c++
 					if zc.decoder != nil {
 						var err error
 						domain, err = zc.decoder.Bytes(domain)
@@ -167,15 +168,16 @@ func main() {
 					StreamHandler:  zc.streamHandler,
 				}
 
-				resultSymbol := "✓"
+
+				resultStatus := "ok"
 				if err := zone.Process(zc.zone, opts); err != nil {
 					log.Error().Msgf("error while processing zone file: %s", err)
-					resultSymbol = "✕"
+					resultStatus = "failed"
 				}
 				progress++
 
 				log.Info().
-					Str("status", resultSymbol).
+					Str("status", resultStatus).
 					Str("progress", fmt.Sprintf("%d/%d", progress, len(zoneConfigs))).
 					Int("processed domains", c).
 					Msgf("finished zone '%s'", zc.zone.Tld())
@@ -183,7 +185,8 @@ func main() {
 		}
 
 		wg.Wait()
-		return nil
+
+		return s.RunPostHooks()
 	}
 
 	// retrieve all zone files on a daily basis

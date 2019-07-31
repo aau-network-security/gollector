@@ -1,6 +1,7 @@
 package generic
 
 import (
+	"fmt"
 	"github.com/rs/zerolog/log"
 	"time"
 )
@@ -20,7 +21,6 @@ func Repeat(f func(t time.Time) error, startTime time.Time, interval time.Durati
 	t := startTime
 
 	for n != 0 {
-		log.Debug().Msgf("Performing function at %s (%d remaining)", t, n)
 		go func() {
 			if err := f(t); err != nil {
 				errc <- err
@@ -39,6 +39,11 @@ func Repeat(f func(t time.Time) error, startTime time.Time, interval time.Durati
 		if n > 0 {
 			n--
 		}
+		msg := fmt.Sprintf("Next scheduled at %s", t)
+		if n >= 0 {
+			msg += fmt.Sprintf(" (%d remaining)", n)
+		}
+		log.Debug().Msgf(msg)
 	}
 	close(errc)
 
