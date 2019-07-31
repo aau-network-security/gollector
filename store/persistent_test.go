@@ -1,46 +1,81 @@
 package store
 
 import (
+	"fmt"
 	"github.com/aau-network-security/go-domains/models"
+	"github.com/jinzhu/gorm"
 	"testing"
 	"time"
 )
 
+func resetDb(g *gorm.DB) error {
+	tables := []string{
+		"apexes",
+		"zonefile_entries",
+	}
+
+	for _, table := range tables {
+		qry := fmt.Sprintf("DROP TABLE IF EXISTS %s", table)
+		if err := g.Exec(qry).Error; err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// test against locally running postgres server
 func TestStore(t *testing.T) {
 	conf := Config{
-		DriverName: "sqlite3",
+		User:     "postgres",
+		Password: "postgres",
+		DBName:   "domains",
+		Host:     "localhost",
+		Port:     10001,
 	}
-	s, err := NewStore(conf, 10*time.Millisecond)
+
+	g, err := conf.Open()
 	if err != nil {
-		t.Fatalf("Failed to create store: %s", err)
+		t.Fatalf("failed to open gorm database: %s", err)
+	}
+	g.LogMode(true)
+
+	if err := resetDb(g); err != nil {
+		t.Fatalf("failed to reset database: %s", err)
+	}
+
+	s, err := NewStore(conf, 10, 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("failed to create store: %s", err)
 	}
 
 	iterations := 3
 	for i := 0; i < iterations; i++ {
 		for j := 0; j < 10; j++ {
 			if _, err := s.StoreZoneEntry(time.Now(), "example.org"); err != nil {
-				t.Fatalf("Error while storing entry: %s", err)
+				t.Fatalf("error while storing entry: %s", err)
 			}
 		}
 		time.Sleep(15 * time.Millisecond)
+	}
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("error while running post hooks: %s", err)
 	}
 
 	counts := []struct {
 		count      uint
 		model      interface{}
-		whereQuery interface{}
-		whereArgs  interface{}
+		whereQuery string
 	}{
-		{1, &models.Apex{}, nil, nil},
-		{3, &models.ZonefileEntry{}, nil, nil},
-		{1, &models.ZonefileEntry{Active: true}, "active", true},
+		{1, &models.Apex{}, ""},
+		{3, &models.ZonefileEntry{}, ""},
+		{1, &models.ZonefileEntry{}, "active = true"},
 	}
 
 	for _, tc := range counts {
 		var count uint
-		qry := s.db.Model(tc.model)
-		if tc.whereQuery != nil {
-			qry = qry.Where(tc.whereQuery, tc.whereArgs)
+		qry := g.Model(tc.model)
+		if tc.whereQuery != "" {
+			qry = qry.Where(tc.whereQuery)
 		}
 
 		if err := qry.Count(&count).Error; err != nil {
@@ -50,61 +85,5 @@ func TestStore(t *testing.T) {
 		if count != tc.count {
 			t.Fatalf("expected %d elements, but got %d", tc.count, count)
 		}
-	}
-}
-
-func TestDsn(t *testing.T) {
-	tests := []struct {
-		name     string
-		conf     Config
-		expected string
-	}{
-		{
-			"in memory sqlite3",
-			Config{
-				DriverName: SQLITE,
-			},
-			"file::memory:?mode=memory&cache=shared",
-		},
-		{
-			"file sqlite3",
-			Config{
-				DriverName: SQLITE,
-				FileName:   "test.db",
-			},
-			"file:test.db",
-		},
-		{
-			"mysql",
-			Config{
-				DriverName: MYSQL,
-				Host:       "host",
-				Password:   "pass",
-				User:       "user",
-				DBName:     "db",
-				Port:       5901,
-			},
-			"user:pass@tcp(host:5901)/db?allowNativePasswords=false&interpolateParams=true&maxAllowedPacket=0&parseTime=true",
-		},
-		{
-			"postgres",
-			Config{
-				DriverName: POSTGRES,
-				Host:       "host",
-				Password:   "pass",
-				User:       "user",
-				DBName:     "db",
-				Port:       5901,
-			},
-			"host=host port=5901 user=user password=pass dbname=db sslmode=disable",
-		},
-	}
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			actual := test.conf.DSN()
-			if actual != test.expected {
-				t.Fatalf("expected DSN '%s', but got '%s'", test.expected, actual)
-			}
-		})
 	}
 }
