@@ -54,7 +54,7 @@ func ZoneFileHandler(str io.Reader, f DomainFunc) error {
 
 			// silently ignore tld domains (e.g. `com` or `net`)
 			if len(strings.Split(domain, ".")) == 1 {
-				return nil
+				continue
 			}
 
 			if _, ok := seen[domain]; !ok {
