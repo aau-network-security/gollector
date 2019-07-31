@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"github.com/aau-network-security/go-domains/generic"
 	"github.com/aau-network-security/go-domains/store"
 	"github.com/aau-network-security/go-domains/zone"
@@ -136,11 +137,13 @@ func main() {
 				charmap.ISO8859_1.NewDecoder(),
 			},
 		}
+		progress := 0
 		for _, zc := range zoneConfigs {
 			go func(zc zoneConfig) {
 				wg.Add(1)
 				defer wg.Done()
 
+				c := 0
 				domainFunc := func(domain []byte) error {
 					if zc.decoder != nil {
 						var err error
@@ -154,6 +157,7 @@ func main() {
 					if err != nil {
 						log.Debug().Msgf("failed to store domain '%s': %s", domain, err)
 					}
+					c++
 					return nil
 				}
 
@@ -163,9 +167,18 @@ func main() {
 					StreamHandler:  zc.streamHandler,
 				}
 
+				resultSymbol := "✓"
 				if err := zone.Process(zc.zone, opts); err != nil {
-					log.Debug().Msgf("error while processing zone file: %s", err)
+					log.Error().Msgf("error while processing zone file: %s", err)
+					resultSymbol = "✕"
 				}
+				progress++
+
+				log.Info().
+					Str("status", resultSymbol).
+					Str("progress", fmt.Sprintf("%d/%d", progress, len(zoneConfigs))).
+					Int("processed domains", c).
+					Msgf("finished zone '%s'", zc.zone.Tld())
 			}(zc)
 		}
 
