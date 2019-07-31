@@ -3,18 +3,12 @@ package store
 import (
 	"fmt"
 	"github.com/aau-network-security/go-domains/models"
-	"github.com/go-sql-driver/mysql"
+	"github.com/go-pg/pg"
 	"github.com/jinzhu/gorm"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 	"sync"
 	"time"
-)
-
-var (
-	SQLITE   = "sqlite3"
-	MYSQL    = "mysql"
-	POSTGRES = "postgres"
 )
 
 type EntryExistsErr struct {
@@ -26,13 +20,11 @@ func (err EntryExistsErr) Error() string {
 }
 
 type Config struct {
-	User       string `yaml:"user"`
-	Password   string `yaml:"password"`
-	Host       string `yaml:"host"`
-	Port       int    `yaml:"port"`
-	DBName     string `yaml:"dbname"`
-	DriverName string `yaml:"driver"`
-	FileName   string `yaml:"filename"`
+	User     string `yaml:"user"`
+	Password string `yaml:"password"`
+	Host     string `yaml:"host"`
+	Port     int    `yaml:"port"`
+	DBName   string `yaml:"dbname"`
 
 	d *gorm.DB
 }
@@ -40,70 +32,115 @@ type Config struct {
 func (c *Config) Open() (*gorm.DB, error) {
 	var err error
 	if c.d == nil {
-		c.d, err = gorm.Open(c.DriverName, c.DSN())
+		c.d, err = gorm.Open("postgres", c.DSN())
 	}
 	return c.d, err
 }
 
 func (c *Config) DSN() string {
-	var dsn string
-	switch c.DriverName {
-	case SQLITE:
-		switch c.FileName {
-		case "": // in memory
-			dsn = "file::memory:?mode=memory&cache=shared"
-		default:
-			dsn = fmt.Sprintf("file:%s", c.FileName)
-		}
-	case MYSQL: // default to postgres
-		conf := mysql.Config{
-			User:              c.User,
-			Passwd:            c.Password,
-			Net:               "tcp",
-			Addr:              fmt.Sprintf("%s:%d", c.Host, c.Port),
-			DBName:            c.DBName,
-			InterpolateParams: true,
-			Params: map[string]string{
-				"parseTime": "true",
-			},
-		}
-		dsn = conf.FormatDSN()
-	case POSTGRES, "": // default to postgres
-		return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-			c.Host, c.Port, c.User, c.Password, c.DBName)
+	return fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+		c.Host, c.Port, c.User, c.Password, c.DBName)
+}
+
+type ModelSet struct {
+	zoneEntries map[uint]*models.ZonefileEntry
+	apexes      map[uint]*models.Apex
+}
+
+func (s *ModelSet) Len() int {
+	return len(s.zoneEntries) + len(s.apexes)
+}
+
+func (ms *ModelSet) zoneEntryList() []*models.ZonefileEntry {
+	var res []*models.ZonefileEntry
+	for _, v := range ms.zoneEntries {
+		res = append(res, v)
 	}
-	return dsn
+	return res
+}
+
+func (ms *ModelSet) apexList() []*models.Apex {
+	var res []*models.Apex
+	for _, v := range ms.apexes {
+		res = append(res, v)
+	}
+	return res
+}
+
+func NewModelSet() ModelSet {
+	return ModelSet{
+		zoneEntries: make(map[uint]*models.ZonefileEntry),
+		apexes:      make(map[uint]*models.Apex),
+	}
+}
+
+type postHook func(*Store) error
+
+type Ids struct {
+	zoneEntries, apexes uint
 }
 
 type Store struct {
-	db          *gorm.DB
-	apexes      map[string]*models.Apex
-	zoneEntries map[string]*models.ZonefileEntry
+	conf                  Config
+	db                    *pg.DB
+	apexByName            map[string]*models.Apex
+	apexById              map[uint]*models.Apex
+	zoneEntriesByApexName map[string]*models.ZonefileEntry
 
 	allowedInterval time.Duration
-	apexMutex       *sync.Mutex
+	m               *sync.Mutex
+	batchSize       int
+	postHooks       []postHook
+	ids             Ids
+
+	inserts ModelSet
+	updates ModelSet
 }
 
-func (s *Store) StoreApexDomain(name string) (*models.Apex, error) {
-	model := models.Apex{
+func (s *Store) RunPostHooks() error {
+	s.m.Lock()
+	defer s.m.Unlock()
+	return s.runPostHooks()
+}
+
+func (s *Store) runPostHooks() error {
+	for _, h := range s.postHooks {
+		if err := h(s); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Store) conditionalPostHooks() error {
+	if s.updates.Len()+s.inserts.Len() >= s.batchSize {
+		return s.runPostHooks()
+	}
+	return nil
+}
+
+func (s *Store) storeApexDomain(name string) (*models.Apex, error) {
+	model := &models.Apex{
+		ID:   s.ids.apexes,
 		Apex: name,
 	}
-	if err := s.db.Create(&model).Error; err != nil {
+
+	s.apexByName[name] = model
+	s.inserts.apexes[model.ID] = model
+	s.ids.apexes++
+
+	if err := s.conditionalPostHooks(); err != nil {
 		return nil, err
 	}
-	s.apexMutex.Lock()
-	s.apexes[name] = &model
-	s.apexMutex.Unlock()
-	return &model, nil
+
+	return model, nil
 }
 
-func (s *Store) GetApexDomain(domain string) (*models.Apex, error) {
-	s.apexMutex.Lock()
-	res, ok := s.apexes[domain]
-	s.apexMutex.Unlock()
+func (s *Store) getApexDomain(domain string) (*models.Apex, error) {
+	res, ok := s.apexByName[domain]
 	if !ok {
 		var err error
-		res, err = s.StoreApexDomain(domain)
+		res, err = s.storeApexDomain(domain)
 		if err != nil {
 			return nil, err
 		}
@@ -112,29 +149,31 @@ func (s *Store) GetApexDomain(domain string) (*models.Apex, error) {
 }
 
 func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntry, error) {
-	apexModel, err := s.GetApexDomain(domain)
+	s.m.Lock()
+	defer s.m.Unlock()
+	apexModel, err := s.getApexDomain(domain)
 	if err != nil {
 		return nil, err
 	}
 
-	s.apexMutex.Lock()
-	existingZoneEntry, ok := s.zoneEntries[domain]
-	s.apexMutex.Unlock()
+	existingZoneEntry, ok := s.zoneEntriesByApexName[domain]
 	if !ok {
 		// non-active domain, create a new zone entry
 		newZoneEntry := &models.ZonefileEntry{
-			Apex:      *apexModel,
+			ID:        s.ids.zoneEntries,
+			ApexID:    apexModel.ID,
 			FirstSeen: t,
 			LastSeen:  t,
 			Active:    true,
 		}
 
-		if err := s.db.Create(&newZoneEntry).Error; err != nil {
+		s.zoneEntriesByApexName[domain] = newZoneEntry
+		s.inserts.zoneEntries[newZoneEntry.ID] = newZoneEntry
+		s.ids.zoneEntries++
+
+		if err := s.conditionalPostHooks(); err != nil {
 			return nil, err
 		}
-		s.apexMutex.Lock()
-		s.zoneEntries[domain] = newZoneEntry
-		s.apexMutex.Unlock()
 
 		return newZoneEntry, nil
 	}
@@ -142,43 +181,53 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 	// active domain
 	if existingZoneEntry.LastSeen.Before(time.Now().Add(-s.allowedInterval)) {
 		// detected re-registration, set old entry inactive and create new
-		if err := s.db.Model(existingZoneEntry).Update("active", false).Error; err != nil {
-			return nil, err
-		}
+
+		existingZoneEntry.Active = false
+		s.updates.zoneEntries[existingZoneEntry.ID] = existingZoneEntry
 
 		newZoneEntry := &models.ZonefileEntry{
-			Apex:      *apexModel,
+			ID:        s.ids.zoneEntries,
+			ApexID:    apexModel.ID,
 			FirstSeen: t,
 			LastSeen:  t,
 			Active:    true,
 		}
 
-		if err := s.db.Create(&newZoneEntry).Error; err != nil {
+		s.zoneEntriesByApexName[domain] = newZoneEntry
+		s.inserts.zoneEntries[newZoneEntry.ID] = newZoneEntry
+		s.ids.zoneEntries++
+
+		if err := s.conditionalPostHooks(); err != nil {
 			return nil, err
 		}
-
-		s.apexMutex.Lock()
-		s.zoneEntries[domain] = newZoneEntry
-		s.apexMutex.Unlock()
 
 		return newZoneEntry, nil
 	}
 
 	// update existing
-	if err := s.db.Model(existingZoneEntry).Update("last_seen", t).Error; err != nil {
+	existingZoneEntry.LastSeen = t
+	s.updates.zoneEntries[existingZoneEntry.ID] = existingZoneEntry
+
+	if err := s.conditionalPostHooks(); err != nil {
 		return nil, err
 	}
 
 	return existingZoneEntry, nil
 }
 
+// use Gorm's auto migrate functionality
 func (s *Store) migrate() error {
+	g, err := s.conf.Open()
+	if err != nil {
+		return err
+	}
+
 	migrateExamples := []interface{}{
 		&models.Apex{},
 		&models.ZonefileEntry{},
 	}
 	for _, ex := range migrateExamples {
-		if err := s.db.AutoMigrate(ex).Error; err != nil {
+		if err := g.AutoMigrate(ex).Error; err != nil {
 			return err
 		}
 	}
@@ -186,41 +235,99 @@ func (s *Store) migrate() error {
 }
 
 func (s *Store) init() error {
-	s.apexMutex.Lock()
-	defer s.apexMutex.Unlock()
-
 	var apexes []models.Apex
-	if err := s.db.Find(&apexes).Error; err != nil {
+	if err := s.db.Model(&apexes).Select(); err != nil {
 		return err
 	}
 	for _, apex := range apexes {
-		s.apexes[apex.Apex] = &apex
+		s.apexByName[apex.Apex] = &apex
+		s.apexById[apex.ID] = &apex
 	}
 
 	var entries []models.ZonefileEntry
-	if err := s.db.Preload("Apex").Where(models.ZonefileEntry{Active: true}).Find(&entries).Error; err != nil {
+	if err := s.db.Model(&entries).Select(); err != nil {
 		return err
 	}
 	for _, entry := range entries {
-		s.zoneEntries[entry.Apex.Apex] = &entry
+		apex := s.apexById[entry.ApexID]
+		s.zoneEntriesByApexName[apex.Apex] = &entry
+	}
+
+	s.ids.apexes = 1
+	if len(apexes) > 0 {
+		s.ids.apexes = apexes[len(apexes)-1].ID + 1
+	}
+	s.ids.zoneEntries = 1
+	if len(entries) > 0 {
+		s.ids.zoneEntries = entries[len(entries)-1].ID + 1
 	}
 
 	return nil
 }
 
-func NewStore(conf Config, allowedInterval time.Duration) (*Store, error) {
-	db, err := conf.Open()
-	if err != nil {
-		return nil, err
+func NewStore(conf Config, batchSize int, allowedInterval time.Duration) (*Store, error) {
+	opts := pg.Options{
+		User:     conf.User,
+		Password: conf.Password,
+		Addr:     fmt.Sprintf("%s:%d", conf.Host, conf.Port),
+		Database: conf.DBName,
 	}
 
+	db := pg.Connect(&opts)
+
 	s := Store{
-		db:              db,
-		apexes:          make(map[string]*models.Apex),
-		zoneEntries:     make(map[string]*models.ZonefileEntry),
-		allowedInterval: allowedInterval,
-		apexMutex:       &sync.Mutex{},
+		conf:                  conf,
+		db:                    db,
+		apexByName:            make(map[string]*models.Apex),
+		apexById:              make(map[uint]*models.Apex),
+		zoneEntriesByApexName: make(map[string]*models.ZonefileEntry),
+		allowedInterval:       allowedInterval,
+		m:                     &sync.Mutex{},
+		batchSize:             batchSize,
+		postHooks:             []postHook{},
+		inserts:               NewModelSet(),
+		updates:               NewModelSet(),
+		ids:                   Ids{},
 	}
+
+	postHook := func(s *Store) error {
+		tx, err := s.db.Begin()
+		if err != nil {
+			return err
+		}
+		defer tx.Rollback()
+		if len(s.inserts.apexes) > 0 {
+			a := s.inserts.apexList()
+			if err := tx.Insert(&a); err != nil {
+				return err
+			}
+		}
+		if len(s.inserts.zoneEntries) > 0 {
+			z := s.inserts.zoneEntryList()
+			if err := tx.Insert(&z); err != nil {
+				return err
+			}
+		}
+		if len(s.updates.apexes) > 0 {
+			a := s.updates.apexList()
+			if err := tx.Update(&a); err != nil {
+				return err
+			}
+		}
+		if len(s.updates.zoneEntries) > 0 {
+			z := s.updates.zoneEntryList()
+			_, err := tx.Model(&z).Column("last_seen").Update()
+			if err != nil {
+				return err
+			}
+		}
+		s.updates = NewModelSet()
+		s.inserts = NewModelSet()
+
+		return tx.Commit()
+	}
+
+	s.postHooks = append(s.postHooks, postHook)
 
 	if err := s.migrate(); err != nil {
 		return nil, err
