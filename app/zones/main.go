@@ -158,6 +158,7 @@ func main() {
 					if err != nil {
 						log.Debug().Msgf("failed to store domain '%s': %s", domain, err)
 					}
+					c++
 					return nil
 				}
 
@@ -166,6 +167,7 @@ func main() {
 					StreamWrappers: zc.streamWrappers,
 					StreamHandler:  zc.streamHandler,
 				}
+
 
 				resultStatus := "ok"
 				if err := zone.Process(zc.zone, opts); err != nil {
