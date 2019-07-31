@@ -137,14 +137,15 @@ func main() {
 				charmap.ISO8859_1.NewDecoder(),
 			},
 		}
+		wg.Add(len(zoneConfigs))
 		progress := 0
 		for _, zc := range zoneConfigs {
 			go func(zc zoneConfig) {
-				wg.Add(1)
 				defer wg.Done()
 
 				c := 0
 				domainFunc := func(domain []byte) error {
+					c++
 					if zc.decoder != nil {
 						var err error
 						domain, err = zc.decoder.Bytes(domain)
@@ -157,7 +158,6 @@ func main() {
 					if err != nil {
 						log.Debug().Msgf("failed to store domain '%s': %s", domain, err)
 					}
-					c++
 					return nil
 				}
 
@@ -183,7 +183,8 @@ func main() {
 		}
 
 		wg.Wait()
-		return nil
+
+		return s.RunPostHooks()
 	}
 
 	// retrieve all zone files on a daily basis

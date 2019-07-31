@@ -20,6 +20,16 @@ func resetDb(g *gorm.DB) error {
 			return err
 		}
 	}
+
+	migrateExamples := []interface{}{
+		&models.Apex{},
+		&models.ZonefileEntry{},
+	}
+	for _, ex := range migrateExamples {
+		if err := g.AutoMigrate(ex).Error; err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -37,7 +47,6 @@ func TestStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open gorm database: %s", err)
 	}
-	g.LogMode(true)
 
 	if err := resetDb(g); err != nil {
 		t.Fatalf("failed to reset database: %s", err)
@@ -85,5 +94,39 @@ func TestStore(t *testing.T) {
 		if count != tc.count {
 			t.Fatalf("expected %d elements, but got %d", tc.count, count)
 		}
+	}
+}
+
+func TestInit(t *testing.T) {
+	conf := Config{
+		User:     "postgres",
+		Password: "postgres",
+		DBName:   "domains",
+		Host:     "localhost",
+		Port:     10001,
+	}
+
+	g, err := conf.Open()
+	if err != nil {
+		t.Fatalf("failed to open gorm database: %s", err)
+	}
+
+	if err := resetDb(g); err != nil {
+		t.Fatalf("failed to reset database: %s", err)
+	}
+
+	for i := 0; i < 10; i++ {
+		if err := g.Create(&models.Apex{Apex: fmt.Sprintf("%d.com", i)}).Error; err != nil {
+			t.Fatalf("error while writing apex to db: %s", err)
+		}
+	}
+
+	s, err := NewStore(conf, 10, 10*time.Millisecond)
+	if err != nil {
+		t.Fatalf("failed to create store: %s", err)
+	}
+
+	if s.ids.apexes != 11 {
+		t.Fatalf("expected next id to be %d, but got %d", 11, s.ids.apexes)
 	}
 }
