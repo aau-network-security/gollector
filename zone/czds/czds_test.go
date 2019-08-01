@@ -13,12 +13,11 @@ func TestCzds(t *testing.T) {
 
 	user := os.Getenv("CZDS_USER")
 	pass := os.Getenv("CZDS_PASS")
-	conf := Config{
-		Tld:      "net",
+	conf := Credentials{
 		Username: user,
 		Password: pass,
 	}
-	z := New(conf)
+	z := New(conf, "net")
 
 	count := 0
 	f := func(domain []byte) error {

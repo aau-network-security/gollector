@@ -60,15 +60,15 @@ func (ar *authResponse) isExpired() (bool, error) {
 }
 
 type client struct {
-	conf       Config
+	cred       Credentials
 	httpClient *http.Client
 	auth       *authResponse
 }
 
-func NewClient(conf Config) Client {
+func NewClient(cred Credentials) Client {
 	httpClient := &http.Client{}
 	c := client{
-		conf:       conf,
+		cred:       cred,
 		httpClient: httpClient,
 	}
 	return &c
@@ -94,8 +94,8 @@ func (c *client) ensureAuthenticated() error {
 
 func (c *client) authenticate() error {
 	postBody := authRequest{
-		Username: c.conf.Username,
-		Password: c.conf.Password,
+		Username: c.cred.Username,
+		Password: c.cred.Password,
 	}
 	marshalled, err := json.Marshal(postBody)
 	if err != nil {
