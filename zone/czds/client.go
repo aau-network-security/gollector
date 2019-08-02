@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"io"
+	"net"
 	"net/http"
 	"time"
 )
@@ -66,7 +67,21 @@ type client struct {
 }
 
 func NewClient(cred Credentials) Client {
-	httpClient := &http.Client{}
+	httpClient := &http.Client{
+		//Timeout: time.Minute * 120, // this timeout also included reading resp body,
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			//MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   20 * time.Second,
+			ResponseHeaderTimeout: 20 * time.Second,
+			ExpectContinueTimeout: 5 * time.Second,
+		},
+	}
 	c := client{
 		cred:       cred,
 		httpClient: httpClient,

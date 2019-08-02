@@ -17,7 +17,7 @@ type Config struct {
 
 type Client interface {
 	Login(user, pass string) error
-	Retr(string) (io.Reader, error)
+	Retr(string) (io.ReadCloser, error)
 }
 
 type client struct {
@@ -28,7 +28,7 @@ func (c *client) Login(user, pass string) error {
 	return c.c.Login(user, pass)
 }
 
-func (c *client) Retr(s string) (io.Reader, error) {
+func (c *client) Retr(s string) (io.ReadCloser, error) {
 	return c.c.Retr(s)
 }
 
@@ -42,7 +42,7 @@ func (z *ftpZone) Tld() string {
 	return z.conf.Tld
 }
 
-func (z *ftpZone) Stream() (io.Reader, error) {
+func (z *ftpZone) Stream() (io.ReadCloser, error) {
 	if err := z.client.Login(z.conf.Username, z.conf.Password); err != nil {
 		return nil, err
 	}

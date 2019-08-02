@@ -176,7 +176,6 @@ func main() {
 					StreamHandler:  zc.streamHandler,
 				}
 
-
 				resultStatus := "ok"
 				if err := zone.Process(zc.zone, opts); err != nil {
 					log.Error().Msgf("error while processing zone file: %s", err)

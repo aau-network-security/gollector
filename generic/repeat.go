@@ -12,7 +12,11 @@ func Repeat(f func(t time.Time) error, startTime time.Time, interval time.Durati
 	untilStart := startTime.Sub(time.Now())
 
 	if untilStart > 0 {
-		log.Debug().Msgf("Waiting %s before starting function", untilStart)
+		msg := fmt.Sprintf("Next scheduled at %s", time.Now().Add(untilStart))
+		if n >= 0 {
+			msg += fmt.Sprintf(" (%d remaining)", n)
+		}
+		log.Debug().Msgf(msg)
 		<-time.After(untilStart)
 	}
 

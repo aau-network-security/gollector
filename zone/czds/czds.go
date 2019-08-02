@@ -19,7 +19,7 @@ func (z *czdsZone) Tld() string {
 	return z.tld
 }
 
-func (z *czdsZone) Stream() (io.Reader, error) {
+func (z *czdsZone) Stream() (io.ReadCloser, error) {
 	return z.client.GetZone(z.tld)
 }
 

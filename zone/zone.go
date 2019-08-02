@@ -26,7 +26,7 @@ func (err *ZoneErr) Error() string {
 
 type DomainFunc func([]byte) error
 
-type StreamWrapper func(io.Reader) (io.Reader, error)
+type StreamWrapper func(closer io.ReadCloser) (io.ReadCloser, error)
 
 type StreamHandler func(io.Reader, DomainFunc) error
 
@@ -80,12 +80,12 @@ func ListHandler(str io.Reader, f DomainFunc) error {
 	return nil
 }
 
-func GzipWrapper(r io.Reader) (io.Reader, error) {
+func GzipWrapper(r io.ReadCloser) (io.ReadCloser, error) {
 	return gzip.NewReader(r)
 }
 
 type Zone interface {
-	Stream() (io.Reader, error)
+	Stream() (io.ReadCloser, error)
 	Tld() string
 }
 
@@ -98,6 +98,7 @@ func Process(z Zone, opts ProcessOpts) error {
 	if err != nil {
 		return &ZoneErr{z.Tld(), err}
 	}
+	defer str.Close()
 	log.Info().Msgf("successfully obtained stream for '%s'", z.Tld())
 
 	for _, w := range opts.StreamWrappers {
