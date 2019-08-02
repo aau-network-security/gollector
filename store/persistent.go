@@ -263,6 +263,7 @@ func (s *Store) migrate() error {
 	migrateExamples := []interface{}{
 		&models.Apex{},
 		&models.ZonefileEntry{},
+		&models.Tld{},
 	}
 	for _, ex := range migrateExamples {
 		if err := g.AutoMigrate(ex).Error; err != nil {
