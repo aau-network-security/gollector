@@ -5,33 +5,30 @@ import (
 	"io"
 )
 
-type Config struct {
-	Tld      string `yaml:"tld"`
+type Credentials struct {
 	Username string `yaml:"username"`
 	Password string
 }
 
 type czdsZone struct {
-	conf   Config
+	tld    string
 	client Client
-	seen   map[string]interface{}
 }
 
 func (z *czdsZone) Tld() string {
-	return z.conf.Tld
+	return z.tld
 }
 
 func (z *czdsZone) Stream() (io.Reader, error) {
-	return z.client.GetZone(z.conf.Tld)
+	return z.client.GetZone(z.tld)
 }
 
-func New(conf Config) zone.Zone {
-	client := NewClient(conf)
+func New(cred Credentials, tld string) zone.Zone {
+	client := NewClient(cred)
 
 	zone := czdsZone{
-		conf:   conf,
+		tld:    tld,
 		client: client,
-		seen:   make(map[string]interface{}),
 	}
 	return &zone
 }

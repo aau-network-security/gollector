@@ -9,11 +9,11 @@ import (
 func TestClient(t *testing.T) {
 	user := os.Getenv("CZDS_USER")
 	pass := os.Getenv("CZDS_PASS")
-	conf := Config{
+	creds := Credentials{
 		Username: user,
 		Password: pass,
 	}
-	c := NewClient(conf)
+	c := NewClient(creds)
 
 	resp, err := c.GetZone("net")
 	if err != nil {

@@ -22,9 +22,9 @@ import (
 )
 
 const (
-	ComFtpPass  = "COM_FTP_PASS"
-	NetCzdsPass = "NET_CZDS_PASS"
-	DkSshPass   = "DK_SSH_PASS"
+	ComFtpPass = "COM_FTP_PASS"
+	CzdsPass   = "CZDS_PASS"
+	DkSshPass  = "DK_SSH_PASS"
 )
 
 type Com struct {
@@ -38,13 +38,14 @@ type Dk struct {
 	Ssh  ssh.Config  `yaml:"ssh"`
 }
 
-type Net struct {
-	Czds czds.Config `yaml:"czds"`
+type Czds struct {
+	Tlds  []string         `yaml:"tlds"`
+	Creds czds.Credentials `yaml:"credentials"`
 }
 
 type config struct {
 	Com   Com          `yaml:"com"`
-	Net   Net          `yaml:"net"`
+	Czds  Czds         `yaml:"czds"`
 	Dk    Dk           `yaml:"dk"`
 	Store store.Config `yaml:"store"`
 }
@@ -60,11 +61,10 @@ func readConfig(path string) (config, error) {
 	}
 
 	conf.Com.Ftp.Password = os.Getenv(ComFtpPass)
-	conf.Net.Czds.Password = os.Getenv(NetCzdsPass)
-	conf.Net.Czds.Password = os.Getenv(NetCzdsPass)
+	conf.Czds.Creds.Password = os.Getenv(CzdsPass)
 	conf.Dk.Ssh.Password = os.Getenv(DkSshPass)
 
-	for _, env := range []string{ComFtpPass, NetCzdsPass, DkSshPass} {
+	for _, env := range []string{ComFtpPass, CzdsPass, DkSshPass} {
 		os.Setenv(env, "")
 	}
 
@@ -95,8 +95,23 @@ func main() {
 
 	f := func(t time.Time) error {
 		wg := sync.WaitGroup{}
+		var zoneConfigs []zoneConfig
 
-		netZone := czds.New(conf.Net.Czds)
+		for _, tld := range conf.Czds.Tlds {
+			cred := czds.Credentials{
+				Username: conf.Czds.Creds.Username,
+				Password: conf.Czds.Creds.Password,
+			}
+			z := czds.New(cred, tld)
+			zc := zoneConfig{
+				z,
+				[]zone.StreamWrapper{zone.GzipWrapper},
+				zone.ZoneFileHandler,
+				nil,
+			}
+
+			zoneConfigs = append(zoneConfigs, zc)
+		}
 
 		var sshDialFunc func(network, address string) (net.Conn, error)
 		if conf.Com.SshEnabled {
@@ -116,16 +131,9 @@ func main() {
 			log.Fatal().Msgf("failed to create .dk zone retriever: %s", err)
 		}
 
-		_, _ = netZone, comZone
-
-		zoneConfigs := []zoneConfig{
+		zoneConfigs = append(zoneConfigs, []zoneConfig{
 			{
 				comZone,
-				[]zone.StreamWrapper{zone.GzipWrapper},
-				zone.ZoneFileHandler,
-				nil,
-			},
-			{netZone,
 				[]zone.StreamWrapper{zone.GzipWrapper},
 				zone.ZoneFileHandler,
 				nil,
@@ -136,7 +144,7 @@ func main() {
 				zone.ListHandler,
 				charmap.ISO8859_1.NewDecoder(),
 			},
-		}
+		}...)
 		wg.Add(len(zoneConfigs))
 		progress := 0
 		for _, zc := range zoneConfigs {
