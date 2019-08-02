@@ -12,6 +12,7 @@ func resetDb(g *gorm.DB) error {
 	tables := []string{
 		"apexes",
 		"zonefile_entries",
+		"tlds",
 	}
 
 	for _, table := range tables {
@@ -24,6 +25,7 @@ func resetDb(g *gorm.DB) error {
 	migrateExamples := []interface{}{
 		&models.Apex{},
 		&models.ZonefileEntry{},
+		&models.Tld{},
 	}
 	for _, ex := range migrateExamples {
 		if err := g.AutoMigrate(ex).Error; err != nil {
@@ -78,6 +80,7 @@ func TestStore(t *testing.T) {
 		{1, &models.Apex{}, ""},
 		{3, &models.ZonefileEntry{}, ""},
 		{1, &models.ZonefileEntry{}, "active = true"},
+		{1, &models.Tld{}, ""},
 	}
 
 	for _, tc := range counts {

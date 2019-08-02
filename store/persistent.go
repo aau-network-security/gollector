@@ -7,6 +7,7 @@ import (
 	"github.com/jinzhu/gorm"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
+	"strings"
 	"sync"
 	"time"
 )
@@ -17,6 +18,14 @@ type EntryExistsErr struct {
 
 func (err EntryExistsErr) Error() string {
 	return fmt.Sprintf("trying to store zonefile entry for existing domain '%s'", err.Domain)
+}
+
+type InvalidDomainErr struct {
+	Domain string
+}
+
+func (err InvalidDomainErr) Error() string {
+	return fmt.Sprintf("cannot store invalid domain: %s", err.Domain)
 }
 
 type Config struct {
@@ -77,7 +86,7 @@ func NewModelSet() ModelSet {
 type postHook func(*Store) error
 
 type Ids struct {
-	zoneEntries, apexes uint
+	zoneEntries, apexes, tlds uint
 }
 
 type Store struct {
@@ -86,6 +95,7 @@ type Store struct {
 	apexByName            map[string]*models.Apex
 	apexById              map[uint]*models.Apex
 	zoneEntriesByApexName map[string]*models.ZonefileEntry
+	tldByName             map[string]*models.Tld
 
 	allowedInterval time.Duration
 	m               *sync.Mutex
@@ -119,10 +129,38 @@ func (s *Store) conditionalPostHooks() error {
 	return nil
 }
 
+func (s *Store) getOrCreateTld(tld string) (*models.Tld, error) {
+	t, ok := s.tldByName[tld]
+	if !ok {
+		t = &models.Tld{
+			ID:  s.ids.tlds,
+			Tld: tld,
+		}
+		if err := s.db.Insert(t); err != nil {
+			return nil, err
+		}
+
+		s.tldByName[tld] = t
+		s.ids.tlds++
+	}
+	return t, nil
+}
+
 func (s *Store) storeApexDomain(name string) (*models.Apex, error) {
+	splitted := strings.Split(name, ".")
+	if len(splitted) == 1 {
+		return nil, InvalidDomainErr{name}
+	}
+
+	tld, err := s.getOrCreateTld(splitted[len(splitted)-1])
+	if err != nil {
+		return nil, err
+	}
+
 	model := &models.Apex{
-		ID:   s.ids.apexes,
-		Apex: name,
+		ID:    s.ids.apexes,
+		Apex:  name,
+		TldID: tld.ID,
 	}
 
 	s.apexByName[name] = model
@@ -136,7 +174,7 @@ func (s *Store) storeApexDomain(name string) (*models.Apex, error) {
 	return model, nil
 }
 
-func (s *Store) getApexDomain(domain string) (*models.Apex, error) {
+func (s *Store) getOrCreateApex(domain string) (*models.Apex, error) {
 	res, ok := s.apexByName[domain]
 	if !ok {
 		var err error
@@ -151,7 +189,7 @@ func (s *Store) getApexDomain(domain string) (*models.Apex, error) {
 func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntry, error) {
 	s.m.Lock()
 	defer s.m.Unlock()
-	apexModel, err := s.getApexDomain(domain)
+	apexModel, err := s.getOrCreateApex(domain)
 	if err != nil {
 		return nil, err
 	}
@@ -253,6 +291,14 @@ func (s *Store) init() error {
 		s.zoneEntriesByApexName[apex.Apex] = entry
 	}
 
+	var tlds []*models.Tld
+	if err := s.db.Model(&entries).Select(); err != nil {
+		return err
+	}
+	for _, tld := range tlds {
+		s.tldByName[tld.Tld] = tld
+	}
+
 	s.ids.apexes = 1
 	if len(apexes) > 0 {
 		s.ids.apexes = apexes[len(apexes)-1].ID + 1
@@ -260,6 +306,10 @@ func (s *Store) init() error {
 	s.ids.zoneEntries = 1
 	if len(entries) > 0 {
 		s.ids.zoneEntries = entries[len(entries)-1].ID + 1
+	}
+	s.ids.tlds = 1
+	if len(tlds) > 0 {
+		s.ids.tlds = entries[len(tlds)-1].ID + 1
 	}
 
 	return nil
@@ -281,6 +331,7 @@ func NewStore(conf Config, batchSize int, allowedInterval time.Duration) (*Store
 		apexByName:            make(map[string]*models.Apex),
 		apexById:              make(map[uint]*models.Apex),
 		zoneEntriesByApexName: make(map[string]*models.ZonefileEntry),
+		tldByName:             make(map[string]*models.Tld),
 		allowedInterval:       allowedInterval,
 		m:                     &sync.Mutex{},
 		batchSize:             batchSize,

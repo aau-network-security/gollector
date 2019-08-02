@@ -4,9 +4,15 @@ import (
 	"time"
 )
 
+type Tld struct {
+	ID  uint `gorm:"primary_key"`
+	Tld string
+}
+
 type Apex struct {
-	ID   uint `gorm:"primary_key"`
-	Apex string
+	ID    uint `gorm:"primary_key"`
+	Apex  string
+	TldID uint
 }
 
 type Subdomain struct {

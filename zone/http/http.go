@@ -29,7 +29,7 @@ func (z *httpZone) Tld() string {
 	return z.conf.Tld
 }
 
-func (z *httpZone) Stream() (io.Reader, error) {
+func (z *httpZone) Stream() (io.ReadCloser, error) {
 	req, err := http.NewRequest("GET", z.conf.Url, nil)
 	if err != nil {
 		return nil, err
