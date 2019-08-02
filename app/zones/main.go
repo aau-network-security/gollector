@@ -93,16 +93,14 @@ func main() {
 	}
 	_ = s
 
+	authenticator := czds.NewAuthenticator(conf.Czds.Creds)
+
 	f := func(t time.Time) error {
 		wg := sync.WaitGroup{}
 		var zoneConfigs []zoneConfig
 
 		for _, tld := range conf.Czds.Tlds {
-			cred := czds.Credentials{
-				Username: conf.Czds.Creds.Username,
-				Password: conf.Czds.Creds.Password,
-			}
-			z := czds.New(cred, tld)
+			z := czds.New(authenticator, tld)
 			zc := zoneConfig{
 				z,
 				[]zone.StreamWrapper{zone.GzipWrapper},

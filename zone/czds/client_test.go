@@ -13,7 +13,9 @@ func TestClient(t *testing.T) {
 		Username: user,
 		Password: pass,
 	}
-	c := NewClient(creds)
+	a := NewAuthenticator(creds)
+
+	c := NewClient(a)
 
 	resp, err := c.GetZone("net")
 	if err != nil {
