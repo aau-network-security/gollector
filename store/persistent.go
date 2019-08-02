@@ -275,7 +275,7 @@ func (s *Store) migrate() error {
 
 func (s *Store) init() error {
 	var apexes []*models.Apex
-	if err := s.db.Model(&apexes).Select(); err != nil {
+	if err := s.db.Model(&apexes).Order("id ASC").Select(); err != nil {
 		return err
 	}
 	for _, apex := range apexes {
@@ -284,7 +284,7 @@ func (s *Store) init() error {
 	}
 
 	var entries []*models.ZonefileEntry
-	if err := s.db.Model(&entries).Select(); err != nil {
+	if err := s.db.Model(&entries).Order("id ASC").Select(); err != nil {
 		return err
 	}
 	for _, entry := range entries {
@@ -293,7 +293,7 @@ func (s *Store) init() error {
 	}
 
 	var tlds []*models.Tld
-	if err := s.db.Model(&entries).Select(); err != nil {
+	if err := s.db.Model(&tlds).Order("id ASC").Select(); err != nil {
 		return err
 	}
 	for _, tld := range tlds {
@@ -310,7 +310,7 @@ func (s *Store) init() error {
 	}
 	s.ids.tlds = 1
 	if len(tlds) > 0 {
-		s.ids.tlds = entries[len(tlds)-1].ID + 1
+		s.ids.tlds = tlds[len(tlds)-1].ID + 1
 	}
 
 	return nil

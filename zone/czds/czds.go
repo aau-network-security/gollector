@@ -23,8 +23,8 @@ func (z *czdsZone) Stream() (io.ReadCloser, error) {
 	return z.client.GetZone(z.tld)
 }
 
-func New(cred Credentials, tld string) zone.Zone {
-	client := NewClient(cred)
+func New(authenticator *Authenticator, tld string) zone.Zone {
+	client := NewClient(authenticator)
 
 	zone := czdsZone{
 		tld:    tld,
