@@ -235,22 +235,22 @@ func (s *Store) migrate() error {
 }
 
 func (s *Store) init() error {
-	var apexes []models.Apex
+	var apexes []*models.Apex
 	if err := s.db.Model(&apexes).Select(); err != nil {
 		return err
 	}
 	for _, apex := range apexes {
-		s.apexByName[apex.Apex] = &apex
-		s.apexById[apex.ID] = &apex
+		s.apexByName[apex.Apex] = apex
+		s.apexById[apex.ID] = apex
 	}
 
-	var entries []models.ZonefileEntry
+	var entries []*models.ZonefileEntry
 	if err := s.db.Model(&entries).Select(); err != nil {
 		return err
 	}
 	for _, entry := range entries {
 		apex := s.apexById[entry.ApexID]
-		s.zoneEntriesByApexName[apex.Apex] = &entry
+		s.zoneEntriesByApexName[apex.Apex] = entry
 	}
 
 	s.ids.apexes = 1
