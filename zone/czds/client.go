@@ -3,7 +3,9 @@ package czds
 import (
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"time"
 )
 
 const (
@@ -29,7 +31,21 @@ type client struct {
 }
 
 func NewClient(authenticator *Authenticator) Client {
-	httpClient := &http.Client{}
+	httpClient := &http.Client{
+		//Timeout: time.Minute * 120, // this timeout also included reading resp body,
+		Transport: &http.Transport{
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 120 * time.Second,
+				DualStack: true,
+			}).DialContext,
+			//MaxIdleConns:          100,
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   20 * time.Second,
+			ResponseHeaderTimeout: 20 * time.Second,
+			ExpectContinueTimeout: 5 * time.Second,
+		},
+	}
 	c := client{
 		authenticator: authenticator,
 		httpClient:    httpClient,
