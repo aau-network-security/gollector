@@ -4,24 +4,27 @@ com:
     host: rz.verisign-grs.com
     username: <username>
     file: com.zone.gz
-  ssh-enabled: true
   ssh:
     host: <host for SSH proxy>
-    user: <username>
+    user: <user>
     authtype: key
     key: <path to key>
-net:
-  czds:
-    tld: net
+czds:
+  tlds:
+    - xyz
+  credentials:
     username: <username>
 dk:
   http:
     tld: dk
-    url: <URL>
+    url: <url>
   ssh:
     host: <host for SSH proxy>
     user: <username>
     authtype: password
 store:
-  driver: sqlite3
-  filename: test.db
+  host: localhost
+  port: 10001
+  user: postgres
+  password: postgres
+  dbname: domains

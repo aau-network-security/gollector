@@ -2,8 +2,8 @@
 A set of tools that are used to retrieve domain names from different sources, such as 
 - [x] Zone file
     - [x] `.com` zone
-    - [x] `.net` zone
-    - [x] `.dk` zone
+    - [x] `.net` zone (or any zone that can be accessed via CZDS)
+    - [x] `.dk` zone 
 - [ ] DNS resolver logs
 - [ ] CT logs
 
@@ -29,8 +29,8 @@ $ docker run go-domains -v config:/config go-domains --config /config/config.yml
 
 #### Docker Compose
 We also provide a Docker compose specification. 
-The `docker-compose.yml` uses several environment variables, which must be declared in an `.env` file in the root of the project (see `docker-compose.yml` for the required environment variables).
-After creating this file, run with
+The `docker-compose.yml` uses several [environment variables](#required-environment-variables), which can be declared in an `.env` file in the root of the project, or set as exported environment variables.
+After declaring them, run with
 ```bash
 $ docker-compose up db 
 ``` 
@@ -39,3 +39,15 @@ followed by
 $ docker-compose up zones 
 ```
 allowing the Postgres database to start before the zone retrieval container does.
+
+##### Required environment variables
+```.env
+POSTGRES_PASS=<password for db>
+POSTGRES_PORT=<port of db>
+DB_VOLUME=<directory in which database is stored persistently>
+SSH_DIR=<directory of SSH key (used for SSH proxying)>
+
+COM_FTP_PASS=<password for accessing .com FTP server>
+CZDS_PASS=<password for accessing CZDS API>
+DK_SSH_PASS=<password for SSH proxy to access DK zone file>
+```
