@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"github.com/aau-network-security/go-domains/generic"
@@ -11,6 +12,7 @@ import (
 	"github.com/aau-network-security/go-domains/zone/http"
 	"github.com/aau-network-security/go-domains/zone/ssh"
 	"github.com/rs/zerolog/log"
+	"golang.org/x/sync/semaphore"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 	"gopkg.in/yaml.v2"
@@ -94,6 +96,7 @@ func main() {
 	_ = s
 
 	authenticator := czds.NewAuthenticator(conf.Czds.Creds)
+	ctx := context.Background()
 
 	f := func(t time.Time) error {
 		wg := sync.WaitGroup{}
@@ -129,7 +132,7 @@ func main() {
 			log.Fatal().Msgf("failed to create .dk zone retriever: %s", err)
 		}
 
-		zoneConfigs = append(zoneConfigs, []zoneConfig{
+		zoneConfigs = append([]zoneConfig{
 			{
 				comZone,
 				[]zone.StreamWrapper{zone.GzipWrapper},
@@ -142,12 +145,19 @@ func main() {
 				zone.ListHandler,
 				charmap.ISO8859_1.NewDecoder(),
 			},
-		}...)
+		}, zoneConfigs...)
+
+		sem := semaphore.NewWeighted(10) // allow 10 concurrent zone files to be retrieved
 		wg.Add(len(zoneConfigs))
 		progress := 0
 		for _, zc := range zoneConfigs {
 			go func(zc zoneConfig) {
 				defer wg.Done()
+				if err := sem.Acquire(ctx, 1); err != nil {
+					log.Debug().Msgf("failed to acquire semaphore: %s", err)
+					return
+				}
+				defer sem.Release(1)
 
 				c := 0
 				domainFunc := func(domain []byte) error {
