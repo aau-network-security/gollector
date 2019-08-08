@@ -1,6 +1,7 @@
 package ct
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,11 +12,80 @@ import (
 	"time"
 )
 
+var (
+	NoIndexFoundErr  = errors.New("no index found")
+	IndexTooLargeErr = errors.New("cannot determine index to start from, as all entries in log are before requested date")
+)
+
+type EntryCountErr struct {
+	count int
+}
+
+func (err EntryCountErr) Error() string {
+	return fmt.Sprintf("retrieved %d log entries, where 2 were expected", err.count)
+}
+
 type Sth struct {
 	TreeSize          int    `json:"tree_size"`
 	Timestamp         int    `json:"timestamp"`
 	Sha256RootHash    string `json:"sha256_root_hash"`
 	TreeHeadSignature string `json:"tree_head_signature"`
+}
+
+type CachedLogClient struct {
+	cache  map[int64]*ct.LogEntry
+	client client.LogClient
+}
+
+func indexByDate(ctx context.Context, client *client.LogClient, t time.Time, lower int64, upper int64) (int64, error) {
+	middle := int64((lower + upper) / 2)
+
+	entries, err := client.GetEntries(ctx, middle, middle+1)
+	if err != nil {
+		return 0, err
+	}
+	if len(entries) != 2 {
+		return 0, EntryCountErr{len(entries)}
+	}
+	cur, next := entries[0], entries[1]
+	ts := cur.Leaf.TimestampedEntry.Timestamp
+	curTs := time.Unix(int64(ts/1000), int64(ts%1000))
+	ts = next.Leaf.TimestampedEntry.Timestamp
+	nextTs := time.Unix(int64(ts/1000), int64(ts%1000))
+
+	// found it!
+	if t.After(curTs) && t.Before(nextTs) {
+		return middle + 1, nil
+	}
+
+	// must seek left of middle
+	if t.Before(curTs) {
+		// time is under lower bound index, so the first index to return must be ZERO
+		if middle == 0 {
+			return 0, nil
+		}
+		return indexByDate(ctx, client, t, lower, middle)
+	}
+
+	// must seek right of middle
+	if t.After(nextTs) {
+		// time is over upper bound index, so return an IndexTooLargeErr
+		if middle == upper-1 {
+			return 0, IndexTooLargeErr
+		}
+		return indexByDate(ctx, client, t, middle, upper)
+	}
+
+	return 0, NoIndexFoundErr
+}
+
+func IndexByDate(ctx context.Context, client *client.LogClient, t time.Time) (int64, error) {
+	sth, err := client.GetSTH(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	return indexByDate(ctx, client, t, 0, int64(sth.TreeSize)-1)
 }
 
 type Log struct {
