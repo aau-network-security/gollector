@@ -158,7 +158,7 @@ func handleRawLogEntryFunc(certFunc CertFunc) func(rle *ct.RawLogEntry) {
 				return UnsupportedCertTypeErr
 			}
 			return certFunc(cert)
-		}; err != nil {
+		}(); err != nil {
 			log.Debug().Msgf("error while handling raw log entry: %s", err)
 		}
 	}

@@ -34,12 +34,19 @@ func storeCertInDbFunc(s *store.Store) ct.CertFunc {
 }
 
 func main() {
+	ctx := context.Background()
+
 	confFile := flag.String("config", "config/config.yml", "location of configuration file")
 	flag.Parse()
 
 	conf, err := config.ReadConfig(*confFile)
 	if err != nil {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
+	}
+
+	t, err := time.Parse("2006-01-02", conf.Ct.Time)
+	if err != nil {
+		log.Fatal().Msgf("failed to parse time from config: %s", err)
 	}
 
 	s, err := store.NewStore(conf.Store, 20000, time.Hour*36)
@@ -51,9 +58,6 @@ func main() {
 	if err != nil {
 		log.Fatal().Msgf("error while retrieving list of existing logs: %s", err)
 	}
-
-	t := time.Now() // TODO: read from configuration instead
-	ctx := context.Background()
 
 	certFunc := storeCertInDbFunc(s)
 

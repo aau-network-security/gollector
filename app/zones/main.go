@@ -42,14 +42,14 @@ func main() {
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}
 
-	authenticator := czds.NewAuthenticator(conf.Czds.Creds)
+	authenticator := czds.NewAuthenticator(conf.Zone.Czds.Creds)
 	ctx := context.Background()
 
 	f := func(t time.Time) error {
 		wg := sync.WaitGroup{}
 		var zoneConfigs []zoneConfig
 
-		for _, tld := range conf.Czds.Tlds {
+		for _, tld := range conf.Zone.Czds.Tlds {
 			z := czds.New(authenticator, tld)
 			zc := zoneConfig{
 				z,
@@ -62,19 +62,19 @@ func main() {
 		}
 
 		var sshDialFunc func(network, address string) (net.Conn, error)
-		if conf.Com.SshEnabled {
-			sshDialFunc, err = ssh.DialFunc(conf.Com.Ssh)
+		if conf.Zone.Com.SshEnabled {
+			sshDialFunc, err = ssh.DialFunc(conf.Zone.Com.Ssh)
 			if err != nil {
 				log.Fatal().Msgf("failed to create SSH dial func: %s", err)
 			}
 		}
-		comZone, err := ftp.New(conf.Com.Ftp, sshDialFunc)
+		comZone, err := ftp.New(conf.Zone.Com.Ftp, sshDialFunc)
 		if err != nil {
 			log.Fatal().Msgf("failed to create .com zone retriever: %s", err)
 		}
 
-		httpClient, err := ssh.HttpClient(conf.Dk.Ssh)
-		dkZone, err := http.New(conf.Dk.Http, httpClient)
+		httpClient, err := ssh.HttpClient(conf.Zone.Dk.Ssh)
+		dkZone, err := http.New(conf.Zone.Dk.Http, httpClient)
 		if err != nil {
 			log.Fatal().Msgf("failed to create .dk zone retriever: %s", err)
 		}

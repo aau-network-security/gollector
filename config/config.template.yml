@@ -1,27 +1,30 @@
-com:
-  ftp:
-    tld: com
-    host: rz.verisign-grs.com
-    username: <username>
-    file: com.zone.gz
-  ssh:
-    host: <host for SSH proxy>
-    user: <user>
-    authtype: key
-    key: <path to key>
-czds:
-  tlds:
-    - xyz
-  credentials:
-    username: <username>
-dk:
-  http:
-    tld: dk
-    url: <url>
-  ssh:
-    host: <host for SSH proxy>
-    user: <username>
-    authtype: password
+zone:
+  com:
+    ftp:
+      tld: com
+      host: rz.verisign-grs.com
+      username: <username>
+      file: com.zone.gz
+    ssh:
+      host: <host for SSH proxy>
+      user: <user>
+      authtype: key
+      key: <path to key>
+  czds:
+    tlds:
+      - xyz
+    credentials:
+      username: <username>
+  dk:
+    http:
+      tld: dk
+      url: <url>
+    ssh:
+      host: <host for SSH proxy>
+      user: <username>
+      authtype: password
+ct:
+  time: 2019-08-08
 store:
   host: localhost
   port: 10001

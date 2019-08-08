@@ -33,10 +33,19 @@ type Czds struct {
 	Creds czds.Credentials `yaml:"credentials"`
 }
 
+type Zone struct {
+	Com  Com  `yaml:"com"`
+	Czds Czds `yaml:"czds"`
+	Dk   Dk   `yaml:"dk"`
+}
+
+type Ct struct {
+	Time string `yaml:"time"`
+}
+
 type config struct {
-	Com   Com          `yaml:"com"`
-	Czds  Czds         `yaml:"czds"`
-	Dk    Dk           `yaml:"dk"`
+	Zone  Zone         `yaml:"zone"`
+	Ct    Ct           `yaml:"ct"`
 	Store store.Config `yaml:"store"`
 }
 
@@ -50,9 +59,9 @@ func ReadConfig(path string) (config, error) {
 		return conf, err
 	}
 
-	conf.Com.Ftp.Password = os.Getenv(ComFtpPass)
-	conf.Czds.Creds.Password = os.Getenv(CzdsPass)
-	conf.Dk.Ssh.Password = os.Getenv(DkSshPass)
+	conf.Zone.Com.Ftp.Password = os.Getenv(ComFtpPass)
+	conf.Zone.Czds.Creds.Password = os.Getenv(CzdsPass)
+	conf.Zone.Dk.Ssh.Password = os.Getenv(DkSshPass)
 
 	for _, env := range []string{ComFtpPass, CzdsPass, DkSshPass} {
 		os.Setenv(env, "")
