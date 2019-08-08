@@ -16,9 +16,16 @@ import (
 
 var (
 	NoIndexFoundErr        = errors.New("no index found")
-	IndexTooLargeErr       = errors.New("cannot determine index to start from, as all entries in log are before requested date")
 	UnsupportedCertTypeErr = errors.New("provided certificate is not supported")
 )
+
+type IndexTooLargeErr struct {
+	t time.Time
+}
+
+func (err IndexTooLargeErr) Error() string {
+	return fmt.Sprintf("cannot determine index to start from, as all entries in log are after upper limit date: %s", err.t)
+}
 
 type EntryCountErr struct {
 	count int
@@ -74,7 +81,7 @@ func indexByDate(ctx context.Context, client *client.LogClient, t time.Time, low
 	if t.After(nextTs) {
 		// time is over upper bound index, so return an IndexTooLargeErr
 		if middle == upper-1 {
-			return 0, IndexTooLargeErr
+			return 0, IndexTooLargeErr{nextTs}
 		}
 		return indexByDate(ctx, client, t, middle, upper)
 	}
@@ -164,21 +171,27 @@ func handleRawLogEntryFunc(certFunc CertFunc) func(rle *ct.RawLogEntry) {
 	}
 }
 
-func ScanFromTime(ctx context.Context, logClient *client.LogClient, t time.Time, f CertFunc) error {
+func ScanFromTime(ctx context.Context, logClient *client.LogClient, t time.Time, f CertFunc) (int64, error) {
 	startIndex, err := IndexByDate(ctx, logClient, t)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	opts := scanner.ScannerOptions{
 		FetcherOptions: scanner.FetcherOptions{
-			StartIndex: startIndex,
-			Continuous: false,
+			BatchSize:     1000,
+			ParallelFetch: 1,
+			StartIndex:    startIndex,
+			EndIndex:      0,
+			Continuous:    false,
 		},
+		Matcher:     &scanner.MatchAll{},
+		PrecertOnly: false,
+		NumWorkers:  1,
 	}
 
 	sc := scanner.NewScanner(logClient, opts)
 	rleFunc := handleRawLogEntryFunc(f)
 
-	return sc.Scan(ctx, rleFunc, rleFunc)
+	return sc.ScanLog(ctx, rleFunc, rleFunc)
 }

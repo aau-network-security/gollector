@@ -12,23 +12,27 @@ import (
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/rs/zerolog/log"
 	"net/http"
+	"sync"
 	"time"
 )
 
-func ScanLogFromTime(ctx context.Context, log ct.Log, t time.Time, certFunc ct.CertFunc) error {
+func ScanLogFromTime(ctx context.Context, log ct.Log, t time.Time, certFunc ct.CertFunc) (int64, error) {
 	uri := fmt.Sprintf("https://%s", log.Url)
 	hc := http.Client{}
 	opts := jsonclient.Options{}
 	lc, err := client.New(uri, &hc, opts)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	return ct.ScanFromTime(ctx, lc, t, certFunc)
 }
 
 func storeCertInDbFunc(s *store.Store) ct.CertFunc {
 	return func(cert *x509.Certificate) error {
-		// TODO: store certificate in store
+		for _, domain := range cert.DNSNames {
+			log.Debug().Msgf("%s", domain)
+		}
+		// TODO: store certificate + domains in store
 		return nil
 	}
 }
@@ -61,10 +65,21 @@ func main() {
 
 	certFunc := storeCertInDbFunc(s)
 
-	for _, l := range logList.Logs {
+	//logs := logList.Logs // todo: Use this list instead of next line!
+	logs := []ct.Log{logList.Logs[0]}
 
-		if err := ScanLogFromTime(ctx, l, t, certFunc); err != nil {
-			log.Debug().Msgf("error while retrieving logs: %s", err)
-		}
+	wg := sync.WaitGroup{}
+	wg.Add(len(logs))
+	for _, l := range logs {
+		go func() {
+			defer wg.Done()
+			count, err := ScanLogFromTime(ctx, l, t, certFunc)
+			if err != nil {
+				log.Debug().Msgf("error while retrieving logs: %s", err)
+				return
+			}
+			log.Debug().Msgf("retrieved %d certificates", count)
+		}()
 	}
+	wg.Wait()
 }
