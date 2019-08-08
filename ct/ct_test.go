@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/google/certificate-transparency-go/client"
 	"github.com/google/certificate-transparency-go/jsonclient"
-	"github.com/rs/zerolog/log"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -40,21 +39,6 @@ func TestLogsFromUrl(t *testing.T) {
 	}
 }
 
-func TestSize(t *testing.T) {
-	s := httptest.NewServer(fileHandler(t, "fixtures/sth.json"))
-
-	l := Log{
-		Url: s.URL,
-	}
-	size, err := l.size()
-	if err != nil {
-		t.Fatalf("unexpected error while retrieving log size: %s", err)
-	}
-	if size != 5 {
-		t.Fatalf("expected size to be %d, but got %d", 64450, size)
-	}
-}
-
 func getEntriesHandleFunc(t *testing.T) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		start := req.URL.Query().Get("start")
@@ -62,17 +46,6 @@ func getEntriesHandleFunc(t *testing.T) http.HandlerFunc {
 		fname := fmt.Sprintf("fixtures/entry_%s_%s.json", start, end)
 		fileHandler(t, fname)(w, req)
 	}
-}
-
-func getSthHandleFunc() http.HandlerFunc {
-	return func(w http.ResponseWriter, req *http.Request) {
-		log.Debug().Msgf("req.Header: %s", req.Header)
-		w.WriteHeader(200)
-	}
-}
-
-func Test(t *testing.T) {
-
 }
 
 func TestIndexByDate(t *testing.T) {

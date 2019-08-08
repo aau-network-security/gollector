@@ -7,14 +7,17 @@ import (
 	"fmt"
 	ct "github.com/google/certificate-transparency-go"
 	"github.com/google/certificate-transparency-go/client"
+	"github.com/google/certificate-transparency-go/scanner"
+	"github.com/google/certificate-transparency-go/x509"
+	"github.com/rs/zerolog/log"
 	"net/http"
-	"net/url"
 	"time"
 )
 
 var (
-	NoIndexFoundErr  = errors.New("no index found")
-	IndexTooLargeErr = errors.New("cannot determine index to start from, as all entries in log are before requested date")
+	NoIndexFoundErr        = errors.New("no index found")
+	IndexTooLargeErr       = errors.New("cannot determine index to start from, as all entries in log are before requested date")
+	UnsupportedCertTypeErr = errors.New("provided certificate is not supported")
 )
 
 type EntryCountErr struct {
@@ -89,103 +92,12 @@ func IndexByDate(ctx context.Context, client *client.LogClient, t time.Time) (in
 }
 
 type Log struct {
-	Description        string `json:"description"`
-	Key                string `json:"key"`
-	Url                string `json:"url"`
-	MaximumMergeDelay  int    `json:"maximum_merge_delay"`
-	OperatedBy         []int  `json:"operated_by"`
-	DnsApiEndpoint     string `json:"dns_api_endpoint"`
-	indexToRawLogEntry map[int64]*ct.RawLogEntry
-	logClient          client.LogClient
-}
-
-func (l *Log) urlByPath(path string, params map[string]string) (string, error) {
-	u, err := url.Parse(l.Url)
-	if err != nil {
-		return "", err
-	}
-	if u.Scheme == "" {
-		u.Scheme = "https"
-	}
-	u.Path = path
-	q := u.Query()
-	for k, v := range params {
-		q.Set(k, v)
-	}
-	u.RawQuery = q.Encode()
-	return u.String(), nil
-}
-
-func (l *Log) size() (int, error) {
-	c := http.Client{}
-	u, err := l.urlByPath("/ct/v1/get-sth", nil)
-	if err != nil {
-		return 0, err
-	}
-
-	resp, err := c.Get(u)
-	if err != nil {
-		return 0, err
-	}
-	defer resp.Body.Close()
-
-	var sth Sth
-	if err := json.NewDecoder(resp.Body).Decode(&sth); err != nil {
-		return 0, err
-	}
-
-	return sth.TreeSize, nil
-}
-
-func (l *Log) get(idx int64) (*ct.RawLogEntry, error) {
-	rle, ok := l.indexToRawLogEntry[idx]
-	if !ok {
-		c := http.Client{}
-		params := map[string]string{
-			"start": fmt.Sprintf("%d", idx),
-			"end":   fmt.Sprintf("%d", idx+1),
-		}
-
-		u, err := l.urlByPath("/ct/v1/get-sth", params)
-		if err != nil {
-			return nil, err
-		}
-
-		resp, err := c.Get(u)
-		if err != nil {
-			return nil, err
-		}
-		defer resp.Body.Close()
-
-		var getEntriesResponse ct.GetEntriesResponse
-		if err := json.NewDecoder(resp.Body).Decode(&getEntriesResponse); err != nil {
-			return nil, err
-		}
-
-		if len(getEntriesResponse.Entries) != 1 {
-			return nil, errors.New("more than one leaf entry received")
-		}
-
-		rle, err = ct.RawLogEntryFromLeaf(idx, &getEntriesResponse.Entries[0])
-		if err != nil {
-			return nil, err
-		}
-		l.indexToRawLogEntry[idx] = rle
-	}
-
-	return rle, nil
-}
-
-// returns the index before which certificates were logged BEFORE time t, and after which certificates were logged AFTER time t
-// it performs a binary search on the CT log, running in O(log(n))
-func (l *Log) IndexByDate(t time.Time) (int, error) {
-	l.indexToRawLogEntry = make(map[int64]*ct.RawLogEntry)
-	size, err := l.size()
-	if err != nil {
-		return 0, err
-	}
-
-	return size, nil
+	Description       string `json:"description"`
+	Key               string `json:"key"`
+	Url               string `json:"url"`
+	MaximumMergeDelay int    `json:"maximum_merge_delay"`
+	OperatedBy        []int  `json:"operated_by"`
+	DnsApiEndpoint    string `json:"dns_api_endpoint"`
 }
 
 type Operator struct {
@@ -225,4 +137,48 @@ func AllLogs() (*LogList, error) {
 // returns a list of all trusted logs
 func TrustedLogs() (*LogList, error) {
 	return logsFromUrl("https://www.gstatic.com/ct/log_list/log_list.json")
+}
+
+type CertFunc func(certificate *x509.Certificate) error
+
+func handleRawLogEntryFunc(certFunc CertFunc) func(rle *ct.RawLogEntry) {
+	return func(rle *ct.RawLogEntry) {
+		if err := func() error {
+			logEntry, err := rle.ToLogEntry()
+			if err != nil {
+				return err
+			}
+
+			var cert *x509.Certificate
+			if logEntry.Precert != nil {
+				cert = logEntry.Precert.TBSCertificate
+			} else if logEntry.X509Cert != nil {
+				cert = logEntry.X509Cert
+			} else {
+				return UnsupportedCertTypeErr
+			}
+			return certFunc(cert)
+		}; err != nil {
+			log.Debug().Msgf("error while handling raw log entry: %s", err)
+		}
+	}
+}
+
+func ScanFromTime(ctx context.Context, logClient *client.LogClient, t time.Time, f CertFunc) error {
+	startIndex, err := IndexByDate(ctx, logClient, t)
+	if err != nil {
+		return err
+	}
+
+	opts := scanner.ScannerOptions{
+		FetcherOptions: scanner.FetcherOptions{
+			StartIndex: startIndex,
+			Continuous: false,
+		},
+	}
+
+	sc := scanner.NewScanner(logClient, opts)
+	rleFunc := handleRawLogEntryFunc(f)
+
+	return sc.Scan(ctx, rleFunc, rleFunc)
 }
