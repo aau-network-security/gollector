@@ -12,6 +12,7 @@ import (
 	"github.com/jinzhu/gorm"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/net/publicsuffix"
 	"strings"
 	"sync"
 	"time"
@@ -39,6 +40,10 @@ type InvalidDomainErr struct {
 
 func (err InvalidDomainErr) Error() string {
 	return fmt.Sprintf("cannot store invalid domain: %s", err.Domain)
+}
+
+func toApex(fqdn string) (string, error) {
+	return publicsuffix.EffectiveTLDPlusOne(fqdn)
 }
 
 func timeFromLogEntry(entry *ct2.LogEntry) time.Time {
@@ -134,9 +139,9 @@ type Store struct {
 	apexById              map[uint]*models.Apex
 	zoneEntriesByApexName map[string]*models.ZonefileEntry
 	tldByName             map[string]*models.Tld
-	certByFingerprint     map[string]*models.Certificate // TODO: correctly initialize
-	logsByUrl             map[string]*models.Log         // TODO: correctly initialize
-	fqdnByName            map[string]*models.Fqdn        // TODO: correclty initialize
+	certByFingerprint     map[string]*models.Certificate
+	logByUrl              map[string]*models.Log
+	fqdnByName            map[string]*models.Fqdn
 
 	allowedInterval time.Duration
 	m               *sync.Mutex
@@ -230,12 +235,18 @@ func (s *Store) getOrCreateApex(domain string) (*models.Apex, error) {
 func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntry, error) {
 	s.m.Lock()
 	defer s.m.Unlock()
-	apexModel, err := s.getOrCreateApex(domain)
+
+	apex, err := toApex(domain)
 	if err != nil {
 		return nil, err
 	}
 
-	existingZoneEntry, ok := s.zoneEntriesByApexName[domain]
+	apexModel, err := s.getOrCreateApex(apex)
+	if err != nil {
+		return nil, err
+	}
+
+	existingZoneEntry, ok := s.zoneEntriesByApexName[apex]
 	if !ok {
 		// non-active domain, create a new zone entry
 		newZoneEntry := &models.ZonefileEntry{
@@ -246,7 +257,7 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 			Active:    true,
 		}
 
-		s.zoneEntriesByApexName[domain] = newZoneEntry
+		s.zoneEntriesByApexName[apex] = newZoneEntry
 		s.inserts.zoneEntries[newZoneEntry.ID] = newZoneEntry
 		s.ids.zoneEntries++
 
@@ -272,7 +283,7 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 			Active:    true,
 		}
 
-		s.zoneEntriesByApexName[domain] = newZoneEntry
+		s.zoneEntriesByApexName[apex] = newZoneEntry
 		s.inserts.zoneEntries[newZoneEntry.ID] = newZoneEntry
 		s.ids.zoneEntries++
 
@@ -295,7 +306,7 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 }
 
 func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
-	l, ok := s.logsByUrl[log.Url]
+	l, ok := s.logByUrl[log.Url]
 	if !ok {
 		l = &models.Log{
 			ID:          s.ids.logs,
@@ -306,7 +317,7 @@ func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
 			return nil, err
 		}
 
-		s.logsByUrl[log.Url] = l
+		s.logByUrl[log.Url] = l
 		s.ids.logs++
 	}
 	return l, nil
@@ -315,7 +326,12 @@ func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
 func (s *Store) getOrCreateFqdn(domain string) (*models.Fqdn, error) {
 	f, ok := s.fqdnByName[domain]
 	if !ok {
-		a, err := s.getOrCreateApex(domain)
+		apex, err := toApex(domain)
+		if err != nil {
+			return nil, err
+		}
+
+		a, err := s.getOrCreateApex(apex)
 		if err != nil {
 			return nil, err
 		}
@@ -451,7 +467,7 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, l := range logs {
-		s.logsByUrl[l.Url] = l
+		s.logByUrl[l.Url] = l
 	}
 
 	var certs []*models.Certificate
@@ -513,7 +529,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		zoneEntriesByApexName: make(map[string]*models.ZonefileEntry),
 		tldByName:             make(map[string]*models.Tld),
 		fqdnByName:            make(map[string]*models.Fqdn),
-		logsByUrl:             make(map[string]*models.Log),
+		logByUrl:              make(map[string]*models.Log),
 		certByFingerprint:     make(map[string]*models.Certificate),
 		allowedInterval:       opts.AllowedInterval,
 		batchSize:             opts.BatchSize,

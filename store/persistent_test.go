@@ -21,7 +21,7 @@ func resetDb(g *gorm.DB) error {
 		"zonefile_entries",
 		"tlds",
 		"fqdns",
-		"certificate_to_fdqns",
+		"certificate_to_fqdns",
 		"certificates",
 		"log_entries",
 		"logs",
@@ -198,26 +198,95 @@ func TestStore_StoreLogEntry(t *testing.T) {
 		Description: "some description",
 	}
 
-	domains := []string{
-		"a.com",
-		"b.com",
+	sanLists := [][]string{
+		{
+			"www.a.com",
+			"www.b.com",
+		},
+		{
+			"mail.a.com",
+			"www.c.com",
+		},
 	}
-	now := time.Now()
-	raw, err := selfSignedCert(now, now, domains)
-	if err != nil {
-		t.Fatalf("unexpected error while creating self-signed certificate: %s", err)
-	}
+	for _, sanList := range sanLists {
+		now := time.Now()
+		raw, err := selfSignedCert(now, now, sanList)
+		if err != nil {
+			t.Fatalf("unexpected error while creating self-signed certificate: %s", err)
+		}
 
-	le, err := logEntryFromCertData(raw, uint64(now.Unix()))
-	if err != nil {
-		t.Fatalf("unexpected error while creating log entry: %s", err)
-	}
+		le, err := logEntryFromCertData(raw, uint64(now.Unix()))
+		if err != nil {
+			t.Fatalf("unexpected error while creating log entry: %s", err)
+		}
 
-	if err := s.StoreLogEntry(le, l); err != nil {
-		t.Fatalf("unexpected error while storing log entry: %s", err)
+		if err := s.StoreLogEntry(le, l); err != nil {
+			t.Fatalf("unexpected error while storing log entry: %s", err)
+		}
 	}
 	if err := s.RunPostHooks(); err != nil {
 		t.Fatalf("unexpected error while running post hooks: %s", err)
+	}
+
+	// test for correct entry count in database
+	counts := []struct {
+		count uint
+		model interface{}
+	}{
+		{4, &models.Fqdn{}},
+		{3, &models.Apex{}},
+		{4, &models.CertificateToFqdn{}},
+		{2, &models.Certificate{}},
+		{2, &models.LogEntry{}},
+		{1, &models.Tld{}},
+	}
+
+	for _, tc := range counts {
+		var count uint
+		if err := g.Model(tc.model).Count(&count).Error; err != nil {
+			t.Fatalf("failed to retrieve apex count: %s", err)
+		}
+
+		if count != tc.count {
+			t.Fatalf("expected %d elements, but got %d", tc.count, count)
+		}
+	}
+
+	// check initialization of new store
+	s, err = NewStore(conf, opts)
+	if err != nil {
+		t.Fatalf("failed to create store: %s", err)
+	}
+
+	comparsions := []struct {
+		name             string
+		actual, expected int
+	}{
+		{
+			"fqdnByName",
+			len(s.fqdnByName),
+			4,
+		},
+		{
+			"apexByName",
+			len(s.apexByName),
+			3,
+		},
+		{
+			"certByFingerprint",
+			len(s.certByFingerprint),
+			2,
+		},
+		{
+			"logByUrl",
+			len(s.logByUrl),
+			1,
+		},
+	}
+	for _, c := range comparsions {
+		if c.actual != c.expected {
+			t.Fatalf("expected map %s to contain %d values, but got %d", c.name, c.expected, c.actual)
+		}
 	}
 }
 
