@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/cheggaaa/pb"
 	ct "github.com/google/certificate-transparency-go"
 	"github.com/google/certificate-transparency-go/client"
 	"github.com/google/certificate-transparency-go/jsonclient"
 	"github.com/google/certificate-transparency-go/scanner"
 	"github.com/rs/zerolog/log"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -41,11 +41,6 @@ type Sth struct {
 	Timestamp         int    `json:"timestamp"`
 	Sha256RootHash    string `json:"sha256_root_hash"`
 	TreeHeadSignature string `json:"tree_head_signature"`
-}
-
-type CachedLogClient struct {
-	cache  map[int64]*ct.LogEntry
-	client client.LogClient
 }
 
 func indexByDate(ctx context.Context, client *client.LogClient, t time.Time, lower int64, upper int64) (int64, error) {
@@ -90,13 +85,18 @@ func indexByDate(ctx context.Context, client *client.LogClient, t time.Time, low
 	return 0, NoIndexFoundErr
 }
 
-func IndexByDate(ctx context.Context, client *client.LogClient, t time.Time) (int64, int64, error) {
-	sth, err := client.GetSTH(ctx)
+func IndexByDate(ctx context.Context, l *Log, t time.Time) (int64, int64, error) {
+	lc, err := l.GetClient()
 	if err != nil {
 		return 0, 0, err
 	}
 
-	start, err := indexByDate(ctx, client, t, 0, int64(sth.TreeSize)-1)
+	sth, err := lc.GetSTH(ctx)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	start, err := indexByDate(ctx, lc, t, 0, int64(sth.TreeSize)-1)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -111,6 +111,26 @@ type Log struct {
 	MaximumMergeDelay int    `json:"maximum_merge_delay"`
 	OperatedBy        []int  `json:"operated_by"`
 	DnsApiEndpoint    string `json:"dns_api_endpoint"`
+	c                 *client.LogClient
+}
+
+func (l *Log) GetClient() (*client.LogClient, error) {
+	if l.c != nil {
+		return l.c, nil
+	}
+	uri := fmt.Sprintf("https://%s", l.Url)
+	hc := http.Client{}
+	jsonOpts := jsonclient.Options{}
+	lc, err := client.New(uri, &hc, jsonOpts)
+	if err != nil {
+		return nil, err
+	}
+	l.c = lc
+	return lc, nil
+}
+
+func (l *Log) Name() string {
+	return strings.ToLower(strings.Split(l.Description, "'")[1])
 }
 
 type Operator struct {
@@ -154,7 +174,7 @@ func TrustedLogs() (*LogList, error) {
 
 type EntryFunc func(entry *ct.LogEntry) error
 
-func handleRawLogEntryFunc(entryFunc EntryFunc, pb *pb.ProgressBar) func(rle *ct.RawLogEntry) {
+func handleRawLogEntryFunc(entryFunc EntryFunc) func(rle *ct.RawLogEntry) {
 	return func(rle *ct.RawLogEntry) {
 		if err := func() error {
 			logEntry, err := rle.ToLogEntry()
@@ -165,34 +185,36 @@ func handleRawLogEntryFunc(entryFunc EntryFunc, pb *pb.ProgressBar) func(rle *ct
 		}(); err != nil {
 			log.Debug().Msgf("error while handling raw log entry: %s", err)
 		}
-		pb.Increment()
 	}
 }
 
-func ScanFromTime(ctx context.Context, l Log, t time.Time, f EntryFunc) (int64, error) {
-	uri := fmt.Sprintf("https://%s", l.Url)
-	hc := http.Client{}
-	jsonOpts := jsonclient.Options{}
-	lc, err := client.New(uri, &hc, jsonOpts)
-	if err != nil {
-		return 0, err
-	}
+type Options struct {
+	StartIndex, EndIndex int64
+}
 
-	startIndex, endIndex, err := IndexByDate(ctx, lc, t)
+func (o Options) Count() int64 {
+	if o.EndIndex == 0 {
+		return 0
+	}
+	return o.EndIndex - o.StartIndex
+}
+
+func Scan(ctx context.Context, l *Log, f EntryFunc, opts Options) (int64, error) {
+	lc, err := l.GetClient()
 	if err != nil {
 		return 0, err
 	}
 
 	log.Info().
-		Str("log", l.Url).
-		Msgf("starting to retrieve %d log entries", endIndex-startIndex)
+		Str("log", l.Name()).
+		Msgf("starting to retrieve %d log entries", opts.EndIndex-opts.StartIndex)
 
 	scannerOpts := scanner.ScannerOptions{
 		FetcherOptions: scanner.FetcherOptions{
 			BatchSize:     1000,
 			ParallelFetch: 1,
-			StartIndex:    startIndex,
-			EndIndex:      endIndex,
+			StartIndex:    opts.StartIndex,
+			EndIndex:      opts.EndIndex,
 			Continuous:    false,
 		},
 		Matcher:     &scanner.MatchAll{},
@@ -200,13 +222,25 @@ func ScanFromTime(ctx context.Context, l Log, t time.Time, f EntryFunc) (int64, 
 		NumWorkers:  1,
 	}
 
-	pb := pb.New(int(endIndex - startIndex)).
-		Prefix(l.Url).
-		Start()
-	defer pb.Finish()
-
 	sc := scanner.NewScanner(lc, scannerOpts)
-	rleFunc := handleRawLogEntryFunc(f, pb)
+	rleFunc := handleRawLogEntryFunc(f)
 
-	return endIndex - startIndex, sc.Scan(ctx, rleFunc, rleFunc)
+	if err := sc.Scan(ctx, rleFunc, rleFunc); err != nil {
+		return 0, err
+	}
+	return opts.Count(), nil
+}
+
+func ScanFromTime(ctx context.Context, l *Log, t time.Time, f EntryFunc) (int64, error) {
+	startIndex, endIndex, err := IndexByDate(ctx, l, t)
+	if err != nil {
+		return 0, err
+	}
+
+	opts := Options{
+		StartIndex: startIndex,
+		EndIndex:   endIndex,
+	}
+
+	return Scan(ctx, l, f, opts)
 }

@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	ct "github.com/google/certificate-transparency-go"
-	"github.com/google/certificate-transparency-go/client"
-	"github.com/google/certificate-transparency-go/jsonclient"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -86,14 +84,11 @@ func TestIndexByDate(t *testing.T) {
 
 			s := httptest.NewServer(mux)
 
-			hc := s.Client()
-			opts := jsonclient.Options{}
-			lc, err := client.New(s.URL, hc, opts)
-			if err != nil {
-				t.Fatalf("failed to create log client: %s", err)
+			l := Log{
+				Url: s.URL,
 			}
 
-			startIndex, endIndex, err := IndexByDate(ctx, lc, test.time)
+			startIndex, endIndex, err := IndexByDate(ctx, l, test.time)
 			if (err == nil) == test.expectErr {
 				t.Fatalf("expected error: %t, but got: %t", test.expectErr, err == nil)
 			}
@@ -116,20 +111,17 @@ func TestScanFromTime(t *testing.T) {
 
 	s := httptest.NewServer(mux)
 
-	hc := s.Client()
-	opts := jsonclient.Options{}
-	lc, err := client.New(s.URL, hc, opts)
-	if err != nil {
-		t.Fatalf("failed to create log client: %s", err)
-	}
-
 	observedCount := 0
 	entryFunc := func(entry *ct.LogEntry) error {
 		observedCount++
 		return nil
 	}
 
-	receivedCount, err := ScanFromTime(ctx, lc, time.Unix(0, 0), entryFunc)
+	l := Log{
+		Url: s.URL,
+	}
+
+	receivedCount, err := ScanFromTime(ctx, &l, time.Unix(0, 0), entryFunc)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}

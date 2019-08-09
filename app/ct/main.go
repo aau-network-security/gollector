@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"github.com/aau-network-security/go-domains/config"
 	"github.com/aau-network-security/go-domains/ct"
 	"github.com/aau-network-security/go-domains/store"
 	ct2 "github.com/google/certificate-transparency-go"
 	"github.com/rs/zerolog/log"
+	"github.com/vbauerster/mpb"
+	"github.com/vbauerster/mpb/decor"
 	"sync"
 	"time"
 )
@@ -39,30 +42,69 @@ func main() {
 	}
 
 	//logs := logList.Logs
-	logs := []ct.Log{logList.Logs[0]}
+	//logs := []ct.Log{logList.Logs[0]}
+	logs := logList.Logs[0:3]
 
 	wg := sync.WaitGroup{}
+
+	p := mpb.New(mpb.WithWaitGroup(&wg))
+
 	wg.Add(len(logs))
+	m := sync.Mutex{}
+	progress := 0
+
 	for _, l := range logs {
 		go func(l ct.Log) {
 			defer wg.Done()
-			entryFunc := func(entry *ct2.LogEntry) error {
-				return s.StoreLogEntry(entry, l)
-			}
 
-			count, err := ct.ScanFromTime(ctx, l, t, entryFunc)
+			start, end, err := ct.IndexByDate(ctx, l, t)
 			if err != nil {
-				log.Warn().
-					Str("log", l.Url).
-					Msgf("error while retrieving logs: %s", err)
+				m.Lock()
+				progress++
+				log.Debug().
+					Str("log", l.Name()).
+					Str("progress", fmt.Sprintf("%d/%d", progress, len(logs))).
+					Msgf("error while getting index by date: %s", err)
+				m.Unlock()
 				return
 			}
+
+			bar := p.AddBar(end-start,
+				mpb.PrependDecorators(
+					decor.Name(l.Name()),
+					decor.CountersNoUnit("%d / %d", decor.WCSyncSpace)),
+				mpb.AppendDecorators(
+					decor.Percentage(),
+					decor.AverageSpeed()))
+			defer bar.Abort(false)
+
+			entryFunc := func(entry *ct2.LogEntry) error {
+				err := s.StoreLogEntry(entry, l)
+				bar.Increment()
+				return err
+			}
+
+			opts := ct.Options{
+				StartIndex: start,
+				EndIndex:   end,
+			}
+
+			count, err := ct.Scan(ctx, &l, entryFunc, opts)
+			if err != nil {
+				log.Warn().
+					Str("log", l.Name()).
+					Msgf("error while retrieving logs: %s", err)
+			}
+			m.Lock()
+			progress++
 			log.Info().
-				Str("log", l.Url).
+				Str("log", l.Name()).
+				Str("progress", fmt.Sprintf("%d/%d", progress, len(logs))).
 				Msgf("retrieved %d log entries", count)
+			m.Unlock()
 		}(l)
 	}
-	wg.Wait()
+	p.Wait()
 
 	if err := s.RunPostHooks(); err != nil {
 		log.Fatal().Msgf("error while running post hooks: %s", err)
