@@ -3,9 +3,9 @@ package ct
 import (
 	"context"
 	"fmt"
+	ct "github.com/google/certificate-transparency-go"
 	"github.com/google/certificate-transparency-go/client"
 	"github.com/google/certificate-transparency-go/jsonclient"
-	"github.com/google/certificate-transparency-go/x509"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -52,25 +52,28 @@ func getEntriesHandleFunc(t *testing.T) http.HandlerFunc {
 func TestIndexByDate(t *testing.T) {
 	now := time.Now()
 	tests := []struct {
-		name          string
-		time          time.Time
-		expectedIndex int64
-		expectedErr   error
+		name               string
+		time               time.Time
+		expectedStartIndex int64
+		expectedEndIndex   int64
+		expectErr          bool
 	}{
 		{
-			name:          "Within range of logs",
-			time:          time.Unix(1502376196, 0), // just before the entry with index 2
-			expectedIndex: 2,
+			name:               "Within range of logs",
+			time:               time.Unix(1502376196, 0), // just before the entry with index 2
+			expectedStartIndex: 2,
+			expectedEndIndex:   5,
 		},
 		{
-			name:          "Before range",
-			time:          time.Unix(0, 0), // 01-01-1970,
-			expectedIndex: 0,
+			name:               "Before range",
+			time:               time.Unix(0, 0), // 01-01-1970,
+			expectedStartIndex: 0,
+			expectedEndIndex:   5,
 		},
 		{
-			name: "After range",
-			time: now, // timestamp after any cert in the test log data set
-			//expectedErr: IndexTooLargeErr{time}, // todo: FIX TEST
+			name:      "After range",
+			time:      now, // timestamp after any cert in the test log data set
+			expectErr: true,
 		},
 	}
 	for _, test := range tests {
@@ -90,12 +93,15 @@ func TestIndexByDate(t *testing.T) {
 				t.Fatalf("failed to create log client: %s", err)
 			}
 
-			idx, err := IndexByDate(ctx, lc, test.time)
-			if err != test.expectedErr {
-				t.Fatalf("expected error %s, but got %s", test.expectedErr, err)
+			startIndex, endIndex, err := IndexByDate(ctx, lc, test.time)
+			if (err == nil) == test.expectErr {
+				t.Fatalf("expected error: %t, but got: %t", test.expectErr, err == nil)
 			}
-			if idx != test.expectedIndex {
-				t.Fatalf("expected index %d, but got %d", test.expectedIndex, idx)
+			if startIndex != test.expectedStartIndex {
+				t.Fatalf("expected start index %d, but got %d", test.expectedStartIndex, startIndex)
+			}
+			if endIndex != test.expectedEndIndex {
+				t.Fatalf("expected end index %d, but got %d", test.expectedEndIndex, endIndex)
 			}
 		})
 	}
@@ -118,12 +124,12 @@ func TestScanFromTime(t *testing.T) {
 	}
 
 	observedCount := 0
-	certFunc := func(cert *x509.Certificate) error {
+	entryFunc := func(entry *ct.LogEntry) error {
 		observedCount++
 		return nil
 	}
 
-	receivedCount, err := ScanFromTime(ctx, lc, time.Unix(0, 0), certFunc)
+	receivedCount, err := ScanFromTime(ctx, lc, time.Unix(0, 0), entryFunc)
 	if err != nil {
 		t.Fatalf("unexpected error: %s", err)
 	}
@@ -133,6 +139,6 @@ func TestScanFromTime(t *testing.T) {
 	}
 
 	if receivedCount != 5 {
-		t.Fatalf("")
+		t.Fatalf("expected %d received certs, but got %d", 5, receivedCount)
 	}
 }

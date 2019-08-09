@@ -96,7 +96,12 @@ type ModelSet struct {
 }
 
 func (s *ModelSet) Len() int {
-	return len(s.zoneEntries) + len(s.apexes)
+	return len(s.zoneEntries) +
+		len(s.apexes) +
+		len(s.certs) +
+		len(s.logEntries) +
+		len(s.certsToFqdns) +
+		len(s.fqdns)
 }
 
 func (ms *ModelSet) zoneEntryList() []*models.ZonefileEntry {
@@ -393,6 +398,9 @@ func (s *Store) StoreLogEntry(entry *ct2.LogEntry, log ct.Log) error {
 	}
 
 	cert, err := s.getOrCreateCertificate(entry)
+	if err != nil {
+		return err
+	}
 
 	ts := timeFromLogEntry(entry)
 
