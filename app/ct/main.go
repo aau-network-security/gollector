@@ -27,16 +27,6 @@ func ScanLogFromTime(ctx context.Context, log ct.Log, t time.Time, certFunc ct.C
 	return ct.ScanFromTime(ctx, lc, t, certFunc)
 }
 
-func storeCertInDbFunc(s *store.Store) ct.CertFunc {
-	return func(cert *x509.Certificate) error {
-		for _, domain := range cert.DNSNames {
-			log.Debug().Msgf("%s", domain)
-		}
-		// TODO: store certificate + domains in store
-		return nil
-	}
-}
-
 func main() {
 	ctx := context.Background()
 
@@ -63,8 +53,6 @@ func main() {
 		log.Fatal().Msgf("error while retrieving list of existing logs: %s", err)
 	}
 
-	certFunc := storeCertInDbFunc(s)
-
 	//logs := logList.Logs // todo: Use this list instead of next line!
 	logs := []ct.Log{logList.Logs[0]}
 
@@ -73,6 +61,10 @@ func main() {
 	for _, l := range logs {
 		go func() {
 			defer wg.Done()
+			certFunc := func(cert *x509.Certificate) error {
+				return s.StoreLogEntry(cert, l) // TODO: pass log entry instead of certificate
+			}
+
 			count, err := ScanLogFromTime(ctx, l, t, certFunc)
 			if err != nil {
 				log.Debug().Msgf("error while retrieving logs: %s", err)
