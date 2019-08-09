@@ -190,6 +190,7 @@ func handleRawLogEntryFunc(entryFunc EntryFunc) func(rle *ct.RawLogEntry) {
 
 type Options struct {
 	StartIndex, EndIndex int64
+	WorkerCount          int
 }
 
 func (o Options) Count() int64 {
@@ -212,14 +213,14 @@ func Scan(ctx context.Context, l *Log, f EntryFunc, opts Options) (int64, error)
 	scannerOpts := scanner.ScannerOptions{
 		FetcherOptions: scanner.FetcherOptions{
 			BatchSize:     1000,
-			ParallelFetch: 1,
+			ParallelFetch: opts.WorkerCount,
 			StartIndex:    opts.StartIndex,
 			EndIndex:      opts.EndIndex,
 			Continuous:    false,
 		},
 		Matcher:     &scanner.MatchAll{},
 		PrecertOnly: false,
-		NumWorkers:  1,
+		NumWorkers:  opts.WorkerCount,
 	}
 
 	sc := scanner.NewScanner(lc, scannerOpts)
@@ -238,8 +239,9 @@ func ScanFromTime(ctx context.Context, l *Log, t time.Time, f EntryFunc) (int64,
 	}
 
 	opts := Options{
-		StartIndex: startIndex,
-		EndIndex:   endIndex,
+		WorkerCount: 10,
+		StartIndex:  startIndex,
+		EndIndex:    endIndex,
 	}
 
 	return Scan(ctx, l, f, opts)

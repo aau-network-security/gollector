@@ -57,7 +57,7 @@ func main() {
 		go func(l ct.Log) {
 			defer wg.Done()
 
-			start, end, err := ct.IndexByDate(ctx, l, t)
+			start, end, err := ct.IndexByDate(ctx, &l, t)
 			if err != nil {
 				m.Lock()
 				progress++
@@ -74,8 +74,7 @@ func main() {
 					decor.Name(l.Name()),
 					decor.CountersNoUnit("%d / %d", decor.WCSyncSpace)),
 				mpb.AppendDecorators(
-					decor.Percentage(),
-					decor.AverageSpeed()))
+					decor.Percentage()))
 			defer bar.Abort(false)
 
 			entryFunc := func(entry *ct2.LogEntry) error {
@@ -85,8 +84,9 @@ func main() {
 			}
 
 			opts := ct.Options{
-				StartIndex: start,
-				EndIndex:   end,
+				WorkerCount: 10,
+				StartIndex:  start,
+				EndIndex:    end,
 			}
 
 			count, err := ct.Scan(ctx, &l, entryFunc, opts)

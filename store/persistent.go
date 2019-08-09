@@ -14,7 +14,6 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"golang.org/x/net/publicsuffix"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -147,24 +146,16 @@ type Store struct {
 	certByFingerprint     map[string]*models.Certificate
 	logByUrl              map[string]*models.Log
 	fqdnByName            map[string]*models.Fqdn
-
-	allowedInterval time.Duration
-	m               *sync.Mutex
-	batchSize       int
-	postHooks       []postHook
-	ids             Ids
-
-	inserts ModelSet
-	updates ModelSet
+	m                     *Lock
+	ids                   Ids
+	allowedInterval       time.Duration
+	batchSize             int
+	postHooks             []postHook
+	inserts               ModelSet
+	updates               ModelSet
 }
 
 func (s *Store) RunPostHooks() error {
-	s.m.Lock()
-	defer s.m.Unlock()
-	return s.runPostHooks()
-}
-
-func (s *Store) runPostHooks() error {
 	for _, h := range s.postHooks {
 		if err := h(s); err != nil {
 			return err
@@ -175,12 +166,14 @@ func (s *Store) runPostHooks() error {
 
 func (s *Store) conditionalPostHooks() error {
 	if s.updates.Len()+s.inserts.Len() >= s.batchSize {
-		return s.runPostHooks()
+		return s.RunPostHooks()
 	}
 	return nil
 }
 
 func (s *Store) getOrCreateTld(tld string) (*models.Tld, error) {
+	s.m.tlds.Lock()
+	defer s.m.tlds.Unlock()
 	t, ok := s.tldByName[tld]
 	if !ok {
 		t = &models.Tld{
@@ -226,21 +219,36 @@ func (s *Store) storeApexDomain(name string) (*models.Apex, error) {
 }
 
 func (s *Store) getOrCreateApex(domain string) (*models.Apex, error) {
+	s.m.apexes.Lock()
+	defer s.m.apexes.Unlock()
 	res, ok := s.apexByName[domain]
 	if !ok {
-		var err error
-		res, err = s.storeApexDomain(domain)
+		splitted := strings.Split(domain, ".")
+		if len(splitted) == 1 {
+			return nil, InvalidDomainErr{domain}
+		}
+
+		tld, err := s.getOrCreateTld(splitted[len(splitted)-1])
 		if err != nil {
 			return nil, err
 		}
+
+		model := &models.Apex{
+			ID:    s.ids.apexes,
+			Apex:  domain,
+			TldID: tld.ID,
+		}
+
+		s.apexByName[domain] = model
+		s.inserts.apexes[model.ID] = model
+		s.ids.apexes++
+
+		res = model
 	}
 	return res, nil
 }
 
 func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntry, error) {
-	s.m.Lock()
-	defer s.m.Unlock()
-
 	apex, err := toApex(domain)
 	if err != nil {
 		return nil, err
@@ -251,6 +259,7 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 		return nil, err
 	}
 
+	s.m.zoneEntries.Lock()
 	existingZoneEntry, ok := s.zoneEntriesByApexName[apex]
 	if !ok {
 		// non-active domain, create a new zone entry
@@ -265,6 +274,8 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 		s.zoneEntriesByApexName[apex] = newZoneEntry
 		s.inserts.zoneEntries[newZoneEntry.ID] = newZoneEntry
 		s.ids.zoneEntries++
+
+		s.m.zoneEntries.Unlock()
 
 		if err := s.conditionalPostHooks(); err != nil {
 			return nil, err
@@ -292,6 +303,8 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 		s.inserts.zoneEntries[newZoneEntry.ID] = newZoneEntry
 		s.ids.zoneEntries++
 
+		s.m.zoneEntries.Unlock()
+
 		if err := s.conditionalPostHooks(); err != nil {
 			return nil, err
 		}
@@ -303,6 +316,8 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 	existingZoneEntry.LastSeen = t
 	s.updates.zoneEntries[existingZoneEntry.ID] = existingZoneEntry
 
+	s.m.zoneEntries.Unlock()
+
 	if err := s.conditionalPostHooks(); err != nil {
 		return nil, err
 	}
@@ -311,6 +326,8 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 }
 
 func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
+	s.m.logs.Lock()
+	defer s.m.logs.Unlock()
 	l, ok := s.logByUrl[log.Url]
 	if !ok {
 		l = &models.Log{
@@ -329,6 +346,9 @@ func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
 }
 
 func (s *Store) getOrCreateFqdn(domain string) (*models.Fqdn, error) {
+	s.m.fqdns.Lock()
+	defer s.m.fqdns.Unlock()
+
 	f, ok := s.fqdnByName[domain]
 	if !ok {
 		apex, err := toApex(domain)
@@ -361,6 +381,8 @@ func (s *Store) getOrCreateCertificate(entry *ct2.LogEntry) (*models.Certificate
 
 	fp := fmt.Sprintf("%x", sha256.Sum256(c.Raw))
 
+	s.m.certs.Lock()
+	defer s.m.certs.Unlock()
 	cert, ok := s.certByFingerprint[fp]
 	if !ok {
 		cert = &models.Certificate{
@@ -389,9 +411,6 @@ func (s *Store) getOrCreateCertificate(entry *ct2.LogEntry) (*models.Certificate
 }
 
 func (s *Store) StoreLogEntry(entry *ct2.LogEntry, log ct.Log) error {
-	s.m.Lock()
-	defer s.m.Unlock()
-
 	l, err := s.getOrCreateLog(log)
 	if err != nil {
 		return err
@@ -410,9 +429,11 @@ func (s *Store) StoreLogEntry(entry *ct2.LogEntry, log ct.Log) error {
 		Timestamp:     ts,
 	}
 
+	s.m.logEntries.Lock()
 	s.inserts.logEntries = append(s.inserts.logEntries, &le)
+	s.m.logEntries.Unlock()
 
-	return nil
+	return s.conditionalPostHooks()
 }
 
 // use Gorm's auto migrate functionality
@@ -546,7 +567,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		certByFingerprint:     make(map[string]*models.Certificate),
 		allowedInterval:       opts.AllowedInterval,
 		batchSize:             opts.BatchSize,
-		m:                     &sync.Mutex{},
+		m:                     NewLock(),
 		postHooks:             []postHook{},
 		inserts:               NewModelSet(),
 		updates:               NewModelSet(),
@@ -559,6 +580,9 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 			return err
 		}
 		defer tx.Rollback()
+
+		s.m.LockAll()
+		defer s.m.UnlockAll()
 
 		// inserts
 		if len(s.inserts.apexes) > 0 {
