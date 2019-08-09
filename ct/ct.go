@@ -8,7 +8,6 @@ import (
 	ct "github.com/google/certificate-transparency-go"
 	"github.com/google/certificate-transparency-go/client"
 	"github.com/google/certificate-transparency-go/scanner"
-	"github.com/google/certificate-transparency-go/x509"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"time"
@@ -146,32 +145,23 @@ func TrustedLogs() (*LogList, error) {
 	return logsFromUrl("https://www.gstatic.com/ct/log_list/log_list.json")
 }
 
-type CertFunc func(certificate *x509.Certificate) error
+type EntryFunc func(entry *ct.LogEntry) error
 
-func handleRawLogEntryFunc(certFunc CertFunc) func(rle *ct.RawLogEntry) {
+func handleRawLogEntryFunc(entryFunc EntryFunc) func(rle *ct.RawLogEntry) {
 	return func(rle *ct.RawLogEntry) {
 		if err := func() error {
 			logEntry, err := rle.ToLogEntry()
 			if err != nil {
 				return err
 			}
-
-			var cert *x509.Certificate
-			if logEntry.Precert != nil {
-				cert = logEntry.Precert.TBSCertificate
-			} else if logEntry.X509Cert != nil {
-				cert = logEntry.X509Cert
-			} else {
-				return UnsupportedCertTypeErr
-			}
-			return certFunc(cert)
+			return entryFunc(logEntry)
 		}(); err != nil {
 			log.Debug().Msgf("error while handling raw log entry: %s", err)
 		}
 	}
 }
 
-func ScanFromTime(ctx context.Context, logClient *client.LogClient, t time.Time, f CertFunc) (int64, error) {
+func ScanFromTime(ctx context.Context, logClient *client.LogClient, t time.Time, f EntryFunc) (int64, error) {
 	startIndex, err := IndexByDate(ctx, logClient, t)
 	if err != nil {
 		return 0, err

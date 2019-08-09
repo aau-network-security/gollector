@@ -7,16 +7,16 @@ import (
 	"github.com/aau-network-security/go-domains/config"
 	"github.com/aau-network-security/go-domains/ct"
 	"github.com/aau-network-security/go-domains/store"
+	ct2 "github.com/google/certificate-transparency-go"
 	"github.com/google/certificate-transparency-go/client"
 	"github.com/google/certificate-transparency-go/jsonclient"
-	"github.com/google/certificate-transparency-go/x509"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"sync"
 	"time"
 )
 
-func ScanLogFromTime(ctx context.Context, log ct.Log, t time.Time, certFunc ct.CertFunc) (int64, error) {
+func ScanLogFromTime(ctx context.Context, log ct.Log, t time.Time, entryFunc ct.EntryFunc) (int64, error) {
 	uri := fmt.Sprintf("https://%s", log.Url)
 	hc := http.Client{}
 	opts := jsonclient.Options{}
@@ -24,7 +24,7 @@ func ScanLogFromTime(ctx context.Context, log ct.Log, t time.Time, certFunc ct.C
 	if err != nil {
 		return 0, err
 	}
-	return ct.ScanFromTime(ctx, lc, t, certFunc)
+	return ct.ScanFromTime(ctx, lc, t, entryFunc)
 }
 
 func main() {
@@ -43,7 +43,7 @@ func main() {
 		log.Fatal().Msgf("failed to parse time from config: %s", err)
 	}
 
-	s, err := store.NewStore(conf.Store, 20000, time.Hour*36)
+	s, err := store.NewStore(conf.Store, store.DefaultOpts)
 	if err != nil {
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}
@@ -61,11 +61,11 @@ func main() {
 	for _, l := range logs {
 		go func() {
 			defer wg.Done()
-			certFunc := func(cert *x509.Certificate) error {
-				return s.StoreLogEntry(cert, l) // TODO: pass log entry instead of certificate
+			entryFunc := func(entry *ct2.LogEntry) error {
+				return s.StoreLogEntry(entry, l)
 			}
 
-			count, err := ScanLogFromTime(ctx, l, t, certFunc)
+			count, err := ScanLogFromTime(ctx, l, t, entryFunc)
 			if err != nil {
 				log.Debug().Msgf("error while retrieving logs: %s", err)
 				return
@@ -74,4 +74,8 @@ func main() {
 		}()
 	}
 	wg.Wait()
+
+	if err := s.RunPostHooks(); err != nil {
+		log.Fatal().Msgf("error while running post hooks: %s", err)
+	}
 }

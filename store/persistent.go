@@ -20,8 +20,8 @@ import (
 
 var (
 	UnsupportedCertTypeErr = errors.New("provided certificate is not supported")
-	DefaultStoreOpts       = Opts{
-		BatchSize:       10000,
+	DefaultOpts            = Opts{
+		BatchSize:       20000,
 		AllowedInterval: 36 * time.Hour,
 	}
 )
@@ -418,6 +418,11 @@ func (s *Store) migrate() error {
 		&models.Apex{},
 		&models.ZonefileEntry{},
 		&models.Tld{},
+		&models.Fqdn{},
+		&models.CertificateToFqdn{},
+		&models.Certificate{},
+		&models.LogEntry{},
+		&models.Log{},
 	}
 	for _, ex := range migrateExamples {
 		if err := g.AutoMigrate(ex).Error; err != nil {
