@@ -46,6 +46,7 @@ type Certificate struct {
 
 type LogEntry struct {
 	ID            uint `gorm:"primary_key"`
+	Index         uint
 	Timestamp     time.Time
 	CertificateID uint
 	LogID         uint

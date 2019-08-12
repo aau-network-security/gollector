@@ -420,6 +420,7 @@ func (s *Store) StoreLogEntry(entry *ct2.LogEntry, log ct.Log) error {
 
 	le := models.LogEntry{
 		LogID:         l.ID,
+		Index:         uint(entry.Index),
 		CertificateID: cert.ID,
 		Timestamp:     ts,
 	}
