@@ -37,7 +37,7 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
-	s, err := store.NewStore(conf.Store, 20000, time.Hour*36)
+	s, err := store.NewStore(conf.Store, store.DefaultOpts)
 	if err != nil {
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}

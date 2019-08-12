@@ -11,7 +11,6 @@ import (
 	"github.com/google/certificate-transparency-go/scanner"
 	"github.com/rs/zerolog/log"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -130,7 +129,7 @@ func (l *Log) GetClient() (*client.LogClient, error) {
 }
 
 func (l *Log) Name() string {
-	return strings.ToLower(strings.Split(l.Description, "'")[1])
+	return l.Url
 }
 
 type Operator struct {
@@ -205,10 +204,6 @@ func Scan(ctx context.Context, l *Log, f EntryFunc, opts Options) (int64, error)
 	if err != nil {
 		return 0, err
 	}
-
-	log.Info().
-		Str("log", l.Name()).
-		Msgf("starting to retrieve %d log entries", opts.EndIndex-opts.StartIndex)
 
 	scannerOpts := scanner.ScannerOptions{
 		FetcherOptions: scanner.FetcherOptions{

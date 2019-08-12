@@ -31,7 +31,12 @@ func main() {
 		log.Fatal().Msgf("failed to parse time from config: %s", err)
 	}
 
-	s, err := store.NewStore(conf.Store, store.DefaultOpts)
+	opts := store.Opts{
+		AllowedInterval: 1 * time.Second, // field is unused, so we don't care about its value
+		BatchSize:       50000,
+	}
+
+	s, err := store.NewStore(conf.Store, opts)
 	if err != nil {
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}
@@ -41,9 +46,9 @@ func main() {
 		log.Fatal().Msgf("error while retrieving list of existing logs: %s", err)
 	}
 
-	//logs := logList.Logs
+	logs := logList.Logs
 	//logs := []ct.Log{logList.Logs[0]}
-	logs := logList.Logs[0:3]
+	//logs := logList.Logs[0:3]
 
 	wg := sync.WaitGroup{}
 
@@ -74,7 +79,10 @@ func main() {
 					decor.Name(l.Name()),
 					decor.CountersNoUnit("%d / %d", decor.WCSyncSpace)),
 				mpb.AppendDecorators(
-					decor.Percentage()))
+					decor.NewPercentage("% .1f"),
+					decor.OnComplete(
+						decor.EwmaETA(decor.ET_STYLE_GO, 60, decor.WC{W: 4}), "done",
+					)))
 			defer bar.Abort(false)
 
 			entryFunc := func(entry *ct2.LogEntry) error {
