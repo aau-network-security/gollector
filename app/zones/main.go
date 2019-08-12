@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/aau-network-security/go-domains/config"
 	"github.com/aau-network-security/go-domains/generic"
 	"github.com/aau-network-security/go-domains/store"
 	"github.com/aau-network-security/go-domains/zone"
@@ -15,63 +16,10 @@ import (
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
-	"gopkg.in/yaml.v2"
-	"io/ioutil"
 	"net"
-	"os"
 	"sync"
 	"time"
 )
-
-const (
-	ComFtpPass = "COM_FTP_PASS"
-	CzdsPass   = "CZDS_PASS"
-	DkSshPass  = "DK_SSH_PASS"
-)
-
-type Com struct {
-	Ftp        ftp.Config `yaml:"ftp"`
-	SshEnabled bool       `yaml:"ssh-enabled"`
-	Ssh        ssh.Config `yaml:"ssh"`
-}
-
-type Dk struct {
-	Http http.Config `yaml:"http"`
-	Ssh  ssh.Config  `yaml:"ssh"`
-}
-
-type Czds struct {
-	Tlds  []string         `yaml:"tlds"`
-	Creds czds.Credentials `yaml:"credentials"`
-}
-
-type config struct {
-	Com   Com          `yaml:"com"`
-	Czds  Czds         `yaml:"czds"`
-	Dk    Dk           `yaml:"dk"`
-	Store store.Config `yaml:"store"`
-}
-
-func readConfig(path string) (config, error) {
-	var conf config
-	f, err := ioutil.ReadFile(path)
-	if err != nil {
-		return conf, err
-	}
-	if err := yaml.Unmarshal(f, &conf); err != nil {
-		return conf, err
-	}
-
-	conf.Com.Ftp.Password = os.Getenv(ComFtpPass)
-	conf.Czds.Creds.Password = os.Getenv(CzdsPass)
-	conf.Dk.Ssh.Password = os.Getenv(DkSshPass)
-
-	for _, env := range []string{ComFtpPass, CzdsPass, DkSshPass} {
-		os.Setenv(env, "")
-	}
-
-	return conf, nil
-}
 
 type zoneConfig struct {
 	zone           zone.Zone
@@ -84,25 +32,24 @@ func main() {
 	confFile := flag.String("config", "config/config.yml", "location of configuration file")
 	flag.Parse()
 
-	conf, err := readConfig(*confFile)
+	conf, err := config.ReadConfig(*confFile)
 	if err != nil {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
-	s, err := store.NewStore(conf.Store, 20000, time.Hour*36)
+	s, err := store.NewStore(conf.Store, store.DefaultOpts)
 	if err != nil {
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}
-	_ = s
 
-	authenticator := czds.NewAuthenticator(conf.Czds.Creds)
+	authenticator := czds.NewAuthenticator(conf.Zone.Czds.Creds)
 	ctx := context.Background()
 
 	f := func(t time.Time) error {
 		wg := sync.WaitGroup{}
 		var zoneConfigs []zoneConfig
 
-		for _, tld := range conf.Czds.Tlds {
+		for _, tld := range conf.Zone.Czds.Tlds {
 			z := czds.New(authenticator, tld)
 			zc := zoneConfig{
 				z,
@@ -115,19 +62,19 @@ func main() {
 		}
 
 		var sshDialFunc func(network, address string) (net.Conn, error)
-		if conf.Com.SshEnabled {
-			sshDialFunc, err = ssh.DialFunc(conf.Com.Ssh)
+		if conf.Zone.Com.SshEnabled {
+			sshDialFunc, err = ssh.DialFunc(conf.Zone.Com.Ssh)
 			if err != nil {
 				log.Fatal().Msgf("failed to create SSH dial func: %s", err)
 			}
 		}
-		comZone, err := ftp.New(conf.Com.Ftp, sshDialFunc)
+		comZone, err := ftp.New(conf.Zone.Com.Ftp, sshDialFunc)
 		if err != nil {
 			log.Fatal().Msgf("failed to create .com zone retriever: %s", err)
 		}
 
-		httpClient, err := ssh.HttpClient(conf.Dk.Ssh)
-		dkZone, err := http.New(conf.Dk.Http, httpClient)
+		httpClient, err := ssh.HttpClient(conf.Zone.Dk.Ssh)
+		dkZone, err := http.New(conf.Zone.Dk.Http, httpClient)
 		if err != nil {
 			log.Fatal().Msgf("failed to create .dk zone retriever: %s", err)
 		}

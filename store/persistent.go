@@ -1,15 +1,29 @@
 package store
 
 import (
+	"crypto/sha256"
+	"errors"
 	"fmt"
+	"github.com/aau-network-security/go-domains/ct"
 	"github.com/aau-network-security/go-domains/models"
 	"github.com/go-pg/pg"
+	ct2 "github.com/google/certificate-transparency-go"
+	"github.com/google/certificate-transparency-go/x509"
 	"github.com/jinzhu/gorm"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
+	"golang.org/x/net/publicsuffix"
 	"strings"
 	"sync"
 	"time"
+)
+
+var (
+	UnsupportedCertTypeErr = errors.New("provided certificate is not supported")
+	DefaultOpts            = Opts{
+		BatchSize:       20000,
+		AllowedInterval: 36 * time.Hour,
+	}
 )
 
 type EntryExistsErr struct {
@@ -26,6 +40,27 @@ type InvalidDomainErr struct {
 
 func (err InvalidDomainErr) Error() string {
 	return fmt.Sprintf("cannot store invalid domain: %s", err.Domain)
+}
+
+func toApex(fqdn string) (string, error) {
+	return publicsuffix.EffectiveTLDPlusOne(fqdn)
+}
+
+func timeFromLogEntry(entry *ct2.LogEntry) time.Time {
+	ts := entry.Leaf.TimestampedEntry.Timestamp
+	return time.Unix(int64(ts/1000), int64(ts%1000))
+}
+
+func certFromLogEntry(entry *ct2.LogEntry) (*x509.Certificate, error) {
+	var cert *x509.Certificate
+	if entry.Precert != nil {
+		cert = entry.Precert.TBSCertificate
+	} else if entry.X509Cert != nil {
+		cert = entry.X509Cert
+	} else {
+		return nil, UnsupportedCertTypeErr
+	}
+	return cert, nil
 }
 
 type Config struct {
@@ -52,12 +87,21 @@ func (c *Config) DSN() string {
 }
 
 type ModelSet struct {
-	zoneEntries map[uint]*models.ZonefileEntry
-	apexes      map[uint]*models.Apex
+	zoneEntries  map[uint]*models.ZonefileEntry
+	apexes       map[uint]*models.Apex
+	certs        []*models.Certificate
+	logEntries   []*models.LogEntry
+	certsToFqdns []*models.CertificateToFqdn
+	fqdns        []*models.Fqdn
 }
 
 func (s *ModelSet) Len() int {
-	return len(s.zoneEntries) + len(s.apexes)
+	return len(s.zoneEntries) +
+		len(s.apexes) +
+		len(s.certs) +
+		len(s.logEntries) +
+		len(s.certsToFqdns) +
+		len(s.fqdns)
 }
 
 func (ms *ModelSet) zoneEntryList() []*models.ZonefileEntry {
@@ -78,15 +122,19 @@ func (ms *ModelSet) apexList() []*models.Apex {
 
 func NewModelSet() ModelSet {
 	return ModelSet{
-		zoneEntries: make(map[uint]*models.ZonefileEntry),
-		apexes:      make(map[uint]*models.Apex),
+		zoneEntries:  make(map[uint]*models.ZonefileEntry),
+		apexes:       make(map[uint]*models.Apex),
+		fqdns:        []*models.Fqdn{},
+		certsToFqdns: []*models.CertificateToFqdn{},
+		certs:        []*models.Certificate{},
+		logEntries:   []*models.LogEntry{},
 	}
 }
 
 type postHook func(*Store) error
 
 type Ids struct {
-	zoneEntries, apexes, tlds uint
+	zoneEntries, apexes, tlds, certs, logs, fqdns uint
 }
 
 type Store struct {
@@ -96,15 +144,16 @@ type Store struct {
 	apexById              map[uint]*models.Apex
 	zoneEntriesByApexName map[string]*models.ZonefileEntry
 	tldByName             map[string]*models.Tld
-
-	allowedInterval time.Duration
-	m               *sync.Mutex
-	batchSize       int
-	postHooks       []postHook
-	ids             Ids
-
-	inserts ModelSet
-	updates ModelSet
+	certByFingerprint     map[string]*models.Certificate
+	logByUrl              map[string]*models.Log
+	fqdnByName            map[string]*models.Fqdn
+	m                     *sync.Mutex
+	ids                   Ids
+	allowedInterval       time.Duration
+	batchSize             int
+	postHooks             []postHook
+	inserts               ModelSet
+	updates               ModelSet
 }
 
 func (s *Store) RunPostHooks() error {
@@ -177,11 +226,27 @@ func (s *Store) storeApexDomain(name string) (*models.Apex, error) {
 func (s *Store) getOrCreateApex(domain string) (*models.Apex, error) {
 	res, ok := s.apexByName[domain]
 	if !ok {
-		var err error
-		res, err = s.storeApexDomain(domain)
+		splitted := strings.Split(domain, ".")
+		if len(splitted) == 1 {
+			return nil, InvalidDomainErr{domain}
+		}
+
+		tld, err := s.getOrCreateTld(splitted[len(splitted)-1])
 		if err != nil {
 			return nil, err
 		}
+
+		model := &models.Apex{
+			ID:    s.ids.apexes,
+			Apex:  domain,
+			TldID: tld.ID,
+		}
+
+		s.apexByName[domain] = model
+		s.inserts.apexes[model.ID] = model
+		s.ids.apexes++
+
+		res = model
 	}
 	return res, nil
 }
@@ -189,12 +254,18 @@ func (s *Store) getOrCreateApex(domain string) (*models.Apex, error) {
 func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntry, error) {
 	s.m.Lock()
 	defer s.m.Unlock()
-	apexModel, err := s.getOrCreateApex(domain)
+
+	apex, err := toApex(domain)
 	if err != nil {
 		return nil, err
 	}
 
-	existingZoneEntry, ok := s.zoneEntriesByApexName[domain]
+	apexModel, err := s.getOrCreateApex(apex)
+	if err != nil {
+		return nil, err
+	}
+
+	existingZoneEntry, ok := s.zoneEntriesByApexName[apex]
 	if !ok {
 		// non-active domain, create a new zone entry
 		newZoneEntry := &models.ZonefileEntry{
@@ -205,7 +276,7 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 			Active:    true,
 		}
 
-		s.zoneEntriesByApexName[domain] = newZoneEntry
+		s.zoneEntriesByApexName[apex] = newZoneEntry
 		s.inserts.zoneEntries[newZoneEntry.ID] = newZoneEntry
 		s.ids.zoneEntries++
 
@@ -231,7 +302,7 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 			Active:    true,
 		}
 
-		s.zoneEntriesByApexName[domain] = newZoneEntry
+		s.zoneEntriesByApexName[apex] = newZoneEntry
 		s.inserts.zoneEntries[newZoneEntry.ID] = newZoneEntry
 		s.ids.zoneEntries++
 
@@ -253,6 +324,112 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 	return existingZoneEntry, nil
 }
 
+func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
+	l, ok := s.logByUrl[log.Url]
+	if !ok {
+		l = &models.Log{
+			ID:          s.ids.logs,
+			Url:         log.Url,
+			Description: log.Description,
+		}
+		if err := s.db.Insert(l); err != nil {
+			return nil, err
+		}
+
+		s.logByUrl[log.Url] = l
+		s.ids.logs++
+	}
+	return l, nil
+}
+
+func (s *Store) getOrCreateFqdn(domain string) (*models.Fqdn, error) {
+	f, ok := s.fqdnByName[domain]
+	if !ok {
+		apex, err := toApex(domain)
+		if err != nil {
+			return nil, err
+		}
+
+		a, err := s.getOrCreateApex(apex)
+		if err != nil {
+			return nil, err
+		}
+
+		f = &models.Fqdn{
+			ID:     s.ids.fqdns,
+			Fqdn:   domain,
+			ApexID: a.ID,
+		}
+		s.inserts.fqdns = append(s.inserts.fqdns, f)
+		s.fqdnByName[domain] = f
+		s.ids.fqdns++
+	}
+	return f, nil
+}
+
+func (s *Store) getOrCreateCertificate(entry *ct2.LogEntry) (*models.Certificate, error) {
+	c, err := certFromLogEntry(entry)
+	if err != nil {
+		return nil, err
+	}
+
+	fp := fmt.Sprintf("%x", sha256.Sum256(c.Raw))
+
+	cert, ok := s.certByFingerprint[fp]
+	if !ok {
+		cert = &models.Certificate{
+			ID:                s.ids.certs,
+			Sha256Fingerprint: fp,
+		}
+
+		// create an association between FQDNs in database and the newly created certificate
+		for _, d := range c.DNSNames {
+			fqdn, err := s.getOrCreateFqdn(d)
+			if err != nil {
+				return nil, err
+			}
+			ctof := models.CertificateToFqdn{
+				CertificateID: cert.ID,
+				FqdnID:        fqdn.ID,
+			}
+			s.inserts.certsToFqdns = append(s.inserts.certsToFqdns, &ctof)
+		}
+
+		s.inserts.certs = append(s.inserts.certs, cert)
+		s.certByFingerprint[fp] = cert
+		s.ids.certs++
+	}
+	return cert, nil
+}
+
+func (s *Store) StoreLogEntry(entry *ct2.LogEntry, log ct.Log) error {
+	s.m.Lock()
+	defer s.m.Unlock()
+
+	l, err := s.getOrCreateLog(log)
+	if err != nil {
+		return err
+	}
+
+	cert, err := s.getOrCreateCertificate(entry)
+	if err != nil {
+		return err
+	}
+
+	ts := timeFromLogEntry(entry)
+
+	le := models.LogEntry{
+		LogID:         l.ID,
+		Index:         uint(entry.Index),
+		CertificateID: cert.ID,
+		Timestamp:     ts,
+	}
+
+	s.inserts.logEntries = append(s.inserts.logEntries, &le)
+
+	return s.conditionalPostHooks()
+}
+
 // use Gorm's auto migrate functionality
 func (s *Store) migrate() error {
 	g, err := s.conf.Open()
@@ -264,6 +441,11 @@ func (s *Store) migrate() error {
 		&models.Apex{},
 		&models.ZonefileEntry{},
 		&models.Tld{},
+		&models.Fqdn{},
+		&models.CertificateToFqdn{},
+		&models.Certificate{},
+		&models.LogEntry{},
+		&models.Log{},
 	}
 	for _, ex := range migrateExamples {
 		if err := g.AutoMigrate(ex).Error; err != nil {
@@ -300,6 +482,30 @@ func (s *Store) init() error {
 		s.tldByName[tld.Tld] = tld
 	}
 
+	var fqdns []*models.Fqdn
+	if err := s.db.Model(&fqdns).Order("id ASC").Select(); err != nil {
+		return err
+	}
+	for _, fqdn := range fqdns {
+		s.fqdnByName[fqdn.Fqdn] = fqdn
+	}
+
+	var logs []*models.Log
+	if err := s.db.Model(&logs).Order("id ASC").Select(); err != nil {
+		return err
+	}
+	for _, l := range logs {
+		s.logByUrl[l.Url] = l
+	}
+
+	var certs []*models.Certificate
+	if err := s.db.Model(&certs).Order("id ASC").Select(); err != nil {
+		return err
+	}
+	for _, c := range certs {
+		s.certByFingerprint[c.Sha256Fingerprint] = c
+	}
+
 	s.ids.apexes = 1
 	if len(apexes) > 0 {
 		s.ids.apexes = apexes[len(apexes)-1].ID + 1
@@ -312,19 +518,36 @@ func (s *Store) init() error {
 	if len(tlds) > 0 {
 		s.ids.tlds = tlds[len(tlds)-1].ID + 1
 	}
+	s.ids.fqdns = 1
+	if len(fqdns) > 0 {
+		s.ids.fqdns = fqdns[len(fqdns)-1].ID + 1
+	}
+	s.ids.logs = 1
+	if len(logs) > 0 {
+		s.ids.logs = logs[len(logs)-1].ID + 1
+	}
+	s.ids.certs = 1
+	if len(certs) > 0 {
+		s.ids.certs = certs[len(certs)-1].ID + 1
+	}
 
 	return nil
 }
 
-func NewStore(conf Config, batchSize int, allowedInterval time.Duration) (*Store, error) {
-	opts := pg.Options{
+type Opts struct {
+	BatchSize       int
+	AllowedInterval time.Duration
+}
+
+func NewStore(conf Config, opts Opts) (*Store, error) {
+	pgOpts := pg.Options{
 		User:     conf.User,
 		Password: conf.Password,
 		Addr:     fmt.Sprintf("%s:%d", conf.Host, conf.Port),
 		Database: conf.DBName,
 	}
 
-	db := pg.Connect(&opts)
+	db := pg.Connect(&pgOpts)
 
 	s := Store{
 		conf:                  conf,
@@ -333,9 +556,12 @@ func NewStore(conf Config, batchSize int, allowedInterval time.Duration) (*Store
 		apexById:              make(map[uint]*models.Apex),
 		zoneEntriesByApexName: make(map[string]*models.ZonefileEntry),
 		tldByName:             make(map[string]*models.Tld),
-		allowedInterval:       allowedInterval,
+		fqdnByName:            make(map[string]*models.Fqdn),
+		logByUrl:              make(map[string]*models.Log),
+		certByFingerprint:     make(map[string]*models.Certificate),
+		allowedInterval:       opts.AllowedInterval,
+		batchSize:             opts.BatchSize,
 		m:                     &sync.Mutex{},
-		batchSize:             batchSize,
 		postHooks:             []postHook{},
 		inserts:               NewModelSet(),
 		updates:               NewModelSet(),
@@ -348,6 +574,8 @@ func NewStore(conf Config, batchSize int, allowedInterval time.Duration) (*Store
 			return err
 		}
 		defer tx.Rollback()
+
+		// inserts
 		if len(s.inserts.apexes) > 0 {
 			a := s.inserts.apexList()
 			if err := tx.Insert(&a); err != nil {
@@ -360,6 +588,28 @@ func NewStore(conf Config, batchSize int, allowedInterval time.Duration) (*Store
 				return err
 			}
 		}
+		if len(s.inserts.logEntries) > 0 {
+			if err := tx.Insert(&s.inserts.logEntries); err != nil {
+				return err
+			}
+		}
+		if len(s.inserts.certs) > 0 {
+			if err := tx.Insert(&s.inserts.certs); err != nil {
+				return err
+			}
+		}
+		if len(s.inserts.certsToFqdns) > 0 {
+			if err := tx.Insert(&s.inserts.certsToFqdns); err != nil {
+				return err
+			}
+		}
+		if len(s.inserts.fqdns) > 0 {
+			if err := tx.Insert(&s.inserts.fqdns); err != nil {
+				return err
+			}
+		}
+
+		// updates
 		if len(s.updates.apexes) > 0 {
 			a := s.updates.apexList()
 			if err := tx.Update(&a); err != nil {

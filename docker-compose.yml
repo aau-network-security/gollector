@@ -12,6 +12,13 @@ services:
     volumes:
       - ./config:/config:ro # configuration files
       - ${SSH_DIR}:/ssh:ro  # ssh keys
+  ct:
+    build:
+      context: .
+      dockerfile: app/ct/Dockerfile
+    command: [ "--config", "/config/docker.yml", "-logtostderr" ]
+    volumes:
+      - ./config:/config:ro # configuration files
   db:
     image: postgres
     restart: always
