@@ -5,7 +5,10 @@ A set of tools that are used to retrieve domain names from different sources, su
     - [x] `.net` zone (or any zone that can be accessed via CZDS)
     - [x] `.dk` zone 
 - [ ] DNS resolver logs
-- [ ] CT logs
+- [x] CT logs
+
+**NOTE** the state of the database is kept in memory by each app, and this state is not synchronized across different instances.
+Therefore, it is NOT recommended to run multiple instances simultaniously, but rather suggest to run them sequentially.    
 
 ## Requirements
 - Golang (tested with version 1.11)
@@ -15,16 +18,19 @@ First, specify a YAML configuration file (see `/config/config.yml.template` for 
 To retrieve zone files, execute the following:
 ```bash
 $ go run app/zones/main.go --config <path to config.yml>   
+$ go run app/ct/main.go --config <path to config.yml>   
 ```
 
 ### Docker
 Build with Docker:
 ```bash
-$ docker build -t go-domains -f app/zones/Dockerfile .
+$ docker build -t zones -f app/zones/Dockerfile .
+$ docker build -t ct -f app/zones/Dockerfile .
 ```
 run with Docker (under the assumption that `config.yml` is located in the `./config` directory):
 ```bash
-$ docker run go-domains -v config:/config go-domains --config /config/config.yml
+$ docker run zones -v config:/config zones --config /config/config.yml
+$ docker run ct -v config:/config ct --config /config/config.yml
 ```
 
 #### Docker Compose
@@ -37,6 +43,7 @@ $ docker-compose up db
 followed by 
 ```bash
 $ docker-compose up zones 
+$ docker-compose up ct 
 ```
 allowing the Postgres database to start before the zone retrieval container does.
 
