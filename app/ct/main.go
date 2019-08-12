@@ -92,7 +92,7 @@ func main() {
 			}
 
 			opts := ct.Options{
-				WorkerCount: 10,
+				WorkerCount: conf.Ct.WorkerCount,
 				StartIndex:  start,
 				EndIndex:    end,
 			}

@@ -40,7 +40,8 @@ type Zone struct {
 }
 
 type Ct struct {
-	Time string `yaml:"time"`
+	Time        string `yaml:"time"`
+	WorkerCount int    `yaml:"worker_count"`
 }
 
 type config struct {

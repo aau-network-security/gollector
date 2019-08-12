@@ -25,6 +25,7 @@ zone:
       authtype: password
 ct:
   time: 2019-08-08
+  worker_count: 5
 store:
   host: localhost
   port: 10001
