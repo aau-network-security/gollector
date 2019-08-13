@@ -4,18 +4,27 @@ import (
 	"time"
 )
 
+// ----- BEGIN DOMAIN -----
 type Tld struct {
 	ID  uint `gorm:"primary_key"`
 	Tld string
 }
 
-// ----- BEGIN ZONEFILE -----
 type Apex struct {
 	ID    uint `gorm:"primary_key"`
 	Apex  string
 	TldID uint
 }
 
+type Fqdn struct {
+	ID     uint `gorm:"primary_key"`
+	Fqdn   string
+	ApexID uint
+}
+
+// ----- END DOMAIN -----
+
+// ----- BEGIN ZONEFILE -----
 type ZonefileEntry struct {
 	ID        uint `gorm:"primary_key"`
 	FirstSeen time.Time
@@ -27,12 +36,6 @@ type ZonefileEntry struct {
 // ----- END ZONEFILE -----
 
 // ----- BEGIN CT -----
-type Fqdn struct {
-	ID     uint `gorm:"primary_key"`
-	Fqdn   string
-	ApexID uint
-}
-
 type CertificateToFqdn struct {
 	ID            uint `gorm:"primary_key"`
 	FqdnID        uint
@@ -61,4 +64,16 @@ type Log struct {
 // ----- END CT -----
 
 // ----- BEGIN PASSIVE DNS -----
+type PassiveEntry struct {
+	ID           uint `gorm:"primary_key"`
+	FqdnID       uint
+	RecordTypeID uint
+	FirstSeen    time.Time
+}
+
+type RecordType struct {
+	ID   uint `gorm:"primary_key"`
+	Type string
+}
+
 // ----- END PASSIVE DNS -----
