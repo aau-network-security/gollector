@@ -447,6 +447,48 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 			t.Fatalf("expected %d elements, but got %d", tc.count, count)
 		}
 	}
+
+	// check initialization of new store
+	s, err = NewStore(conf, opts)
+	if err != nil {
+		t.Fatalf("failed to create store: %s", err)
+	}
+
+	comparisons := []struct {
+		name             string
+		actual, expected int
+	}{
+		{
+			"tldByName",
+			len(s.tldByName),
+			2,
+		},
+		{
+			"apexByName",
+			len(s.apexByName),
+			2,
+		},
+		{
+			"fqdnByName",
+			len(s.fqdnByName),
+			3,
+		},
+		{
+			"passiveEntryByFqdn",
+			s.passiveEntryByFqdn.len(),
+			4,
+		},
+		{
+			"recordTypeByName",
+			len(s.recordTypeByName),
+			2,
+		},
+	}
+	for _, c := range comparisons {
+		if c.actual != c.expected {
+			t.Fatalf("expected map %s to contain %d values, but got %d", c.name, c.expected, c.actual)
+		}
+	}
 }
 
 func TestInit(t *testing.T) {
