@@ -20,7 +20,7 @@ func TestProcess(t *testing.T) {
 		t.Fatalf("unexpected error: %s", err)
 	}
 
-	if count != 5 {
+	if count != 4 {
 		t.Fatalf("expected %d entries, but got %d", 5, count)
 	}
 }

@@ -1,3 +1,2 @@
 {"preview":false,"offset":0,"result":{"timestamp":"2019-07-23T13:08:22.784554Z","query{}":"a.com","query_type{}":"A"}}
-{"preview":false,"offset":1,"result":{"timestamp":"2019-07-23T13:08:23.596449Z","query{}":"a.com","query_type{}":"A"}}
-{"preview":false,"offset":2,"result":{"timestamp":"2019-07-23T13:08:23.660049Z","query{}":"a.com","query_type{}":"AAAA"}}
+{"preview":false,"offset":1,"result":{"timestamp":"2019-07-23T13:08:23.596449Z","query{}":["a.com","a.com"],"query_type{}":["A","AAAA"]}}

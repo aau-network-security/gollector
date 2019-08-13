@@ -4,6 +4,7 @@
 *.db
 .env
 _data
+.data
 
 ### Go ###
 # Binaries for programs and plugins

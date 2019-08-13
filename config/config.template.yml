@@ -26,6 +26,8 @@ zone:
 ct:
   time: 2019-08-08
   worker_count: 5
+splunk:
+  directory: <path to directory with Splunk JSON files>
 store:
   host: localhost
   port: 10001

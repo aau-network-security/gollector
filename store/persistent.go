@@ -492,6 +492,9 @@ func (s *Store) StorePassiveEntry(query string, queryType string, t time.Time) (
 	s.m.Lock()
 	defer s.m.Unlock()
 
+	query = strings.ToLower(query)
+	queryType = strings.ToLower(queryType)
+
 	pe, ok := s.passiveEntryByFqdn.get(query, queryType)
 	if !ok {
 		// create a new entry
