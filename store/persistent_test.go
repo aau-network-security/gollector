@@ -401,6 +401,16 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 		{
 			"b.org",
 			"A",
+			tm.Add(2 * time.Second),
+		},
+		{
+			"b.org",
+			"A",
+			tm.Add(1 * time.Second),
+		},
+		{
+			"b.org",
+			"A",
 			tm,
 		},
 	}
@@ -424,6 +434,7 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 		{2, &models.Apex{}},
 		{3, &models.Fqdn{}},
 		{4, &models.PassiveEntry{}},
+		{2, &models.RecordType{}},
 	}
 
 	for _, tc := range counts {

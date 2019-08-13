@@ -471,13 +471,30 @@ func (s *Store) StoreLogEntry(entry *ct2.LogEntry, log ct.Log) error {
 	return s.conditionalPostHooks()
 }
 
+func (s *Store) getorCreateRecordType(rtype string) (*models.RecordType, error) {
+	rt, ok := s.recordTypeByName[rtype]
+	if !ok {
+		rt = &models.RecordType{
+			ID:   s.ids.recordTypes,
+			Type: rtype,
+		}
+		if err := s.db.Insert(rt); err != nil {
+			return nil, err
+		}
+
+		s.recordTypeByName[rtype] = rt
+		s.ids.recordTypes++
+	}
+	return rt, nil
+}
+
 func (s *Store) StorePassiveEntry(query string, queryType string, t time.Time) (*models.PassiveEntry, error) {
 	s.m.Lock()
 	defer s.m.Unlock()
 
-	// TODO: update with first seen field when passive entry does exist
 	pe, ok := s.passiveEntryByFqdn.get(query, queryType)
 	if !ok {
+		// create a new entry
 		fqdn, err := s.getOrCreateFqdn(query)
 		if err != nil {
 			return nil, err
@@ -496,6 +513,10 @@ func (s *Store) StorePassiveEntry(query string, queryType string, t time.Time) (
 
 		s.passiveEntryByFqdn.add(query, queryType, pe)
 		s.inserts.passiveEntries = append(s.inserts.passiveEntries, pe)
+	} else if t.Before(pe.FirstSeen) {
+		// see if we must update the existing one
+		pe.FirstSeen = t
+		s.updates.passiveEntries = append(s.updates.passiveEntries, pe)
 	}
 
 	return pe, nil
@@ -633,18 +654,6 @@ func (s *Store) init() error {
 	return nil
 }
 
-func (s *Store) getorCreateRecordType(rtype string) (*models.RecordType, error) {
-	rt, ok := s.recordTypeByName[rtype]
-	if !ok {
-		rt = &models.RecordType{
-			ID:   s.ids.recordTypes,
-			Type: rtype,
-		}
-		s.recordTypeByName[rtype] = rt
-	}
-	return rt, nil
-}
-
 type Opts struct {
 	BatchSize       int
 	AllowedInterval time.Duration
@@ -741,6 +750,12 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 				return err
 			}
 		}
+		if len(s.updates.passiveEntries) > 0 {
+			if _, err := tx.Model(&s.updates.passiveEntries).Column("first_seen").Update(); err != nil {
+				return err
+			}
+		}
+
 		s.updates = NewModelSet()
 		s.inserts = NewModelSet()
 
