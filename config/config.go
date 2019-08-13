@@ -44,10 +44,15 @@ type Ct struct {
 	WorkerCount int    `yaml:"worker_count"`
 }
 
+type Splunk struct {
+	Directory string `yaml:"directory"`
+}
+
 type config struct {
-	Zone  Zone         `yaml:"zone"`
-	Ct    Ct           `yaml:"ct"`
-	Store store.Config `yaml:"store"`
+	Zone   Zone         `yaml:"zone"`
+	Ct     Ct           `yaml:"ct"`
+	Store  store.Config `yaml:"store"`
+	Splunk Splunk       `yaml:"splunk"`
 }
 
 func ReadConfig(path string) (config, error) {

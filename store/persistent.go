@@ -87,12 +87,13 @@ func (c *Config) DSN() string {
 }
 
 type ModelSet struct {
-	zoneEntries  map[uint]*models.ZonefileEntry
-	apexes       map[uint]*models.Apex
-	certs        []*models.Certificate
-	logEntries   []*models.LogEntry
-	certsToFqdns []*models.CertificateToFqdn
-	fqdns        []*models.Fqdn
+	zoneEntries    map[uint]*models.ZonefileEntry
+	apexes         map[uint]*models.Apex
+	certs          []*models.Certificate
+	logEntries     []*models.LogEntry
+	certToFqdns    []*models.CertificateToFqdn
+	fqdns          []*models.Fqdn
+	passiveEntries []*models.PassiveEntry
 }
 
 func (s *ModelSet) Len() int {
@@ -100,8 +101,9 @@ func (s *ModelSet) Len() int {
 		len(s.apexes) +
 		len(s.certs) +
 		len(s.logEntries) +
-		len(s.certsToFqdns) +
-		len(s.fqdns)
+		len(s.certToFqdns) +
+		len(s.fqdns) +
+		len(s.passiveEntries)
 }
 
 func (ms *ModelSet) zoneEntryList() []*models.ZonefileEntry {
@@ -122,19 +124,56 @@ func (ms *ModelSet) apexList() []*models.Apex {
 
 func NewModelSet() ModelSet {
 	return ModelSet{
-		zoneEntries:  make(map[uint]*models.ZonefileEntry),
-		apexes:       make(map[uint]*models.Apex),
-		fqdns:        []*models.Fqdn{},
-		certsToFqdns: []*models.CertificateToFqdn{},
-		certs:        []*models.Certificate{},
-		logEntries:   []*models.LogEntry{},
+		zoneEntries:    make(map[uint]*models.ZonefileEntry),
+		apexes:         make(map[uint]*models.Apex),
+		fqdns:          []*models.Fqdn{},
+		certToFqdns:    []*models.CertificateToFqdn{},
+		certs:          []*models.Certificate{},
+		logEntries:     []*models.LogEntry{},
+		passiveEntries: []*models.PassiveEntry{},
 	}
 }
 
 type postHook func(*Store) error
 
 type Ids struct {
-	zoneEntries, apexes, tlds, certs, logs, fqdns uint
+	zoneEntries, apexes, tlds, certs, logs, fqdns, recordTypes uint
+}
+
+type splunkEntryMap struct {
+	byQueryType map[string]map[string]*models.PassiveEntry
+}
+
+func (m *splunkEntryMap) get(query, queryType string) (*models.PassiveEntry, bool) {
+	byQType, ok := m.byQueryType[queryType]
+	if !ok {
+		return nil, false
+	}
+	res, ok := byQType[query]
+	return res, ok
+}
+
+func (m *splunkEntryMap) add(query, queryType string, entry *models.PassiveEntry) {
+	byQType, ok := m.byQueryType[queryType]
+	if !ok {
+		byQType = make(map[string]*models.PassiveEntry)
+	}
+	byQType[query] = entry
+	m.byQueryType[queryType] = byQType
+}
+
+func (m *splunkEntryMap) len() int {
+	sum := 0
+	for _, v := range m.byQueryType {
+		sum += len(v)
+	}
+	return sum
+}
+
+func newSplunkEntryMap() splunkEntryMap {
+	return splunkEntryMap{
+		byQueryType: make(map[string]map[string]*models.PassiveEntry),
+	}
 }
 
 type Store struct {
@@ -147,6 +186,8 @@ type Store struct {
 	certByFingerprint     map[string]*models.Certificate
 	logByUrl              map[string]*models.Log
 	fqdnByName            map[string]*models.Fqdn
+	recordTypeByName      map[string]*models.RecordType
+	passiveEntryByFqdn    splunkEntryMap
 	m                     *sync.Mutex
 	ids                   Ids
 	allowedInterval       time.Duration
@@ -392,7 +433,7 @@ func (s *Store) getOrCreateCertificate(entry *ct2.LogEntry) (*models.Certificate
 				CertificateID: cert.ID,
 				FqdnID:        fqdn.ID,
 			}
-			s.inserts.certsToFqdns = append(s.inserts.certsToFqdns, &ctof)
+			s.inserts.certToFqdns = append(s.inserts.certToFqdns, &ctof)
 		}
 
 		s.inserts.certs = append(s.inserts.certs, cert)
@@ -430,6 +471,60 @@ func (s *Store) StoreLogEntry(entry *ct2.LogEntry, log ct.Log) error {
 	return s.conditionalPostHooks()
 }
 
+func (s *Store) getorCreateRecordType(rtype string) (*models.RecordType, error) {
+	rt, ok := s.recordTypeByName[rtype]
+	if !ok {
+		rt = &models.RecordType{
+			ID:   s.ids.recordTypes,
+			Type: rtype,
+		}
+		if err := s.db.Insert(rt); err != nil {
+			return nil, err
+		}
+
+		s.recordTypeByName[rtype] = rt
+		s.ids.recordTypes++
+	}
+	return rt, nil
+}
+
+func (s *Store) StorePassiveEntry(query string, queryType string, t time.Time) (*models.PassiveEntry, error) {
+	s.m.Lock()
+	defer s.m.Unlock()
+
+	query = strings.ToLower(query)
+	queryType = strings.ToLower(queryType)
+
+	pe, ok := s.passiveEntryByFqdn.get(query, queryType)
+	if !ok {
+		// create a new entry
+		fqdn, err := s.getOrCreateFqdn(query)
+		if err != nil {
+			return nil, err
+		}
+
+		rt, err := s.getorCreateRecordType(queryType)
+		if err != nil {
+			return nil, err
+		}
+
+		pe = &models.PassiveEntry{
+			FqdnID:       fqdn.ID,
+			FirstSeen:    t,
+			RecordTypeID: rt.ID,
+		}
+
+		s.passiveEntryByFqdn.add(query, queryType, pe)
+		s.inserts.passiveEntries = append(s.inserts.passiveEntries, pe)
+	} else if t.Before(pe.FirstSeen) {
+		// see if we must update the existing one
+		pe.FirstSeen = t
+		s.updates.passiveEntries = append(s.updates.passiveEntries, pe)
+	}
+
+	return pe, nil
+}
+
 // use Gorm's auto migrate functionality
 func (s *Store) migrate() error {
 	g, err := s.conf.Open()
@@ -446,6 +541,8 @@ func (s *Store) migrate() error {
 		&models.Certificate{},
 		&models.LogEntry{},
 		&models.Log{},
+		&models.RecordType{},
+		&models.PassiveEntry{},
 	}
 	for _, ex := range migrateExamples {
 		if err := g.AutoMigrate(ex).Error; err != nil {
@@ -486,8 +583,10 @@ func (s *Store) init() error {
 	if err := s.db.Model(&fqdns).Order("id ASC").Select(); err != nil {
 		return err
 	}
+	fqdnsById := make(map[uint]*models.Fqdn)
 	for _, fqdn := range fqdns {
 		s.fqdnByName[fqdn.Fqdn] = fqdn
+		fqdnsById[fqdn.ID] = fqdn
 	}
 
 	var logs []*models.Log
@@ -504,6 +603,26 @@ func (s *Store) init() error {
 	}
 	for _, c := range certs {
 		s.certByFingerprint[c.Sha256Fingerprint] = c
+	}
+
+	var rtypes []*models.RecordType
+	if err := s.db.Model(&rtypes).Order("id ASC").Select(); err != nil {
+		return err
+	}
+	rtypeById := make(map[uint]*models.RecordType)
+	for _, rtype := range rtypes {
+		s.recordTypeByName[rtype.Type] = rtype
+		rtypeById[rtype.ID] = rtype
+	}
+
+	var passiveEntries []*models.PassiveEntry
+	if err := s.db.Model(&passiveEntries).Order("id ASC").Select(); err != nil {
+		return err
+	}
+	for _, entry := range passiveEntries {
+		fqdn := fqdnsById[entry.FqdnID]
+		rtype := rtypeById[entry.RecordTypeID]
+		s.passiveEntryByFqdn.add(fqdn.Fqdn, rtype.Type, entry)
 	}
 
 	s.ids.apexes = 1
@@ -529,6 +648,10 @@ func (s *Store) init() error {
 	s.ids.certs = 1
 	if len(certs) > 0 {
 		s.ids.certs = certs[len(certs)-1].ID + 1
+	}
+	s.ids.recordTypes = 1
+	if len(rtypes) > 0 {
+		s.ids.recordTypes = rtypes[len(rtypes)-1].ID + 1
 	}
 
 	return nil
@@ -559,6 +682,8 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		fqdnByName:            make(map[string]*models.Fqdn),
 		logByUrl:              make(map[string]*models.Log),
 		certByFingerprint:     make(map[string]*models.Certificate),
+		passiveEntryByFqdn:    newSplunkEntryMap(),
+		recordTypeByName:      make(map[string]*models.RecordType),
 		allowedInterval:       opts.AllowedInterval,
 		batchSize:             opts.BatchSize,
 		m:                     &sync.Mutex{},
@@ -598,13 +723,18 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 				return err
 			}
 		}
-		if len(s.inserts.certsToFqdns) > 0 {
-			if err := tx.Insert(&s.inserts.certsToFqdns); err != nil {
+		if len(s.inserts.certToFqdns) > 0 {
+			if err := tx.Insert(&s.inserts.certToFqdns); err != nil {
 				return err
 			}
 		}
 		if len(s.inserts.fqdns) > 0 {
 			if err := tx.Insert(&s.inserts.fqdns); err != nil {
+				return err
+			}
+		}
+		if len(s.inserts.passiveEntries) > 0 {
+			if err := tx.Insert(&s.inserts.passiveEntries); err != nil {
 				return err
 			}
 		}
@@ -623,6 +753,12 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 				return err
 			}
 		}
+		if len(s.updates.passiveEntries) > 0 {
+			if _, err := tx.Model(&s.updates.passiveEntries).Column("first_seen").Update(); err != nil {
+				return err
+			}
+		}
+
 		s.updates = NewModelSet()
 		s.inserts = NewModelSet()
 

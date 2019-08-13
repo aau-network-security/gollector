@@ -19,6 +19,14 @@ services:
     command: [ "--config", "/config/docker.yml", "-logtostderr" ]
     volumes:
       - ./config:/config:ro # configuration files
+  splunk:
+    build:
+      context: .
+      dockerfile: app/splunk/Dockerfile
+    command: [ "--config", "/config/docker.yml", "-logtostderr" ]
+    volumes:
+      - ./config:/config:ro # configuration files
+      - ${SPLUNK_DIR}:/splunk # directory containing Splunk JSON logs
   db:
     image: postgres
     restart: always
