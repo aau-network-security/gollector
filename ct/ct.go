@@ -9,6 +9,7 @@ import (
 	"github.com/google/certificate-transparency-go/client"
 	"github.com/google/certificate-transparency-go/jsonclient"
 	"github.com/google/certificate-transparency-go/scanner"
+	errors2 "github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"time"
@@ -47,7 +48,7 @@ func indexByDate(ctx context.Context, client *client.LogClient, t time.Time, low
 
 	entries, err := client.GetEntries(ctx, middle, middle+1)
 	if err != nil {
-		return 0, err
+		return 0, errors2.Wrap(err, "get CT log entries")
 	}
 	if len(entries) != 2 {
 		return 0, EntryCountErr{len(entries)}
@@ -87,17 +88,17 @@ func indexByDate(ctx context.Context, client *client.LogClient, t time.Time, low
 func IndexByDate(ctx context.Context, l *Log, t time.Time) (int64, int64, error) {
 	lc, err := l.GetClient()
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, errors2.Wrap(err, "get log client")
 	}
 
 	sth, err := lc.GetSTH(ctx)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, errors2.Wrap(err, "get CT STH")
 	}
 
 	start, err := indexByDate(ctx, lc, t, 0, int64(sth.TreeSize)-1)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, errors2.Wrap(err, "get index by date")
 	}
 
 	return start, int64(sth.TreeSize), nil
@@ -122,7 +123,7 @@ func (l *Log) GetClient() (*client.LogClient, error) {
 	jsonOpts := jsonclient.Options{}
 	lc, err := client.New(uri, &hc, jsonOpts)
 	if err != nil {
-		return nil, err
+		return nil, errors2.Wrap(err, "create new log client")
 	}
 	l.c = lc
 	return lc, nil
@@ -178,11 +179,14 @@ func handleRawLogEntryFunc(entryFunc EntryFunc) func(rle *ct.RawLogEntry) {
 		if err := func() error {
 			logEntry, err := rle.ToLogEntry()
 			if err != nil {
-				return err
+				return errors2.Wrap(err, "parse raw log entry")
 			}
-			return entryFunc(logEntry)
+			if err := entryFunc(logEntry); err != nil {
+				return errors2.Wrap(err, "handle log entry")
+			}
+			return nil
 		}(); err != nil {
-			log.Debug().Msgf("error while handling raw log entry: %s", err)
+			log.Debug().Err(err).Msgf("")
 		}
 	}
 }
@@ -222,7 +226,7 @@ func Scan(ctx context.Context, l *Log, f EntryFunc, opts Options) (int64, error)
 	rleFunc := handleRawLogEntryFunc(f)
 
 	if err := sc.Scan(ctx, rleFunc, rleFunc); err != nil {
-		return 0, err
+		return 0, errors2.Wrap(err, "scan log")
 	}
 	return opts.Count(), nil
 }

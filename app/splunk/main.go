@@ -5,6 +5,7 @@ import (
 	"github.com/aau-network-security/go-domains/config"
 	"github.com/aau-network-security/go-domains/splunk"
 	"github.com/aau-network-security/go-domains/store"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"time"
 )
@@ -31,7 +32,7 @@ func main() {
 	entryFn := func(entry splunk.Entry) error {
 		for _, qr := range entry.QueryResults() {
 			if _, err := s.StorePassiveEntry(qr.Query, qr.QueryType, entry.Result.Timestamp); err != nil {
-				return err
+				return errors.Wrap(err, "store passive entry")
 			}
 		}
 		return nil

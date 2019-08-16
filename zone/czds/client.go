@@ -53,10 +53,6 @@ func NewClient(authenticator *Authenticator) Client {
 	return &c
 }
 
-func (c *client) GetTLD() error {
-	return nil
-}
-
 func (c *client) GetZone(tld string) (io.ReadCloser, error) {
 	url := fmt.Sprintf(apiUrl, tld)
 	req, err := http.NewRequest("GET", url, nil)

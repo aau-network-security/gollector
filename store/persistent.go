@@ -12,6 +12,7 @@ import (
 	"github.com/jinzhu/gorm"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
+	errors2 "github.com/pkg/errors"
 	"golang.org/x/net/publicsuffix"
 	"strings"
 	"sync"
@@ -227,7 +228,7 @@ func (s *Store) getOrCreateTld(tld string) (*models.Tld, error) {
 			Tld: tld,
 		}
 		if err := s.db.Insert(t); err != nil {
-			return nil, err
+			return nil, errors2.Wrap(err, "insert tld")
 		}
 
 		s.tldByName[tld] = t
@@ -374,7 +375,7 @@ func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
 			Description: log.Description,
 		}
 		if err := s.db.Insert(l); err != nil {
-			return nil, err
+			return nil, errors2.Wrap(err, "insert log")
 		}
 
 		s.logByUrl[log.Url] = l
@@ -479,7 +480,7 @@ func (s *Store) getorCreateRecordType(rtype string) (*models.RecordType, error) 
 			Type: rtype,
 		}
 		if err := s.db.Insert(rt); err != nil {
-			return nil, err
+			return nil, errors2.Wrap(err, "insert record type")
 		}
 
 		s.recordTypeByName[rtype] = rt
@@ -704,38 +705,38 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		if len(s.inserts.apexes) > 0 {
 			a := s.inserts.apexList()
 			if err := tx.Insert(&a); err != nil {
-				return err
+				return errors2.Wrap(err, "insert apexes")
 			}
 		}
 		if len(s.inserts.zoneEntries) > 0 {
 			z := s.inserts.zoneEntryList()
 			if err := tx.Insert(&z); err != nil {
-				return err
+				return errors2.Wrap(err, "insert zone entries")
 			}
 		}
 		if len(s.inserts.logEntries) > 0 {
 			if err := tx.Insert(&s.inserts.logEntries); err != nil {
-				return err
+				return errors2.Wrap(err, "insert log entries")
 			}
 		}
 		if len(s.inserts.certs) > 0 {
 			if err := tx.Insert(&s.inserts.certs); err != nil {
-				return err
+				return errors2.Wrap(err, "insert certs")
 			}
 		}
 		if len(s.inserts.certToFqdns) > 0 {
 			if err := tx.Insert(&s.inserts.certToFqdns); err != nil {
-				return err
+				return errors2.Wrap(err, "insert cert-to-fqdns")
 			}
 		}
 		if len(s.inserts.fqdns) > 0 {
 			if err := tx.Insert(&s.inserts.fqdns); err != nil {
-				return err
+				return errors2.Wrap(err, "insert fqdns")
 			}
 		}
 		if len(s.inserts.passiveEntries) > 0 {
 			if err := tx.Insert(&s.inserts.passiveEntries); err != nil {
-				return err
+				return errors2.Wrap(err, "insert passive entries")
 			}
 		}
 
@@ -743,19 +744,19 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		if len(s.updates.apexes) > 0 {
 			a := s.updates.apexList()
 			if err := tx.Update(&a); err != nil {
-				return err
+				return errors2.Wrap(err, "update apexes")
 			}
 		}
 		if len(s.updates.zoneEntries) > 0 {
 			z := s.updates.zoneEntryList()
 			_, err := tx.Model(&z).Column("last_seen").Update()
 			if err != nil {
-				return err
+				return errors2.Wrap(err, "update zone entries")
 			}
 		}
 		if len(s.updates.passiveEntries) > 0 {
 			if _, err := tx.Model(&s.updates.passiveEntries).Column("first_seen").Update(); err != nil {
-				return err
+				return errors2.Wrap(err, "update passive entries")
 			}
 		}
 
@@ -768,11 +769,11 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 	s.postHooks = append(s.postHooks, postHook)
 
 	if err := s.migrate(); err != nil {
-		return nil, err
+		return nil, errors2.Wrap(err, "migrate models")
 	}
 
 	if err := s.init(); err != nil {
-		return nil, err
+		return nil, errors2.Wrap(err, "initialize database")
 	}
 	return &s, nil
 }

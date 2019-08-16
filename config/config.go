@@ -6,6 +6,7 @@ import (
 	"github.com/aau-network-security/go-domains/zone/ftp"
 	"github.com/aau-network-security/go-domains/zone/http"
 	"github.com/aau-network-security/go-domains/zone/ssh"
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
@@ -59,10 +60,10 @@ func ReadConfig(path string) (config, error) {
 	var conf config
 	f, err := ioutil.ReadFile(path)
 	if err != nil {
-		return conf, err
+		return conf, errors.Wrap(err, "read config file")
 	}
 	if err := yaml.Unmarshal(f, &conf); err != nil {
-		return conf, err
+		return conf, errors.Wrap(err, "unmarshal config file")
 	}
 
 	conf.Zone.Com.Ftp.Password = os.Getenv(ComFtpPass)

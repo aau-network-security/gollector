@@ -8,6 +8,7 @@ import (
 	"github.com/aau-network-security/go-domains/ct"
 	"github.com/aau-network-security/go-domains/store"
 	ct2 "github.com/google/certificate-transparency-go"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/vbauerster/mpb"
 	"github.com/vbauerster/mpb/decor"
@@ -88,7 +89,7 @@ func main() {
 			entryFunc := func(entry *ct2.LogEntry) error {
 				err := s.StoreLogEntry(entry, l)
 				bar.Increment()
-				return err
+				return errors.Wrap(err, "store log entry")
 			}
 
 			opts := ct.Options{

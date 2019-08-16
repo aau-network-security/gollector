@@ -12,6 +12,7 @@ import (
 	"github.com/aau-network-security/go-domains/zone/ftp"
 	"github.com/aau-network-security/go-domains/zone/http"
 	"github.com/aau-network-security/go-domains/zone/ssh"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/text/encoding"
@@ -113,7 +114,7 @@ func main() {
 						var err error
 						domain, err = zc.decoder.Bytes(domain)
 						if err != nil {
-							return err
+							return errors.Wrap(err, "decode domain")
 						}
 					}
 
