@@ -21,6 +21,7 @@ func Repeat(f func(t time.Time) error, startTime time.Time, interval time.Durati
 	}
 
 	errc := make(chan error)
+	defer close(errc)
 
 	t := startTime
 
@@ -49,7 +50,6 @@ func Repeat(f func(t time.Time) error, startTime time.Time, interval time.Durati
 		}
 		log.Debug().Msgf(msg)
 	}
-	close(errc)
 
 	return nil
 }

@@ -102,6 +102,7 @@ func main() {
 			go func(zc zoneConfig) {
 				defer wg.Done()
 				if err := sem.Acquire(ctx, 1); err != nil {
+					// TODO: report error to Sentry
 					log.Debug().Msgf("failed to acquire semaphore: %s", err)
 					return
 				}
@@ -120,6 +121,7 @@ func main() {
 
 					_, err := s.StoreZoneEntry(t, string(domain))
 					if err != nil {
+						// TODO: report error to Sentry
 						log.Debug().Msgf("failed to store domain '%s': %s", domain, err)
 					}
 					c++
@@ -134,6 +136,7 @@ func main() {
 
 				resultStatus := "ok"
 				if err := zone.Process(zc.zone, opts); err != nil {
+					// TODO: report error to Sentry
 					log.Error().Msgf("error while processing zone file: %s", err)
 					resultStatus = "failed"
 				}
@@ -154,6 +157,7 @@ func main() {
 
 	// retrieve all zone files on a daily basis
 	if err := generic.Repeat(f, time.Now(), time.Hour*24, -1); err != nil {
+		// TODO: report error to Sentry
 		log.Fatal().Msgf("error while retrieving zone files: %s", err)
 	}
 }

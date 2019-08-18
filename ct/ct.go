@@ -186,6 +186,7 @@ func handleRawLogEntryFunc(entryFunc EntryFunc) func(rle *ct.RawLogEntry) {
 			}
 			return nil
 		}(); err != nil {
+			// TODO: report error to Sentry
 			log.Debug().Err(err).Msgf("")
 		}
 	}

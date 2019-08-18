@@ -54,6 +54,12 @@ type config struct {
 	Ct     Ct           `yaml:"ct"`
 	Store  store.Config `yaml:"store"`
 	Splunk Splunk       `yaml:"splunk"`
+	Sentry Sentry       `yaml:"sentry"`
+}
+
+type Sentry struct {
+	Enabled bool   `yaml:"enabled"`
+	Dsn     string `yaml:"dsn"`
 }
 
 func ReadConfig(path string) (config, error) {

@@ -7,6 +7,7 @@ import (
 	"github.com/aau-network-security/go-domains/config"
 	"github.com/aau-network-security/go-domains/ct"
 	"github.com/aau-network-security/go-domains/store"
+	"github.com/getsentry/sentry-go"
 	ct2 "github.com/google/certificate-transparency-go"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -27,6 +28,20 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
+	co := sentry.ClientOptions{
+		Dsn: conf.Sentry.Dsn,
+	}
+
+	c, err := sentry.NewClient(co)
+	if err != nil {
+		log.Fatal().Msgf("error while creating sentry client: %s", err)
+	}
+
+	scope := sentry.NewScope()
+	scope.SetTag("mode", "splunk")
+
+	initHub := sentry.NewHub(c, scope)
+
 	t, err := time.Parse("2006-01-02", conf.Ct.Time)
 	if err != nil {
 		log.Fatal().Msgf("failed to parse time from config: %s", err)
@@ -39,11 +54,13 @@ func main() {
 
 	s, err := store.NewStore(conf.Store, opts)
 	if err != nil {
+		initHub.CaptureException(err)
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}
 
 	logList, err := ct.AllLogs()
 	if err != nil {
+		initHub.CaptureException(err)
 		log.Fatal().Msgf("error while retrieving list of existing logs: %s", err)
 	}
 
@@ -60,13 +77,18 @@ func main() {
 	progress := 0
 
 	for _, l := range logs {
-		go func(l ct.Log) {
+		scope = sentry.NewScope()
+		scope.SetTag("log", l.Url)
+		logHub := sentry.NewHub(c, scope)
+
+		go func(h *sentry.Hub, l ct.Log) {
 			defer wg.Done()
 
 			start, end, err := ct.IndexByDate(ctx, &l, t)
 			if err != nil {
 				m.Lock()
 				progress++
+				h.CaptureException(err)
 				log.Debug().
 					Str("log", l.Name()).
 					Str("progress", fmt.Sprintf("%d/%d", progress, len(logs))).
@@ -100,6 +122,7 @@ func main() {
 
 			count, err := ct.Scan(ctx, &l, entryFunc, opts)
 			if err != nil {
+				h.CaptureException(err)
 				log.Warn().
 					Str("log", l.Name()).
 					Msgf("error while retrieving logs: %s", err)
@@ -111,11 +134,12 @@ func main() {
 				Str("progress", fmt.Sprintf("%d/%d", progress, len(logs))).
 				Msgf("retrieved %d log entries", count)
 			m.Unlock()
-		}(l)
+		}(logHub, l)
 	}
 	p.Wait()
 
 	if err := s.RunPostHooks(); err != nil {
+		initHub.CaptureException(err)
 		log.Fatal().Msgf("error while running post hooks: %s", err)
 	}
 }

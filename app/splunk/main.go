@@ -5,6 +5,7 @@ import (
 	"github.com/aau-network-security/go-domains/config"
 	"github.com/aau-network-security/go-domains/splunk"
 	"github.com/aau-network-security/go-domains/store"
+	"github.com/getsentry/sentry-go"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"time"
@@ -19,6 +20,20 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
+	co := sentry.ClientOptions{
+		Dsn: conf.Sentry.Dsn,
+	}
+
+	c, err := sentry.NewClient(co)
+	if err != nil {
+		log.Fatal().Msgf("error while creating sentry client: %s", err)
+	}
+
+	scope := sentry.NewScope()
+	scope.SetTag("mode", "splunk")
+
+	h := sentry.NewHub(c, scope)
+
 	opts := store.Opts{
 		AllowedInterval: 1 * time.Second, // field is unused, so we don't care about its value
 		BatchSize:       20000,
@@ -26,6 +41,7 @@ func main() {
 
 	s, err := store.NewStore(conf.Store, opts)
 	if err != nil {
+		h.CaptureException(err)
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}
 
@@ -39,10 +55,12 @@ func main() {
 	}
 
 	if err := splunk.Process(conf.Splunk, entryFn); err != nil {
+		h.CaptureException(err)
 		log.Fatal().Msgf("error while processing splunk files: %s", err)
 	}
 
 	if err := s.RunPostHooks(); err != nil {
+		h.CaptureException(err)
 		log.Fatal().Msgf("error while running post hooks: %s", err)
 	}
 }
