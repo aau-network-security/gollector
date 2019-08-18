@@ -6,6 +6,7 @@ import (
 	"github.com/aau-network-security/go-domains/zone/ftp"
 	"github.com/aau-network-security/go-domains/zone/http"
 	"github.com/aau-network-security/go-domains/zone/ssh"
+	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 	"os"
@@ -37,15 +38,18 @@ type Zone struct {
 	Com  Com  `yaml:"com"`
 	Czds Czds `yaml:"czds"`
 	Dk   Dk   `yaml:"dk"`
+	Meta Meta `yaml:"meta"`
 }
 
 type Ct struct {
 	Time        string `yaml:"time"`
 	WorkerCount int    `yaml:"worker_count"`
+	Meta        Meta   `yaml:"meta"`
 }
 
 type Splunk struct {
 	Directory string `yaml:"directory"`
+	Meta      Meta   `yaml:"meta"`
 }
 
 type config struct {
@@ -55,14 +59,19 @@ type config struct {
 	Splunk Splunk       `yaml:"splunk"`
 }
 
+type Meta struct {
+	Description string `yaml:"description"`
+	Host        string `yaml:"host"`
+}
+
 func ReadConfig(path string) (config, error) {
 	var conf config
 	f, err := ioutil.ReadFile(path)
 	if err != nil {
-		return conf, err
+		return conf, errors.Wrap(err, "read config file")
 	}
 	if err := yaml.Unmarshal(f, &conf); err != nil {
-		return conf, err
+		return conf, errors.Wrap(err, "unmarshal config file")
 	}
 
 	conf.Zone.Com.Ftp.Password = os.Getenv(ComFtpPass)

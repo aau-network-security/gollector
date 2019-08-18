@@ -28,6 +28,16 @@ func main() {
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}
 
+	if err := s.StartMeasurement(conf.Splunk.Meta.Description, conf.Splunk.Meta.Host); err != nil {
+		log.Fatal().Msgf("failed to start measurement", err)
+	}
+
+	defer func() {
+		if err := s.StopMeasurement(); err != nil {
+			log.Fatal().Msgf("error while stopping measurement", err)
+		}
+	}()
+
 	entryFn := func(entry splunk.Entry) error {
 		for _, qr := range entry.QueryResults() {
 			if _, err := s.StorePassiveEntry(qr.Query, qr.QueryType, entry.Result.Timestamp); err != nil {

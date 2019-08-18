@@ -31,6 +31,7 @@ type ZonefileEntry struct {
 	LastSeen  time.Time
 	ApexID    uint
 	Active    bool
+	StageID   uint
 }
 
 // ----- END ZONEFILE -----
@@ -53,6 +54,7 @@ type LogEntry struct {
 	Timestamp     time.Time
 	CertificateID uint
 	LogID         uint
+	StageID       uint
 }
 
 type Log struct {
@@ -69,6 +71,7 @@ type PassiveEntry struct {
 	FqdnID       uint
 	RecordTypeID uint
 	FirstSeen    time.Time
+	StageID      uint
 }
 
 type RecordType struct {
@@ -77,3 +80,24 @@ type RecordType struct {
 }
 
 // ----- END PASSIVE DNS -----
+
+// ----- BEGIN MEASUREMENT -----
+
+// Meta information for invidual measurements
+type Measurement struct {
+	ID          uint `gorm:"primary_key"`
+	Description string
+	Host        string
+	StartTime   time.Time
+	EndTime     time.Time
+}
+
+// An individual measurement can repeat a single stage multiple times
+type Stage struct {
+	ID            uint `gorm:"primary_key"`
+	MeasurementID uint
+	StartTime     time.Time
+	StopTime      time.Time
+}
+
+// ----- END MEASUREMENT -----
