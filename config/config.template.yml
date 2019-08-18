@@ -43,3 +43,6 @@ store:
   user: postgres
   password: postgres
   dbname: domains
+sentry:
+  enabled: true
+  dsn: <dsn that includes key and host>

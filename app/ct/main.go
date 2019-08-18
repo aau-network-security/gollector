@@ -8,6 +8,7 @@ import (
 	"github.com/aau-network-security/go-domains/ct"
 	"github.com/aau-network-security/go-domains/store"
 	ct2 "github.com/google/certificate-transparency-go"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/vbauerster/mpb"
 	"github.com/vbauerster/mpb/decor"
@@ -56,6 +57,14 @@ func main() {
 		log.Fatal().Msgf("error while retrieving list of existing logs: %s", err)
 	}
 
+	var h *config.SentryHub
+	if conf.Sentry.Enabled {
+		h, err = config.NewSentryHub(conf)
+		if err != nil {
+			log.Fatal().Msgf("error while creating sentry hub: %s", err)
+		}
+	}
+
 	logs := logList.Logs
 	//logs := []ct.Log{logList.Logs[0]}
 	//logs := logList.Logs[0:3]
@@ -69,18 +78,37 @@ func main() {
 	progress := 0
 
 	for _, l := range logs {
-		go func(l ct.Log) {
-			defer wg.Done()
+		tags := map[string]string{
+			"app": "ct",
+			"log": l.Name(),
+		}
+		zl := config.NewZeroLogger(tags)
+		el := config.NewErrLogChain(zl)
+		if conf.Sentry.Enabled {
+			sl := h.GetLogger(tags)
+			el.Add(sl)
+		}
+
+		go func(el config.ErrLogger, l ct.Log) {
+			var count int64
+
+			defer func() {
+				m.Lock()
+				progress++
+				log.Info().
+					Str("log", l.Name()).
+					Str("progress", fmt.Sprintf("%d/%d", progress, len(logs))).
+					Msgf("retrieved %d log entries", count)
+				m.Unlock()
+				wg.Done()
+			}()
 
 			start, end, err := ct.IndexByDate(ctx, &l, t)
 			if err != nil {
-				m.Lock()
-				progress++
-				log.Debug().
-					Str("log", l.Name()).
-					Str("progress", fmt.Sprintf("%d/%d", progress, len(logs))).
-					Msgf("error while getting index by date: %s", err)
-				m.Unlock()
+				opts := config.LogOptions{
+					Msg: "error while getting index by date",
+				}
+				el.Log(err, opts)
 				return
 			}
 
@@ -95,10 +123,14 @@ func main() {
 					)))
 			defer bar.Abort(false)
 
-			entryFunc := func(entry *ct2.LogEntry) error {
+			entryFn := func(entry *ct2.LogEntry) error {
 				err := s.StoreLogEntry(entry, l)
 				bar.Increment()
-				return err
+				return errors.Wrap(err, "store log entry")
+			}
+
+			errorFn := func(err error) {
+				el.Log(err, config.LogOptions{})
 			}
 
 			opts := ct.Options{
@@ -107,20 +139,14 @@ func main() {
 				EndIndex:    end,
 			}
 
-			count, err := ct.Scan(ctx, &l, entryFunc, opts)
+			count, err = ct.Scan(ctx, &l, entryFn, errorFn, opts)
 			if err != nil {
-				log.Warn().
-					Str("log", l.Name()).
-					Msgf("error while retrieving logs: %s", err)
+				opts := config.LogOptions{
+					Msg: "error while retrieving logs",
+				}
+				el.Log(err, opts)
 			}
-			m.Lock()
-			progress++
-			log.Info().
-				Str("log", l.Name()).
-				Str("progress", fmt.Sprintf("%d/%d", progress, len(logs))).
-				Msgf("retrieved %d log entries", count)
-			m.Unlock()
-		}(l)
+		}(el, l)
 	}
 	p.Wait()
 

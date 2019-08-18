@@ -33,7 +33,7 @@ func TestProcess(t *testing.T) {
 	}
 
 	opts := zone.ProcessOpts{
-		DomainFunc:     f,
+		DomainFn:       f,
 		StreamWrappers: []zone.StreamWrapper{zone.GzipWrapper},
 		StreamHandler:  zone.ZoneFileHandler,
 	}

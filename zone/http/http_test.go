@@ -41,7 +41,7 @@ func TestHttp(t *testing.T) {
 	}
 
 	opts := zone.ProcessOpts{
-		DomainFunc:     f,
+		DomainFn:       f,
 		StreamWrappers: []zone.StreamWrapper{},
 		StreamHandler:  zone.ListHandler,
 	}
