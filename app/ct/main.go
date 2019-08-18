@@ -47,9 +47,12 @@ func main() {
 		log.Fatal().Msgf("error while retrieving list of existing logs: %s", err)
 	}
 
-	h, err := config.NewSentryHub(conf)
-	if err != nil {
-		log.Fatal().Msgf("error while creating sentry hub: %s", err)
+	var h *config.SentryHub
+	if conf.Sentry.Enabled {
+		h, err = config.NewSentryHub(conf)
+		if err != nil {
+			log.Fatal().Msgf("error while creating sentry hub: %s", err)
+		}
 	}
 
 	logs := logList.Logs
@@ -69,9 +72,12 @@ func main() {
 			"app": "ct",
 			"log": l.Name(),
 		}
-		sl := h.GetLogger(tags)
 		zl := config.NewZeroLogger(tags)
-		el := config.NewErrLogChain(sl, zl)
+		el := config.NewErrLogChain(zl)
+		if conf.Sentry.Enabled {
+			sl := h.GetLogger(tags)
+			el.Add(sl)
+		}
 
 		go func(el config.ErrLogger, l ct.Log) {
 			defer wg.Done()

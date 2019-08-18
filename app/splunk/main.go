@@ -19,16 +19,19 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
-	h, err := config.NewSentryHub(conf)
-	if err != nil {
-		log.Fatal().Msgf("error while creating sentry hub: %s", err)
-	}
 	tags := map[string]string{
 		"app": "splunk",
 	}
-	sl := h.GetLogger(tags)
 	zl := config.NewZeroLogger(tags)
-	el := config.NewErrLogChain(sl, zl)
+	el := config.NewErrLogChain(zl)
+	if conf.Sentry.Enabled {
+		h, err := config.NewSentryHub(conf)
+		if err != nil {
+			log.Fatal().Msgf("error while creating sentry hub: %s", err)
+		}
+		sl := h.GetLogger(tags)
+		el.Add(sl)
+	}
 
 	opts := store.Opts{
 		AllowedInterval: 1 * time.Second, // field is unused, so we don't care about its value

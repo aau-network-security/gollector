@@ -16,11 +16,11 @@ type ErrLogger interface {
 	Log(error, LogOptions)
 }
 
-type sentryHub struct {
+type SentryHub struct {
 	client *sentry.Client
 }
 
-func NewSentryHub(conf config) (*sentryHub, error) {
+func NewSentryHub(conf config) (*SentryHub, error) {
 	opts := sentry.ClientOptions{
 		Dsn: conf.Sentry.Dsn,
 	}
@@ -28,14 +28,14 @@ func NewSentryHub(conf config) (*sentryHub, error) {
 	if err != nil {
 		return nil, err
 	}
-	sh := sentryHub{
+	sh := SentryHub{
 		client: c,
 	}
 
 	return &sh, nil
 }
 
-func (hub *sentryHub) GetLogger(tags map[string]string) *sentryLogger {
+func (hub *SentryHub) GetLogger(tags map[string]string) *sentryLogger {
 	scope := sentry.NewScope()
 	for k, v := range tags {
 		scope.SetTag(k, v)
@@ -94,7 +94,11 @@ func (chain *errLogChain) Log(err error, opts LogOptions) {
 	}
 }
 
-func NewErrLogChain(loggers ...ErrLogger) ErrLogger {
+func (chain *errLogChain) Add(el ErrLogger) {
+	chain.loggers = append(chain.loggers, el)
+}
+
+func NewErrLogChain(loggers ...ErrLogger) *errLogChain {
 	return &errLogChain{
 		loggers: loggers,
 	}

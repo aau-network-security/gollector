@@ -43,9 +43,12 @@ func main() {
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}
 
-	h, err := config.NewSentryHub(conf)
-	if err != nil {
-		log.Fatal().Msgf("error while creating sentry hub: %s", err)
+	var h *config.SentryHub
+	if conf.Sentry.Enabled {
+		h, err = config.NewSentryHub(conf)
+		if err != nil {
+			log.Fatal().Msgf("error while creating sentry hub: %s", err)
+		}
 	}
 
 	authenticator := czds.NewAuthenticator(conf.Zone.Czds.Creds)
@@ -108,9 +111,12 @@ func main() {
 				"app": "zones",
 				"tld": zc.zone.Tld(),
 			}
-			sl := h.GetLogger(tags)
 			zl := config.NewZeroLogger(tags)
-			el := config.NewErrLogChain(sl, zl)
+			el := config.NewErrLogChain(zl)
+			if conf.Sentry.Enabled {
+				sl := h.GetLogger(tags)
+				el.Add(sl)
+			}
 
 			go func(el config.ErrLogger, zc zoneConfig) {
 				defer wg.Done()
