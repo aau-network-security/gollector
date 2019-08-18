@@ -43,10 +43,15 @@ func main() {
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}
 
+	h, err := config.NewSentryHub(conf)
+	if err != nil {
+		log.Fatal().Msgf("error while creating sentry hub: %s", err)
+	}
+
 	authenticator := czds.NewAuthenticator(conf.Zone.Czds.Creds)
 	ctx := context.Background()
 
-	f := func(t time.Time) error {
+	fn := func(t time.Time) error {
 		wg := sync.WaitGroup{}
 		var zoneConfigs []zoneConfig
 
@@ -66,18 +71,18 @@ func main() {
 		if conf.Zone.Com.SshEnabled {
 			sshDialFunc, err = ssh.DialFunc(conf.Zone.Com.Ssh)
 			if err != nil {
-				log.Fatal().Msgf("failed to create SSH dial func: %s", err)
+				return errors.Wrap(err, "failed to create SSH dial func")
 			}
 		}
 		comZone, err := ftp.New(conf.Zone.Com.Ftp, sshDialFunc)
 		if err != nil {
-			log.Fatal().Msgf("failed to create .com zone retriever: %s", err)
+			return errors.Wrap(err, "failed to create .com zone retriever")
 		}
 
 		httpClient, err := ssh.HttpClient(conf.Zone.Dk.Ssh)
 		dkZone, err := http.New(conf.Zone.Dk.Http, httpClient)
 		if err != nil {
-			log.Fatal().Msgf("failed to create .dk zone retriever: %s", err)
+			return errors.Wrap(err, "failed to create .dk zone retriever")
 		}
 
 		zoneConfigs = append([]zoneConfig{
@@ -99,17 +104,24 @@ func main() {
 		wg.Add(len(zoneConfigs))
 		progress := 0
 		for _, zc := range zoneConfigs {
-			go func(zc zoneConfig) {
+			tags := map[string]string{
+				"app": "zones",
+				"tld": zc.zone.Tld(),
+			}
+			sl := h.GetLogger(tags)
+			zl := config.NewZeroLogger(tags)
+			el := config.NewErrLogChain(sl, zl)
+
+			go func(el config.ErrLogger, zc zoneConfig) {
 				defer wg.Done()
 				if err := sem.Acquire(ctx, 1); err != nil {
-					// TODO: report error to Sentry
-					log.Debug().Msgf("failed to acquire semaphore: %s", err)
+					el.Log(err, config.LogOptions{Msg: "failed to acquire semaphore"})
 					return
 				}
 				defer sem.Release(1)
 
 				c := 0
-				domainFunc := func(domain []byte) error {
+				domainFn := func(domain []byte) error {
 					c++
 					if zc.decoder != nil {
 						var err error
@@ -121,23 +133,27 @@ func main() {
 
 					_, err := s.StoreZoneEntry(t, string(domain))
 					if err != nil {
-						// TODO: report error to Sentry
-						log.Debug().Msgf("failed to store domain '%s': %s", domain, err)
+						tags := map[string]string{
+							"domain": string(domain),
+						}
+						el.Log(err, config.LogOptions{
+							Tags: tags,
+							Msg:  "failed to store domain",
+						})
 					}
 					c++
 					return nil
 				}
 
 				opts := zone.ProcessOpts{
-					DomainFunc:     domainFunc,
+					DomainFn:       domainFn,
 					StreamWrappers: zc.streamWrappers,
 					StreamHandler:  zc.streamHandler,
 				}
 
 				resultStatus := "ok"
 				if err := zone.Process(zc.zone, opts); err != nil {
-					// TODO: report error to Sentry
-					log.Error().Msgf("error while processing zone file: %s", err)
+					el.Log(err, config.LogOptions{Msg: "error while processing zone file"})
 					resultStatus = "failed"
 				}
 				progress++
@@ -147,7 +163,7 @@ func main() {
 					Str("progress", fmt.Sprintf("%d/%d", progress, len(zoneConfigs))).
 					Int("processed domains", c).
 					Msgf("finished zone '%s'", zc.zone.Tld())
-			}(zc)
+			}(el, zc)
 		}
 
 		wg.Wait()
@@ -156,8 +172,7 @@ func main() {
 	}
 
 	// retrieve all zone files on a daily basis
-	if err := generic.Repeat(f, time.Now(), time.Hour*24, -1); err != nil {
-		// TODO: report error to Sentry
+	if err := generic.Repeat(fn, time.Now(), time.Hour*24, -1); err != nil {
 		log.Fatal().Msgf("error while retrieving zone files: %s", err)
 	}
 }

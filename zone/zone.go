@@ -31,13 +31,13 @@ type StreamWrapper func(closer io.ReadCloser) (io.ReadCloser, error)
 type StreamHandler func(io.Reader, DomainFunc) error
 
 type ProcessOpts struct {
-	DomainFunc     DomainFunc
+	DomainFn       DomainFunc
 	StreamWrappers []StreamWrapper
 	StreamHandler  StreamHandler
 }
 
 func (opts *ProcessOpts) isValid() bool {
-	return opts.DomainFunc != nil
+	return opts.DomainFn != nil
 }
 
 // this handler reads files that fulfill the zone file standard
@@ -108,7 +108,7 @@ func Process(z Zone, opts ProcessOpts) error {
 		}
 	}
 
-	if err := opts.StreamHandler(str, opts.DomainFunc); err != nil {
+	if err := opts.StreamHandler(str, opts.DomainFn); err != nil {
 		return &ZoneErr{z.Tld(), err}
 	}
 	return nil

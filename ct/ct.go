@@ -10,7 +10,6 @@ import (
 	"github.com/google/certificate-transparency-go/jsonclient"
 	"github.com/google/certificate-transparency-go/scanner"
 	errors2 "github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 	"net/http"
 	"time"
 )
@@ -174,20 +173,21 @@ func TrustedLogs() (*LogList, error) {
 
 type EntryFunc func(entry *ct.LogEntry) error
 
-func handleRawLogEntryFunc(entryFunc EntryFunc) func(rle *ct.RawLogEntry) {
+type ErrorFunc func(err error)
+
+func handleRawLogEntryFunc(entryFn EntryFunc, errorFn ErrorFunc) func(rle *ct.RawLogEntry) {
 	return func(rle *ct.RawLogEntry) {
 		if err := func() error {
 			logEntry, err := rle.ToLogEntry()
 			if err != nil {
 				return errors2.Wrap(err, "parse raw log entry")
 			}
-			if err := entryFunc(logEntry); err != nil {
+			if err := entryFn(logEntry); err != nil {
 				return errors2.Wrap(err, "handle log entry")
 			}
 			return nil
 		}(); err != nil {
-			// TODO: report error to Sentry
-			log.Debug().Err(err).Msgf("")
+			errorFn(err)
 		}
 	}
 }
@@ -204,7 +204,7 @@ func (o Options) Count() int64 {
 	return o.EndIndex - o.StartIndex
 }
 
-func Scan(ctx context.Context, l *Log, f EntryFunc, opts Options) (int64, error) {
+func Scan(ctx context.Context, l *Log, entryFn EntryFunc, errorFn ErrorFunc, opts Options) (int64, error) {
 	lc, err := l.GetClient()
 	if err != nil {
 		return 0, err
@@ -224,7 +224,7 @@ func Scan(ctx context.Context, l *Log, f EntryFunc, opts Options) (int64, error)
 	}
 
 	sc := scanner.NewScanner(lc, scannerOpts)
-	rleFunc := handleRawLogEntryFunc(f)
+	rleFunc := handleRawLogEntryFunc(entryFn, errorFn)
 
 	if err := sc.Scan(ctx, rleFunc, rleFunc); err != nil {
 		return 0, errors2.Wrap(err, "scan log")
@@ -232,7 +232,7 @@ func Scan(ctx context.Context, l *Log, f EntryFunc, opts Options) (int64, error)
 	return opts.Count(), nil
 }
 
-func ScanFromTime(ctx context.Context, l *Log, t time.Time, f EntryFunc) (int64, error) {
+func ScanFromTime(ctx context.Context, l *Log, t time.Time, entryFn EntryFunc, errorFn ErrorFunc) (int64, error) {
 	startIndex, endIndex, err := IndexByDate(ctx, l, t)
 	if err != nil {
 		return 0, err
@@ -244,5 +244,5 @@ func ScanFromTime(ctx context.Context, l *Log, t time.Time, f EntryFunc) (int64,
 		EndIndex:    endIndex,
 	}
 
-	return Scan(ctx, l, f, opts)
+	return Scan(ctx, l, entryFn, errorFn, opts)
 }
