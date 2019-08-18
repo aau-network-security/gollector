@@ -38,15 +38,18 @@ type Zone struct {
 	Com  Com  `yaml:"com"`
 	Czds Czds `yaml:"czds"`
 	Dk   Dk   `yaml:"dk"`
+	Meta Meta `yaml:"meta"`
 }
 
 type Ct struct {
 	Time        string `yaml:"time"`
 	WorkerCount int    `yaml:"worker_count"`
+	Meta        Meta   `yaml:"meta"`
 }
 
 type Splunk struct {
 	Directory string `yaml:"directory"`
+	Meta      Meta   `yaml:"meta"`
 }
 
 type config struct {
@@ -60,6 +63,11 @@ type config struct {
 type Sentry struct {
 	Enabled bool   `yaml:"enabled"`
 	Dsn     string `yaml:"dsn"`
+}
+
+type Meta struct {
+	Description string `yaml:"description"`
+	Host        string `yaml:"host"`
 }
 
 func ReadConfig(path string) (config, error) {

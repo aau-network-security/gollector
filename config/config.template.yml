@@ -1,4 +1,7 @@
 zone:
+  meta:
+    host: <host that runs measurement, for meta info storage purposes>
+    description: <description of measurement>
   com:
     ftp:
       tld: com
@@ -24,9 +27,15 @@ zone:
       user: <username>
       authtype: password
 ct:
+  meta:
+    host: <host that runs measurement, for meta info storage purposes>
+    description: <description of measurement>
   time: 2019-08-08
   worker_count: 5
 splunk:
+  meta:
+    host: <host that runs measurement, for meta info storage purposes>
+    description: <description of measurement>
   directory: <path to directory with Splunk JSON files>
 store:
   host: localhost

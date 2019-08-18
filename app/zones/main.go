@@ -43,6 +43,10 @@ func main() {
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}
 
+	if err := s.StartMeasurement(conf.Zone.Meta.Description, conf.Zone.Meta.Host); err != nil {
+		log.Fatal().Msgf("failed to start measurement", err)
+	}
+
 	var h *config.SentryHub
 	if conf.Sentry.Enabled {
 		h, err = config.NewSentryHub(conf)
@@ -54,7 +58,16 @@ func main() {
 	authenticator := czds.NewAuthenticator(conf.Zone.Czds.Creds)
 	ctx := context.Background()
 
+	c := 0
 	fn := func(t time.Time) error {
+		defer func() {
+			c++
+		}()
+		if c != 0 {
+			if err := s.NextStage(); err != nil {
+				log.Fatal().Msgf("error while starting next stage", err)
+			}
+		}
 		wg := sync.WaitGroup{}
 		var zoneConfigs []zoneConfig
 
@@ -180,5 +193,9 @@ func main() {
 	// retrieve all zone files on a daily basis
 	if err := generic.Repeat(fn, time.Now(), time.Hour*24, -1); err != nil {
 		log.Fatal().Msgf("error while retrieving zone files: %s", err)
+	}
+
+	if err := s.StopMeasurement(); err != nil {
+		log.Fatal().Msgf("error while stopping measurement", err)
 	}
 }

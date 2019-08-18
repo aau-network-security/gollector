@@ -27,6 +27,8 @@ func resetDb(g *gorm.DB) error {
 		"logs",
 		"record_types",
 		"passive_entries",
+		"measurements",
+		"stages",
 	}
 
 	for _, table := range tables {
@@ -47,6 +49,8 @@ func resetDb(g *gorm.DB) error {
 		&models.Log{},
 		&models.RecordType{},
 		&models.PassiveEntry{},
+		&models.Measurement{},
+		&models.Stage{},
 	}
 	for _, ex := range migrateExamples {
 		if err := g.AutoMigrate(ex).Error; err != nil {
@@ -127,6 +131,7 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
+	s.curStage = &models.Stage{}
 
 	iterations := 3
 	for i := 0; i < iterations; i++ {
@@ -196,6 +201,7 @@ func TestStore_StoreLogEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
+	s.curStage = &models.Stage{}
 
 	l := ct.Log{
 		Url:         "localhost",
@@ -375,6 +381,7 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
+	s.curStage = &models.Stage{}
 
 	tm := time.Now()
 
