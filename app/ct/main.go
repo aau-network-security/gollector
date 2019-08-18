@@ -80,20 +80,25 @@ func main() {
 		}
 
 		go func(el config.ErrLogger, l ct.Log) {
-			defer wg.Done()
+			var count int64
+
+			defer func() {
+				m.Lock()
+				progress++
+				log.Info().
+					Str("log", l.Name()).
+					Str("progress", fmt.Sprintf("%d/%d", progress, len(logs))).
+					Msgf("retrieved %d log entries", count)
+				m.Unlock()
+				wg.Done()
+			}()
 
 			start, end, err := ct.IndexByDate(ctx, &l, t)
 			if err != nil {
-				m.Lock()
-				progress++
 				opts := config.LogOptions{
 					Msg: "error while getting index by date",
-					Tags: map[string]string{
-						"progress": fmt.Sprintf("%d/%d", progress, len(logs)),
-					},
 				}
 				el.Log(err, opts)
-				m.Unlock()
 				return
 			}
 
@@ -124,20 +129,13 @@ func main() {
 				EndIndex:    end,
 			}
 
-			count, err := ct.Scan(ctx, &l, entryFn, errorFn, opts)
+			count, err = ct.Scan(ctx, &l, entryFn, errorFn, opts)
 			if err != nil {
 				opts := config.LogOptions{
 					Msg: "error while retrieving logs",
 				}
 				el.Log(err, opts)
 			}
-			m.Lock()
-			progress++
-			log.Info().
-				Str("log", l.Name()).
-				Str("progress", fmt.Sprintf("%d/%d", progress, len(logs))).
-				Msgf("retrieved %d log entries", count)
-			m.Unlock()
 		}(el, l)
 	}
 	p.Wait()

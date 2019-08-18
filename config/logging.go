@@ -2,7 +2,6 @@ package config
 
 import (
 	"github.com/getsentry/sentry-go"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"os"
 )
@@ -51,14 +50,15 @@ type sentryLogger struct {
 }
 
 func (l *sentryLogger) Log(err error, opts LogOptions) {
-	l.h.Lock()
-	defer l.h.Unlock()
 	scope := l.h.PushScope()
 	defer l.h.PopScope()
 	for k, v := range opts.Tags {
 		scope.SetTag(k, v)
 	}
-	l.h.CaptureException(errors.Wrap(err, opts.Msg))
+	if opts.Msg != "" {
+		scope.SetExtra("msg", opts.Msg)
+	}
+	l.h.CaptureException(err)
 }
 
 type zeroLogger struct {
@@ -66,11 +66,11 @@ type zeroLogger struct {
 }
 
 func (l *zeroLogger) Log(err error, opts LogOptions) {
-	ctx := l.l.With()
+	ev := l.l.Err(err)
 	for k, v := range opts.Tags {
-		ctx = ctx.Str(k, v)
+		ev = ev.Str(k, v)
 	}
-	ctx.Logger().Err(err).Msg(opts.Msg)
+	ev.Msg(opts.Msg)
 }
 
 func NewZeroLogger(tags map[string]string) ErrLogger {
