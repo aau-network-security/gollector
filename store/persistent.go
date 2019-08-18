@@ -137,7 +137,7 @@ func NewModelSet() ModelSet {
 type postHook func(*Store) error
 
 type Ids struct {
-	zoneEntries, apexes, tlds, certs, logs, fqdns, recordTypes uint
+	zoneEntries, apexes, tlds, certs, logs, fqdns, recordTypes, measurements, stages uint
 }
 
 type splunkEntryMap struct {
@@ -195,6 +195,8 @@ type Store struct {
 	postHooks             []postHook
 	inserts               ModelSet
 	updates               ModelSet
+	curStage              *models.Stage
+	curMeasurement        *models.Measurement
 }
 
 func (s *Store) RunPostHooks() error {
@@ -315,6 +317,7 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 			FirstSeen: t,
 			LastSeen:  t,
 			Active:    true,
+			StageID:   s.curStage.ID,
 		}
 
 		s.zoneEntriesByApexName[apex] = newZoneEntry
@@ -341,6 +344,7 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 			FirstSeen: t,
 			LastSeen:  t,
 			Active:    true,
+			StageID:   s.curStage.ID,
 		}
 
 		s.zoneEntriesByApexName[apex] = newZoneEntry
@@ -464,6 +468,7 @@ func (s *Store) StoreLogEntry(entry *ct2.LogEntry, log ct.Log) error {
 		Index:         uint(entry.Index),
 		CertificateID: cert.ID,
 		Timestamp:     ts,
+		StageID:       s.curStage.ID,
 	}
 
 	s.inserts.logEntries = append(s.inserts.logEntries, &le)
@@ -512,6 +517,7 @@ func (s *Store) StorePassiveEntry(query string, queryType string, t time.Time) (
 			FqdnID:       fqdn.ID,
 			FirstSeen:    t,
 			RecordTypeID: rt.ID,
+			StageID:      s.curStage.ID,
 		}
 
 		s.passiveEntryByFqdn.add(query, queryType, pe)
@@ -543,6 +549,8 @@ func (s *Store) migrate() error {
 		&models.Log{},
 		&models.RecordType{},
 		&models.PassiveEntry{},
+		&models.Measurement{},
+		&models.Stage{},
 	}
 	for _, ex := range migrateExamples {
 		if err := g.AutoMigrate(ex).Error; err != nil {
@@ -625,6 +633,16 @@ func (s *Store) init() error {
 		s.passiveEntryByFqdn.add(fqdn.Fqdn, rtype.Type, entry)
 	}
 
+	var measurements []*models.Measurement
+	if err := s.db.Model(&measurements).Order("id ASC").Select(); err != nil {
+		return err
+	}
+
+	var stages []*models.Stage
+	if err := s.db.Model(&stages).Order("id ASC").Select(); err != nil {
+		return err
+	}
+
 	s.ids.apexes = 1
 	if len(apexes) > 0 {
 		s.ids.apexes = apexes[len(apexes)-1].ID + 1
@@ -652,6 +670,14 @@ func (s *Store) init() error {
 	s.ids.recordTypes = 1
 	if len(rtypes) > 0 {
 		s.ids.recordTypes = rtypes[len(rtypes)-1].ID + 1
+	}
+	s.ids.measurements = 1
+	if len(measurements) > 0 {
+		s.ids.measurements = measurements[len(measurements)-1].ID + 1
+	}
+	s.ids.stages = 1
+	if len(stages) > 0 {
+		s.ids.stages = stages[len(stages)-1].ID + 1
 	}
 
 	return nil
