@@ -17,20 +17,26 @@ func TestGetStartTime(t *testing.T) {
 
 	interval := 24 * time.Hour
 
+	tBase := time.Now()
+
 	tests := []struct {
 		name             string
 		entries          []insertEntry
 		expectedInterval time.Duration
 	}{
 		{
-			"existing entry",
+			"multiple existing entries",
 			[]insertEntry{
 				{
-					time.Now(),
+					tBase,
 					"example.org",
 				},
+				{
+					tBase.Add(10 * time.Hour),
+					"example.com",
+				},
 			},
-			24 * time.Hour,
+			34 * time.Hour,
 		},
 		{
 			"no existing entry",
@@ -76,9 +82,9 @@ func TestGetStartTime(t *testing.T) {
 				t.Fatalf("unexpected error while getting start time: %s", err)
 			}
 
-			expected := time.Now().Add(test.expectedInterval)
+			expected := tBase.Add(test.expectedInterval)
 
-			if !almostEqual(actual, expected, 10*time.Second) {
+			if !almostEqual(actual, expected, 1*time.Minute) {
 				t.Fatalf("expected start time to be %s, but got %s", expected, actual)
 			}
 		})

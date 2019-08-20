@@ -134,7 +134,7 @@ func GetStartTime(conf store.Config, interval time.Duration) (time.Time, error) 
 		return time.Now(), nil
 	}
 
-	st := entries[0].LastSeen
+	st := entries[0].LastSeen.Add(interval)
 	for st.Before(time.Now()) {
 		st = st.Add(interval)
 	}
