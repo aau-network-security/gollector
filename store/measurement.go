@@ -15,6 +15,10 @@ func (s *Store) hasActiveMeasurement() bool {
 	return s.curMeasurement.ID != 0
 }
 
+func (s *Store) hasActiveStage() bool {
+	return s.curStage.ID != 0
+}
+
 // starts a new measurement
 func (s *Store) StartMeasurement(description, host string) error {
 	if s.hasActiveMeasurement() {
@@ -25,6 +29,7 @@ func (s *Store) StartMeasurement(description, host string) error {
 		Description: description,
 		Host:        host,
 		StartTime:   time.Now(),
+		Stage:       1,
 	}
 
 	if err := s.db.Insert(measure); err != nil {
@@ -35,8 +40,9 @@ func (s *Store) StartMeasurement(description, host string) error {
 	return s.NextStage()
 }
 
+// stop the current stage if it exists
 func (s *Store) stopStage() error {
-	if s.curStage == nil {
+	if !s.hasActiveStage() {
 		return nil
 	}
 	s.curStage.StopTime = time.Now()
@@ -60,6 +66,7 @@ func (s *Store) NextStage() error {
 		StartTime:     time.Now(),
 		MeasurementID: s.curMeasurement.ID,
 		ID:            s.ids.stages,
+		Stage:         s.curMeasurement.Stage,
 	}
 
 	if err := s.db.Insert(stage); err != nil {
@@ -67,6 +74,7 @@ func (s *Store) NextStage() error {
 	}
 	s.curStage = stage
 	s.ids.stages++
+	s.curMeasurement.Stage++
 
 	return nil
 }
