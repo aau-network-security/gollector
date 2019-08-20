@@ -47,7 +47,7 @@ func main() {
 	}
 
 	if err := s.StartMeasurement(conf.Splunk.Meta.Description, conf.Splunk.Meta.Host); err != nil {
-		log.Fatal().Msgf("failed to start measurement", err)
+		log.Fatal().Msgf("failed to start measurement: %s", err)
 	}
 
 	defer func() {

@@ -2,6 +2,7 @@ package czds
 
 import (
 	"errors"
+	tst "github.com/aau-network-security/go-domains/testing"
 	"github.com/aau-network-security/go-domains/zone"
 	"github.com/rs/zerolog/log"
 	"os"
@@ -9,15 +10,16 @@ import (
 )
 
 func TestCzds(t *testing.T) {
-	zone.SkipCI(t)
+	tst.SkipCI(t)
 
 	user := os.Getenv("CZDS_USER")
 	pass := os.Getenv("CZDS_PASS")
-	conf := Credentials{
+	cred := Credentials{
 		Username: user,
 		Password: pass,
 	}
-	z := New(conf, "net")
+	auth := NewAuthenticator(cred)
+	z := New(auth, "net")
 
 	count := 0
 	f := func(domain []byte) error {

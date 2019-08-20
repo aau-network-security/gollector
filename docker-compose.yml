@@ -1,6 +1,7 @@
 version: '2.4'
 services:
   zones:
+    container_name: go-domains-zones
     build:
       context: .
       dockerfile: app/zones/Dockerfile
@@ -13,6 +14,7 @@ services:
       - ./config:/config:ro # configuration files
       - ${SSH_DIR}:/ssh:ro  # ssh keys
   ct:
+    container_name: go-domains-ct
     build:
       context: .
       dockerfile: app/ct/Dockerfile
@@ -20,6 +22,7 @@ services:
     volumes:
       - ./config:/config:ro # configuration files
   splunk:
+    container_name: go-domains-splunk
     build:
       context: .
       dockerfile: app/splunk/Dockerfile
@@ -28,6 +31,7 @@ services:
       - ./config:/config:ro # configuration files
       - ${SPLUNK_DIR}:/splunk # directory containing Splunk JSON logs
   db:
+    container_name: go-domains-db
     image: postgres
     restart: always
     environment:

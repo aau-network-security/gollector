@@ -6,9 +6,11 @@ import (
 	"time"
 )
 
+type RepeatFunc func(t time.Time) error
+
 // repeats the execution of a function n times at a given interval
 // if n is negative, repeat infinitely
-func Repeat(f func(t time.Time) error, startTime time.Time, interval time.Duration, n int) error {
+func Repeat(f RepeatFunc, startTime time.Time, interval time.Duration, n int) error {
 	untilStart := startTime.Sub(time.Now())
 
 	if untilStart > 0 {

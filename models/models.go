@@ -90,12 +90,14 @@ type Measurement struct {
 	Host        string
 	StartTime   time.Time
 	EndTime     time.Time
+	Stage       uint `sql:"-"`
 }
 
 // An individual measurement can repeat a single stage multiple times
 type Stage struct {
 	ID            uint `gorm:"primary_key"`
 	MeasurementID uint
+	Stage         uint
 	StartTime     time.Time
 	StopTime      time.Time
 }
