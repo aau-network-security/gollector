@@ -38,10 +38,12 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
+	log.Debug().Msgf("loading store..")
 	s, err := store.NewStore(conf.Store, store.DefaultOpts)
 	if err != nil {
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}
+	log.Debug().Msgf("loaded store..!")
 
 	interval := 24 * time.Hour
 
