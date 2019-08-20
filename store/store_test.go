@@ -6,70 +6,25 @@ import (
 	"fmt"
 	"github.com/aau-network-security/go-domains/ct"
 	"github.com/aau-network-security/go-domains/models"
-	ct2 "github.com/google/certificate-transparency-go"
+	tst "github.com/aau-network-security/go-domains/testing"
+	gct "github.com/google/certificate-transparency-go"
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/google/certificate-transparency-go/x509/pkix"
-	"github.com/jinzhu/gorm"
 	"math/big"
 	"testing"
 	"time"
 )
 
-func resetDb(g *gorm.DB) error {
-	tables := []string{
-		"apexes",
-		"zonefile_entries",
-		"tlds",
-		"fqdns",
-		"certificate_to_fqdns",
-		"certificates",
-		"log_entries",
-		"logs",
-		"record_types",
-		"passive_entries",
-		"measurements",
-		"stages",
-	}
-
-	for _, table := range tables {
-		qry := fmt.Sprintf("DROP TABLE IF EXISTS %s", table)
-		if err := g.Exec(qry).Error; err != nil {
-			return err
-		}
-	}
-
-	migrateExamples := []interface{}{
-		&models.Apex{},
-		&models.ZonefileEntry{},
-		&models.Tld{},
-		&models.Fqdn{},
-		&models.CertificateToFqdn{},
-		&models.Certificate{},
-		&models.LogEntry{},
-		&models.Log{},
-		&models.RecordType{},
-		&models.PassiveEntry{},
-		&models.Measurement{},
-		&models.Stage{},
-	}
-	for _, ex := range migrateExamples {
-		if err := g.AutoMigrate(ex).Error; err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func logEntryFromCertData(raw []byte, ts uint64) (*ct2.LogEntry, error) {
+func logEntryFromCertData(raw []byte, ts uint64) (*gct.LogEntry, error) {
 	cert, err := x509.ParseCertificate(raw)
 	if err != nil {
 		return nil, err
 	}
-	le := &ct2.LogEntry{
-		Leaf: ct2.MerkleTreeLeaf{
-			TimestampedEntry: &ct2.TimestampedEntry{
-				EntryType: ct2.X509LogEntryType,
-				X509Entry: &ct2.ASN1Cert{
+	le := &gct.LogEntry{
+		Leaf: gct.MerkleTreeLeaf{
+			TimestampedEntry: &gct.TimestampedEntry{
+				EntryType: gct.X509LogEntryType,
+				X509Entry: &gct.ASN1Cert{
 					Data: raw,
 				},
 				Timestamp: ts,
@@ -118,7 +73,7 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 		t.Fatalf("failed to open gorm database: %s", err)
 	}
 
-	if err := resetDb(g); err != nil {
+	if err := tst.ResetDb(g); err != nil {
 		t.Fatalf("failed to reset database: %s", err)
 	}
 
@@ -131,7 +86,6 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
-	s.curStage = &models.Stage{}
 
 	iterations := 3
 	for i := 0; i < iterations; i++ {
@@ -188,7 +142,7 @@ func TestStore_StoreLogEntry(t *testing.T) {
 		t.Fatalf("failed to open gorm database: %s", err)
 	}
 
-	if err := resetDb(g); err != nil {
+	if err := tst.ResetDb(g); err != nil {
 		t.Fatalf("failed to reset database: %s", err)
 	}
 
@@ -201,7 +155,6 @@ func TestStore_StoreLogEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
-	s.curStage = &models.Stage{}
 
 	l := ct.Log{
 		Url:         "localhost",
@@ -368,7 +321,7 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 		t.Fatalf("failed to open gorm database: %s", err)
 	}
 
-	if err := resetDb(g); err != nil {
+	if err := tst.ResetDb(g); err != nil {
 		t.Fatalf("failed to reset database: %s", err)
 	}
 
@@ -381,7 +334,6 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
-	s.curStage = &models.Stage{}
 
 	tm := time.Now()
 
@@ -512,7 +464,7 @@ func TestInit(t *testing.T) {
 		t.Fatalf("failed to open gorm database: %s", err)
 	}
 
-	if err := resetDb(g); err != nil {
+	if err := tst.ResetDb(g); err != nil {
 		t.Fatalf("failed to reset database: %s", err)
 	}
 

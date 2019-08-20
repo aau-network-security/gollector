@@ -2,6 +2,7 @@ package http
 
 import (
 	"errors"
+	tst "github.com/aau-network-security/go-domains/testing"
 	"github.com/aau-network-security/go-domains/zone"
 	"github.com/aau-network-security/go-domains/zone/ssh"
 	"github.com/rs/zerolog/log"
@@ -10,7 +11,7 @@ import (
 )
 
 func TestHttp(t *testing.T) {
-	zone.SkipCI(t)
+	tst.SkipCI(t)
 
 	sshConf := ssh.Config{
 		Host:     "js3.es.aau.dk",

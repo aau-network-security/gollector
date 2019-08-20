@@ -1,20 +1,14 @@
 package store
 
 import (
-	"crypto/sha256"
 	"errors"
 	"fmt"
-	"github.com/aau-network-security/go-domains/ct"
 	"github.com/aau-network-security/go-domains/models"
 	"github.com/go-pg/pg"
-	ct2 "github.com/google/certificate-transparency-go"
-	"github.com/google/certificate-transparency-go/x509"
 	"github.com/jinzhu/gorm"
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 	errors2 "github.com/pkg/errors"
-	"golang.org/x/net/publicsuffix"
-	"strings"
 	"sync"
 	"time"
 )
@@ -41,27 +35,6 @@ type InvalidDomainErr struct {
 
 func (err InvalidDomainErr) Error() string {
 	return fmt.Sprintf("cannot store invalid domain: %s", err.Domain)
-}
-
-func toApex(fqdn string) (string, error) {
-	return publicsuffix.EffectiveTLDPlusOne(fqdn)
-}
-
-func timeFromLogEntry(entry *ct2.LogEntry) time.Time {
-	ts := entry.Leaf.TimestampedEntry.Timestamp
-	return time.Unix(int64(ts/1000), int64(ts%1000))
-}
-
-func certFromLogEntry(entry *ct2.LogEntry) (*x509.Certificate, error) {
-	var cert *x509.Certificate
-	if entry.Precert != nil {
-		cert = entry.Precert.TBSCertificate
-	} else if entry.X509Cert != nil {
-		cert = entry.X509Cert
-	} else {
-		return nil, UnsupportedCertTypeErr
-	}
-	return cert, nil
 }
 
 type Config struct {
@@ -141,42 +114,6 @@ type Ids struct {
 	zoneEntries, apexes, tlds, certs, logs, fqdns, recordTypes, measurements, stages uint
 }
 
-type splunkEntryMap struct {
-	byQueryType map[string]map[string]*models.PassiveEntry
-}
-
-func (m *splunkEntryMap) get(query, queryType string) (*models.PassiveEntry, bool) {
-	byQType, ok := m.byQueryType[queryType]
-	if !ok {
-		return nil, false
-	}
-	res, ok := byQType[query]
-	return res, ok
-}
-
-func (m *splunkEntryMap) add(query, queryType string, entry *models.PassiveEntry) {
-	byQType, ok := m.byQueryType[queryType]
-	if !ok {
-		byQType = make(map[string]*models.PassiveEntry)
-	}
-	byQType[query] = entry
-	m.byQueryType[queryType] = byQType
-}
-
-func (m *splunkEntryMap) len() int {
-	sum := 0
-	for _, v := range m.byQueryType {
-		sum += len(v)
-	}
-	return sum
-}
-
-func newSplunkEntryMap() splunkEntryMap {
-	return splunkEntryMap{
-		byQueryType: make(map[string]map[string]*models.PassiveEntry),
-	}
-}
-
 type Store struct {
 	conf                  Config
 	db                    *pg.DB
@@ -220,316 +157,6 @@ func (s *Store) conditionalPostHooks() error {
 		return s.runPostHooks()
 	}
 	return nil
-}
-
-func (s *Store) getOrCreateTld(tld string) (*models.Tld, error) {
-	t, ok := s.tldByName[tld]
-	if !ok {
-		t = &models.Tld{
-			ID:  s.ids.tlds,
-			Tld: tld,
-		}
-		if err := s.db.Insert(t); err != nil {
-			return nil, errors2.Wrap(err, "insert tld")
-		}
-
-		s.tldByName[tld] = t
-		s.ids.tlds++
-	}
-	return t, nil
-}
-
-func (s *Store) storeApexDomain(name string) (*models.Apex, error) {
-	splitted := strings.Split(name, ".")
-	if len(splitted) == 1 {
-		return nil, InvalidDomainErr{name}
-	}
-
-	tld, err := s.getOrCreateTld(splitted[len(splitted)-1])
-	if err != nil {
-		return nil, err
-	}
-
-	model := &models.Apex{
-		ID:    s.ids.apexes,
-		Apex:  name,
-		TldID: tld.ID,
-	}
-
-	s.apexByName[name] = model
-	s.inserts.apexes[model.ID] = model
-	s.ids.apexes++
-
-	if err := s.conditionalPostHooks(); err != nil {
-		return nil, err
-	}
-
-	return model, nil
-}
-
-func (s *Store) getOrCreateApex(domain string) (*models.Apex, error) {
-	res, ok := s.apexByName[domain]
-	if !ok {
-		splitted := strings.Split(domain, ".")
-		if len(splitted) == 1 {
-			return nil, InvalidDomainErr{domain}
-		}
-
-		tld, err := s.getOrCreateTld(splitted[len(splitted)-1])
-		if err != nil {
-			return nil, err
-		}
-
-		model := &models.Apex{
-			ID:    s.ids.apexes,
-			Apex:  domain,
-			TldID: tld.ID,
-		}
-
-		s.apexByName[domain] = model
-		s.inserts.apexes[model.ID] = model
-		s.ids.apexes++
-
-		res = model
-	}
-	return res, nil
-}
-
-func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntry, error) {
-	s.m.Lock()
-	defer s.m.Unlock()
-
-	apex, err := toApex(domain)
-	if err != nil {
-		return nil, err
-	}
-
-	apexModel, err := s.getOrCreateApex(apex)
-	if err != nil {
-		return nil, err
-	}
-
-	existingZoneEntry, ok := s.zoneEntriesByApexName[apex]
-	if !ok {
-		// non-active domain, create a new zone entry
-		newZoneEntry := &models.ZonefileEntry{
-			ID:        s.ids.zoneEntries,
-			ApexID:    apexModel.ID,
-			FirstSeen: t,
-			LastSeen:  t,
-			Active:    true,
-			StageID:   s.curStage.ID,
-		}
-
-		s.zoneEntriesByApexName[apex] = newZoneEntry
-		s.inserts.zoneEntries[newZoneEntry.ID] = newZoneEntry
-		s.ids.zoneEntries++
-
-		if err := s.conditionalPostHooks(); err != nil {
-			return nil, err
-		}
-
-		return newZoneEntry, nil
-	}
-
-	// active domain
-	if existingZoneEntry.LastSeen.Before(time.Now().Add(-s.allowedInterval)) {
-		// detected re-registration, set old entry inactive and create new
-
-		existingZoneEntry.Active = false
-		s.updates.zoneEntries[existingZoneEntry.ID] = existingZoneEntry
-
-		newZoneEntry := &models.ZonefileEntry{
-			ID:        s.ids.zoneEntries,
-			ApexID:    apexModel.ID,
-			FirstSeen: t,
-			LastSeen:  t,
-			Active:    true,
-			StageID:   s.curStage.ID,
-		}
-
-		s.zoneEntriesByApexName[apex] = newZoneEntry
-		s.inserts.zoneEntries[newZoneEntry.ID] = newZoneEntry
-		s.ids.zoneEntries++
-
-		if err := s.conditionalPostHooks(); err != nil {
-			return nil, err
-		}
-
-		return newZoneEntry, nil
-	}
-
-	// update existing
-	existingZoneEntry.LastSeen = t
-	s.updates.zoneEntries[existingZoneEntry.ID] = existingZoneEntry
-
-	if err := s.conditionalPostHooks(); err != nil {
-		return nil, err
-	}
-
-	return existingZoneEntry, nil
-}
-
-func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
-	l, ok := s.logByUrl[log.Url]
-	if !ok {
-		l = &models.Log{
-			ID:          s.ids.logs,
-			Url:         log.Url,
-			Description: log.Description,
-		}
-		if err := s.db.Insert(l); err != nil {
-			return nil, errors2.Wrap(err, "insert log")
-		}
-
-		s.logByUrl[log.Url] = l
-		s.ids.logs++
-	}
-	return l, nil
-}
-
-func (s *Store) getOrCreateFqdn(domain string) (*models.Fqdn, error) {
-	f, ok := s.fqdnByName[domain]
-	if !ok {
-		apex, err := toApex(domain)
-		if err != nil {
-			return nil, err
-		}
-
-		a, err := s.getOrCreateApex(apex)
-		if err != nil {
-			return nil, err
-		}
-
-		f = &models.Fqdn{
-			ID:     s.ids.fqdns,
-			Fqdn:   domain,
-			ApexID: a.ID,
-		}
-		s.inserts.fqdns = append(s.inserts.fqdns, f)
-		s.fqdnByName[domain] = f
-		s.ids.fqdns++
-	}
-	return f, nil
-}
-
-func (s *Store) getOrCreateCertificate(entry *ct2.LogEntry) (*models.Certificate, error) {
-	c, err := certFromLogEntry(entry)
-	if err != nil {
-		return nil, err
-	}
-
-	fp := fmt.Sprintf("%x", sha256.Sum256(c.Raw))
-
-	cert, ok := s.certByFingerprint[fp]
-	if !ok {
-		cert = &models.Certificate{
-			ID:                s.ids.certs,
-			Sha256Fingerprint: fp,
-		}
-
-		// create an association between FQDNs in database and the newly created certificate
-		for _, d := range c.DNSNames {
-			fqdn, err := s.getOrCreateFqdn(d)
-			if err != nil {
-				return nil, err
-			}
-			ctof := models.CertificateToFqdn{
-				CertificateID: cert.ID,
-				FqdnID:        fqdn.ID,
-			}
-			s.inserts.certToFqdns = append(s.inserts.certToFqdns, &ctof)
-		}
-
-		s.inserts.certs = append(s.inserts.certs, cert)
-		s.certByFingerprint[fp] = cert
-		s.ids.certs++
-	}
-	return cert, nil
-}
-
-func (s *Store) StoreLogEntry(entry *ct2.LogEntry, log ct.Log) error {
-	s.m.Lock()
-	defer s.m.Unlock()
-
-	l, err := s.getOrCreateLog(log)
-	if err != nil {
-		return err
-	}
-
-	cert, err := s.getOrCreateCertificate(entry)
-	if err != nil {
-		return err
-	}
-
-	ts := timeFromLogEntry(entry)
-
-	le := models.LogEntry{
-		LogID:         l.ID,
-		Index:         uint(entry.Index),
-		CertificateID: cert.ID,
-		Timestamp:     ts,
-		StageID:       s.curStage.ID,
-	}
-
-	s.inserts.logEntries = append(s.inserts.logEntries, &le)
-
-	return s.conditionalPostHooks()
-}
-
-func (s *Store) getorCreateRecordType(rtype string) (*models.RecordType, error) {
-	rt, ok := s.recordTypeByName[rtype]
-	if !ok {
-		rt = &models.RecordType{
-			ID:   s.ids.recordTypes,
-			Type: rtype,
-		}
-		if err := s.db.Insert(rt); err != nil {
-			return nil, errors2.Wrap(err, "insert record type")
-		}
-
-		s.recordTypeByName[rtype] = rt
-		s.ids.recordTypes++
-	}
-	return rt, nil
-}
-
-func (s *Store) StorePassiveEntry(query string, queryType string, t time.Time) (*models.PassiveEntry, error) {
-	s.m.Lock()
-	defer s.m.Unlock()
-
-	query = strings.ToLower(query)
-	queryType = strings.ToLower(queryType)
-
-	pe, ok := s.passiveEntryByFqdn.get(query, queryType)
-	if !ok {
-		// create a new entry
-		fqdn, err := s.getOrCreateFqdn(query)
-		if err != nil {
-			return nil, err
-		}
-
-		rt, err := s.getorCreateRecordType(queryType)
-		if err != nil {
-			return nil, err
-		}
-
-		pe = &models.PassiveEntry{
-			FqdnID:       fqdn.ID,
-			FirstSeen:    t,
-			RecordTypeID: rt.ID,
-			StageID:      s.curStage.ID,
-		}
-
-		s.passiveEntryByFqdn.add(query, queryType, pe)
-		s.inserts.passiveEntries = append(s.inserts.passiveEntries, pe)
-	} else if t.Before(pe.FirstSeen) {
-		// see if we must update the existing one
-		pe.FirstSeen = t
-		s.updates.passiveEntries = append(s.updates.passiveEntries, pe)
-	}
-
-	return pe, nil
 }
 
 // use Gorm's auto migrate functionality
@@ -801,5 +428,9 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 	if err := s.init(); err != nil {
 		return nil, errors2.Wrap(err, "initialize database")
 	}
+
+	s.curStage = &models.Stage{}
+	s.curMeasurement = &models.Measurement{}
+
 	return &s, nil
 }

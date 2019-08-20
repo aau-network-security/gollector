@@ -43,6 +43,13 @@ func main() {
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}
 
+	interval := 24 * time.Hour
+
+	st, err := zone.GetStartTime(conf.Store, interval)
+	if err != nil {
+		log.Fatal().Msgf("error while creating gorm database: %s", err)
+	}
+
 	if err := s.StartMeasurement(conf.Zone.Meta.Description, conf.Zone.Meta.Host); err != nil {
 		log.Fatal().Msgf("failed to start measurement", err)
 	}
@@ -191,7 +198,7 @@ func main() {
 	}
 
 	// retrieve all zone files on a daily basis
-	if err := generic.Repeat(fn, time.Now(), time.Hour*24, -1); err != nil {
+	if err := generic.Repeat(fn, st, interval, -1); err != nil {
 		log.Fatal().Msgf("error while retrieving zone files: %s", err)
 	}
 
