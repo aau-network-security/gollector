@@ -43,7 +43,7 @@ func main() {
 	}
 
 	if err := s.StartMeasurement(conf.Ct.Meta.Description, conf.Ct.Meta.Host); err != nil {
-		log.Fatal().Msgf("failed to start measurement", err)
+		log.Fatal().Msgf("failed to start measurement: %s", err)
 	}
 
 	defer func() {

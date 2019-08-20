@@ -53,7 +53,7 @@ func main() {
 	}
 
 	if err := s.StartMeasurement(conf.Zone.Meta.Description, conf.Zone.Meta.Host); err != nil {
-		log.Fatal().Msgf("failed to start measurement", err)
+		log.Fatal().Msgf("failed to start measurement: %s", err)
 	}
 
 	var h *config.SentryHub

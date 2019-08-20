@@ -11,9 +11,13 @@ var (
 	NoActiveMeasurementErr = errors.New("no measurement running")
 )
 
+func (s *Store) hasActiveMeasurement() bool {
+	return s.curMeasurement.ID != 0
+}
+
 // starts a new measurement
 func (s *Store) StartMeasurement(description, host string) error {
-	if s.curMeasurement != nil {
+	if s.hasActiveMeasurement() {
 		return ActiveMeasurementErr
 	}
 	measure := &models.Measurement{
@@ -44,7 +48,7 @@ func (s *Store) stopStage() error {
 }
 
 func (s *Store) NextStage() error {
-	if s.curMeasurement == nil {
+	if !s.hasActiveMeasurement() {
 		return NoActiveMeasurementErr
 	}
 	// stop current stage if exists
@@ -69,7 +73,7 @@ func (s *Store) NextStage() error {
 
 // stops the currently running measurements
 func (s *Store) StopMeasurement() error {
-	if s.curMeasurement == nil {
+	if !s.hasActiveMeasurement() {
 		return NoActiveMeasurementErr
 	}
 	s.curMeasurement.EndTime = time.Now()
