@@ -10,6 +10,8 @@ import (
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
 	"io"
+	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 )
@@ -46,7 +48,6 @@ func (opts *ProcessOpts) isValid() bool {
 // this handler reads files that fulfill the zone file standard
 func ZoneFileHandler(str io.Reader, f DomainFunc) error {
 	seen := make(map[string]interface{})
-
 	for t := range dns.ParseZone(str, "", "") {
 		if t.Error != nil {
 			return t.Error
@@ -68,6 +69,7 @@ func ZoneFileHandler(str io.Reader, f DomainFunc) error {
 			}
 		}
 	}
+	log.Info().Msgf("finished handler")
 	return nil
 }
 
@@ -111,9 +113,37 @@ func Process(z Zone, opts ProcessOpts) error {
 		}
 	}
 
-	if err := opts.StreamHandler(str, opts.DomainFn); err != nil {
+	// write zone file to temporary file on filesystem before processing
+	f, err := ioutil.TempFile("", "")
+	if err != nil {
 		return &ZoneErr{z.Tld(), err}
 	}
+	defer os.Remove(f.Name())
+
+	if _, err := io.Copy(f, str); err != nil {
+		return &ZoneErr{z.Tld(), err}
+	}
+
+	log.Debug().Msgf("successfully written stream to file for '%s'", z.Tld())
+
+	fi, err := os.Open(f.Name())
+	if err != nil {
+		return &ZoneErr{z.Tld(), err}
+	}
+
+	if err := f.Close(); err != nil {
+		return &ZoneErr{z.Tld(), err}
+	}
+
+	// process content of zone file according to domain function
+	if err := opts.StreamHandler(fi, opts.DomainFn); err != nil {
+		return &ZoneErr{z.Tld(), err}
+	}
+
+	if err := fi.Close(); err != nil {
+		return &ZoneErr{z.Tld(), err}
+	}
+
 	return nil
 }
 

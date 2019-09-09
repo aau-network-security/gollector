@@ -28,29 +28,29 @@ func Repeat(f RepeatFunc, startTime time.Time, interval time.Duration, n int) er
 	t := startTime
 
 	for n != 0 {
+		t = t.Add(interval)
 		go func() {
 			if err := f(t); err != nil {
 				errc <- err
 				return
 			}
+			msg := fmt.Sprintf("Next scheduled at %s", t)
+			if n >= 0 {
+				msg += fmt.Sprintf(" (%d remaining)", n)
+			}
+			log.Debug().Msgf(msg)
 		}()
 
 		select {
 		case err := <-errc:
 			return err
 		case <-time.After(interval):
-			// do
+			// do again
 		}
-		t = t.Add(interval)
 
 		if n > 0 {
 			n--
 		}
-		msg := fmt.Sprintf("Next scheduled at %s", t)
-		if n >= 0 {
-			msg += fmt.Sprintf(" (%d remaining)", n)
-		}
-		log.Debug().Msgf(msg)
 	}
 
 	return nil

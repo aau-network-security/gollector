@@ -63,7 +63,12 @@ func (s *Store) getOrCreateCertificate(entry *ct2.LogEntry) (*models.Certificate
 
 		// create an association between FQDNs in database and the newly created certificate
 		for _, d := range c.DNSNames {
-			fqdn, err := s.getOrCreateFqdn(d)
+			domain, err := NewDomain(d)
+			if err != nil {
+				return nil, err
+			}
+
+			fqdn, err := s.getOrCreateFqdn(domain)
 			if err != nil {
 				return nil, err
 			}

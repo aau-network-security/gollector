@@ -70,7 +70,12 @@ func (s *Store) StorePassiveEntry(query string, queryType string, t time.Time) (
 	pe, ok := s.passiveEntryByFqdn.get(query, queryType)
 	if !ok {
 		// create a new entry
-		fqdn, err := s.getOrCreateFqdn(query)
+		domain, err := NewDomain(query)
+		if err != nil {
+			return nil, err
+		}
+
+		fqdn, err := s.getOrCreateFqdn(domain)
 		if err != nil {
 			return nil, err
 		}

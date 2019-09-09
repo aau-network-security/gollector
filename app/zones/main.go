@@ -56,6 +56,12 @@ func main() {
 		log.Fatal().Msgf("failed to start measurement: %s", err)
 	}
 
+	defer func() {
+		if err := s.StopMeasurement(); err != nil {
+			log.Fatal().Msgf("error while stopping measurement", err)
+		}
+	}()
+
 	var h *config.SentryHub
 	if conf.Sentry.Enabled {
 		h, err = config.NewSentryHub(conf)
@@ -202,9 +208,5 @@ func main() {
 	// retrieve all zone files on a daily basis
 	if err := generic.Repeat(fn, st, interval, -1); err != nil {
 		log.Fatal().Msgf("error while retrieving zone files: %s", err)
-	}
-
-	if err := s.StopMeasurement(); err != nil {
-		log.Fatal().Msgf("error while stopping measurement", err)
 	}
 }
