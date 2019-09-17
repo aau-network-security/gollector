@@ -93,16 +93,17 @@ func (s *Store) getOrCreateTldAnon(domain *domain) (*models.TldAnon, error) {
 
 	res, ok := s.tldAnonByName[domain.tld.anon]
 	if !ok {
-		tld, err := s.getOrCreateTld(domain)
-		if err != nil {
-			return nil, err
+		tldId := uint(0)
+		tld, ok := s.tldByName[domain.tld.normal]
+		if ok {
+			tldId = tld.ID
 		}
 		res = &models.TldAnon{
 			Tld: models.Tld{
 				ID:  s.ids.tldsAnon,
 				Tld: domain.tld.anon,
 			},
-			TldID: tld.ID,
+			TldID: tldId,
 		}
 		if err := s.db.Insert(res); err != nil {
 			return nil, errors.Wrap(err, "insert anon tld")
@@ -147,9 +148,10 @@ func (s *Store) getOrCreatePublicSuffixAnon(domain *domain) (*models.PublicSuffi
 			return nil, err
 		}
 
-		suffix, err := s.getOrCreatePublicSuffix(domain)
-		if err != nil {
-			return nil, err
+		suffixId := uint(0)
+		suffix, ok := s.publicSuffixByName[domain.publicSuffix.normal]
+		if ok {
+			suffixId = suffix.ID
 		}
 
 		res = &models.PublicSuffixAnon{
@@ -158,7 +160,7 @@ func (s *Store) getOrCreatePublicSuffixAnon(domain *domain) (*models.PublicSuffi
 				PublicSuffix: domain.publicSuffix.anon,
 				TldID:        tldAnon.ID,
 			},
-			PublicSuffixID: suffix.ID,
+			PublicSuffixID: suffixId,
 		}
 		if err := s.db.Insert(res); err != nil {
 			return nil, errors.Wrap(err, "insert anon public suffix")
@@ -203,9 +205,10 @@ func (s *Store) getOrCreateApexAnon(domain *domain) (*models.ApexAnon, error) {
 			return nil, err
 		}
 
-		apex, err := s.getOrCreateApex(domain)
-		if err != nil {
-			return nil, err
+		apexId := uint(0)
+		apex, ok := s.apexByName[domain.apex.normal]
+		if ok {
+			apexId = apex.ID
 		}
 
 		res := &models.ApexAnon{
@@ -215,7 +218,7 @@ func (s *Store) getOrCreateApexAnon(domain *domain) (*models.ApexAnon, error) {
 				TldID:          ps.TldID,
 				PublicSuffixID: ps.ID,
 			},
-			ApexID: apex.ID,
+			ApexID: apexId,
 		}
 
 		s.apexByNameAnon[domain.apex.anon] = res
@@ -259,9 +262,10 @@ func (s *Store) getOrCreateFqdnAnon(domain *domain) (*models.FqdnAnon, error) {
 			return nil, err
 		}
 
-		fqdn, err := s.getOrCreateFqdn(domain)
-		if err != nil {
-			return nil, err
+		fqdnId := uint(0)
+		fqdn, ok := s.fqdnByName[domain.fqdn.normal]
+		if ok {
+			fqdnId = fqdn.ID
 		}
 
 		res := &models.FqdnAnon{
@@ -272,7 +276,7 @@ func (s *Store) getOrCreateFqdnAnon(domain *domain) (*models.FqdnAnon, error) {
 				TldID:          apex.TldID,
 				PublicSuffixID: apex.PublicSuffixID,
 			},
-			FqdnID: fqdn.ID,
+			FqdnID: fqdnId,
 		}
 		s.inserts.fqdnsAnon = append(s.inserts.fqdnsAnon, res)
 		s.fqdnByNameAnon[domain.fqdn.anon] = res
