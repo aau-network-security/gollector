@@ -7,8 +7,7 @@ import (
 	"github.com/go-pg/pg"
 	"github.com/jinzhu/gorm"
 	_ "github.com/lib/pq"
-	_ "github.com/mattn/go-sqlite3"
-	errors2 "github.com/pkg/errors"
+	errs "github.com/pkg/errors"
 	"sync"
 	"time"
 )
@@ -373,38 +372,38 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		if len(s.inserts.apexes) > 0 {
 			a := s.inserts.apexList()
 			if err := tx.Insert(&a); err != nil {
-				return errors2.Wrap(err, "insert apexes")
+				return errs.Wrap(err, "insert apexes")
 			}
 		}
 		if len(s.inserts.zoneEntries) > 0 {
 			z := s.inserts.zoneEntryList()
 			if err := tx.Insert(&z); err != nil {
-				return errors2.Wrap(err, "insert zone entries")
+				return errs.Wrap(err, "insert zone entries")
 			}
 		}
 		if len(s.inserts.logEntries) > 0 {
 			if err := tx.Insert(&s.inserts.logEntries); err != nil {
-				return errors2.Wrap(err, "insert log entries")
+				return errs.Wrap(err, "insert log entries")
 			}
 		}
 		if len(s.inserts.certs) > 0 {
 			if err := tx.Insert(&s.inserts.certs); err != nil {
-				return errors2.Wrap(err, "insert certs")
+				return errs.Wrap(err, "insert certs")
 			}
 		}
 		if len(s.inserts.certToFqdns) > 0 {
 			if err := tx.Insert(&s.inserts.certToFqdns); err != nil {
-				return errors2.Wrap(err, "insert cert-to-fqdns")
+				return errs.Wrap(err, "insert cert-to-fqdns")
 			}
 		}
 		if len(s.inserts.fqdns) > 0 {
 			if err := tx.Insert(&s.inserts.fqdns); err != nil {
-				return errors2.Wrap(err, "insert fqdns")
+				return errs.Wrap(err, "insert fqdns")
 			}
 		}
 		if len(s.inserts.passiveEntries) > 0 {
 			if err := tx.Insert(&s.inserts.passiveEntries); err != nil {
-				return errors2.Wrap(err, "insert passive entries")
+				return errs.Wrap(err, "insert passive entries")
 			}
 		}
 
@@ -412,19 +411,19 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		if len(s.updates.apexes) > 0 {
 			a := s.updates.apexList()
 			if err := tx.Update(&a); err != nil {
-				return errors2.Wrap(err, "update apexes")
+				return errs.Wrap(err, "update apexes")
 			}
 		}
 		if len(s.updates.zoneEntries) > 0 {
 			z := s.updates.zoneEntryList()
 			_, err := tx.Model(&z).Column("last_seen").Update()
 			if err != nil {
-				return errors2.Wrap(err, "update zone entries")
+				return errs.Wrap(err, "update zone entries")
 			}
 		}
 		if len(s.updates.passiveEntries) > 0 {
 			if _, err := tx.Model(&s.updates.passiveEntries).Column("first_seen").Update(); err != nil {
-				return errors2.Wrap(err, "update passive entries")
+				return errs.Wrap(err, "update passive entries")
 			}
 		}
 
@@ -437,11 +436,11 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 	s.postHooks = append(s.postHooks, postHook)
 
 	if err := s.migrate(); err != nil {
-		return nil, errors2.Wrap(err, "migrate models")
+		return nil, errs.Wrap(err, "migrate models")
 	}
 
 	if err := s.init(); err != nil {
-		return nil, errors2.Wrap(err, "initialize database")
+		return nil, errs.Wrap(err, "initialize database")
 	}
 
 	s.curStage = &models.Stage{}

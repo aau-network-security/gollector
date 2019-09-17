@@ -52,12 +52,19 @@ type Splunk struct {
 	Meta      Meta   `yaml:"meta"`
 }
 
+type Entrada struct {
+	Host string `yaml:"host"`
+	Port string `yaml:"port"`
+	Meta Meta   `yaml:"meta"`
+}
+
 type config struct {
-	Zone   Zone         `yaml:"zone"`
-	Ct     Ct           `yaml:"ct"`
-	Store  store.Config `yaml:"store"`
-	Splunk Splunk       `yaml:"splunk"`
-	Sentry Sentry       `yaml:"sentry"`
+	Zone    Zone         `yaml:"zone"`
+	Ct      Ct           `yaml:"ct"`
+	Splunk  Splunk       `yaml:"splunk"`
+	Entrada Entrada      `yaml:"entrada"`
+	Store   store.Config `yaml:"store"`
+	Sentry  Sentry       `yaml:"sentry"`
 }
 
 type Sentry struct {
