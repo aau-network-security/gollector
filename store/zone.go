@@ -5,33 +5,33 @@ import (
 	"time"
 )
 
-func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntry, error) {
+func (s *Store) StoreZoneEntry(t time.Time, fqdn string) (*models.ZonefileEntry, error) {
 	s.m.Lock()
 	defer s.m.Unlock()
 
-	apex, err := toApex(domain)
+	domain, err := NewDomain(fqdn)
 	if err != nil {
 		return nil, err
 	}
 
-	apexModel, err := s.getOrCreateApex(apex)
+	apex, err := s.getOrCreateApex(domain)
 	if err != nil {
 		return nil, err
 	}
 
-	existingZoneEntry, ok := s.zoneEntriesByApexName[apex]
+	existingZoneEntry, ok := s.zoneEntriesByApexName[apex.Apex]
 	if !ok {
 		// non-active domain, create a new zone entry
 		newZoneEntry := &models.ZonefileEntry{
 			ID:        s.ids.zoneEntries,
-			ApexID:    apexModel.ID,
+			ApexID:    apex.ID,
 			FirstSeen: t,
 			LastSeen:  t,
 			Active:    true,
 			StageID:   s.curStage.ID,
 		}
 
-		s.zoneEntriesByApexName[apex] = newZoneEntry
+		s.zoneEntriesByApexName[apex.Apex] = newZoneEntry
 		s.inserts.zoneEntries[newZoneEntry.ID] = newZoneEntry
 		s.ids.zoneEntries++
 
@@ -51,14 +51,14 @@ func (s *Store) StoreZoneEntry(t time.Time, domain string) (*models.ZonefileEntr
 
 		newZoneEntry := &models.ZonefileEntry{
 			ID:        s.ids.zoneEntries,
-			ApexID:    apexModel.ID,
+			ApexID:    apex.ID,
 			FirstSeen: t,
 			LastSeen:  t,
 			Active:    true,
 			StageID:   s.curStage.ID,
 		}
 
-		s.zoneEntriesByApexName[apex] = newZoneEntry
+		s.zoneEntriesByApexName[apex.Apex] = newZoneEntry
 		s.inserts.zoneEntries[newZoneEntry.ID] = newZoneEntry
 		s.ids.zoneEntries++
 

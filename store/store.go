@@ -111,7 +111,7 @@ func NewModelSet() ModelSet {
 type postHook func(*Store) error
 
 type Ids struct {
-	zoneEntries, apexes, tlds, certs, logs, fqdns, recordTypes, measurements, stages uint
+	zoneEntries, apexes, tlds, pss, certs, logs, fqdns, recordTypes, measurements, stages uint
 }
 
 type Store struct {
@@ -121,6 +121,7 @@ type Store struct {
 	apexById              map[uint]*models.Apex
 	zoneEntriesByApexName map[string]*models.ZonefileEntry
 	tldByName             map[string]*models.Tld
+	publicSuffixByName    map[string]*models.PublicSuffix
 	certByFingerprint     map[string]*models.Certificate
 	logByUrl              map[string]*models.Log
 	fqdnByName            map[string]*models.Fqdn
@@ -179,6 +180,7 @@ func (s *Store) migrate() error {
 		&models.PassiveEntry{},
 		&models.Measurement{},
 		&models.Stage{},
+		&models.PublicSuffix{},
 	}
 	for _, ex := range migrateExamples {
 		if err := g.AutoMigrate(ex).Error; err != nil {
@@ -213,6 +215,14 @@ func (s *Store) init() error {
 	}
 	for _, tld := range tlds {
 		s.tldByName[tld.Tld] = tld
+	}
+
+	var pss []*models.PublicSuffix
+	if err := s.db.Model(&pss).Order("id ASC").Select(); err != nil {
+		return err
+	}
+	for _, ps := range pss {
+		s.publicSuffixByName[ps.PublicSuffix] = ps
 	}
 
 	var fqdns []*models.Fqdn
@@ -283,6 +293,10 @@ func (s *Store) init() error {
 	if len(tlds) > 0 {
 		s.ids.tlds = tlds[len(tlds)-1].ID + 1
 	}
+	s.ids.pss = 1
+	if len(pss) > 1 {
+		s.ids.pss = pss[len(pss)-1].ID + 1
+	}
 	s.ids.fqdns = 1
 	if len(fqdns) > 0 {
 		s.ids.fqdns = fqdns[len(fqdns)-1].ID + 1
@@ -333,6 +347,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		apexById:              make(map[uint]*models.Apex),
 		zoneEntriesByApexName: make(map[string]*models.ZonefileEntry),
 		tldByName:             make(map[string]*models.Tld),
+		publicSuffixByName:    make(map[string]*models.PublicSuffix),
 		fqdnByName:            make(map[string]*models.Fqdn),
 		logByUrl:              make(map[string]*models.Log),
 		certByFingerprint:     make(map[string]*models.Certificate),

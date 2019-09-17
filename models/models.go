@@ -10,16 +10,25 @@ type Tld struct {
 	Tld string
 }
 
+type PublicSuffix struct {
+	ID           uint `gorm:"primary_key"`
+	TldID        uint
+	PublicSuffix string
+}
+
 type Apex struct {
-	ID    uint `gorm:"primary_key"`
-	Apex  string
-	TldID uint
+	ID             uint `gorm:"primary_key"`
+	Apex           string
+	TldID          uint
+	PublicSuffixID uint
 }
 
 type Fqdn struct {
-	ID     uint `gorm:"primary_key"`
-	Fqdn   string
-	ApexID uint
+	ID             uint `gorm:"primary_key"`
+	Fqdn           string
+	TldID          uint
+	PublicSuffixID uint
+	ApexID         uint
 }
 
 // ----- END DOMAIN -----

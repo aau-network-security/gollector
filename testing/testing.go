@@ -16,9 +16,10 @@ func SkipCI(t *testing.T) {
 
 func ResetDb(g *gorm.DB) error {
 	tables := []string{
-		"apexes",
 		"zonefile_entries",
 		"tlds",
+		"public_suffixes",
+		"apexes",
 		"fqdns",
 		"certificate_to_fqdns",
 		"certificates",
@@ -38,9 +39,10 @@ func ResetDb(g *gorm.DB) error {
 	}
 
 	migrateExamples := []interface{}{
-		&models.Apex{},
 		&models.ZonefileEntry{},
 		&models.Tld{},
+		&models.PublicSuffix{},
+		&models.Apex{},
 		&models.Fqdn{},
 		&models.CertificateToFqdn{},
 		&models.Certificate{},
