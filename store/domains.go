@@ -72,12 +72,30 @@ func NewDomain(fqdn string) (*domain, error) {
 func (s *Store) getOrCreateTld(domain *domain) (*models.Tld, error) {
 	res, ok := s.tldByName[domain.tld.normal]
 	if !ok {
+		tx, err := s.db.Begin()
+		if err != nil {
+			return nil, err
+		}
+
 		res = &models.Tld{
 			ID:  s.ids.tlds,
 			Tld: domain.tld.normal,
 		}
-		if err := s.db.Insert(res); err != nil {
+		if err := tx.Insert(res); err != nil {
 			return nil, errors.Wrap(err, "insert tld")
+		}
+
+		// update anonymized model (if it exists)
+		anon, ok := s.tldAnonByName[domain.tld.anon]
+		if ok {
+			anon.TldID = res.ID
+			if _, err := tx.Model(&anon).Column("tld_id").Update(); err != nil {
+				return nil, err
+			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			return nil, err
 		}
 
 		s.tldByName[domain.tld.normal] = res
@@ -117,6 +135,12 @@ func (s *Store) getOrCreateTldAnon(domain *domain) (*models.TldAnon, error) {
 func (s *Store) getOrCreatePublicSuffix(domain *domain) (*models.PublicSuffix, error) {
 	res, ok := s.publicSuffixByName[domain.publicSuffix.normal]
 	if !ok {
+		tx, err := s.db.Begin()
+		if err != nil {
+			return nil, err
+		}
+		defer tx.Rollback()
+
 		tld, err := s.getOrCreateTld(domain)
 		if err != nil {
 			return nil, err
@@ -127,9 +151,23 @@ func (s *Store) getOrCreatePublicSuffix(domain *domain) (*models.PublicSuffix, e
 			PublicSuffix: domain.publicSuffix.normal,
 			TldID:        tld.ID,
 		}
-		if err := s.db.Insert(res); err != nil {
+		if err := tx.Insert(res); err != nil {
 			return nil, errors.Wrap(err, "insert public suffix")
 		}
+
+		// update anonymized model (if it exists)
+		anon, ok := s.publicSuffixAnonByName[domain.publicSuffix.anon]
+		if ok {
+			anon.PublicSuffixID = res.ID
+			if _, err := tx.Model(&anon).Column("public_suffix_id").Update(); err != nil {
+				return nil, err
+			}
+		}
+
+		if err := tx.Commit(); err != nil {
+			return nil, err
+		}
+
 		s.publicSuffixByName[domain.publicSuffix.normal] = res
 		s.ids.suffixes++
 	}
@@ -189,6 +227,13 @@ func (s *Store) getOrCreateApex(domain *domain) (*models.Apex, error) {
 		s.apexByName[domain.apex.normal] = res
 		s.inserts.apexes[res.ID] = res
 		s.ids.apexes++
+
+		// update anonymized model (if it exists)
+		anon, ok := s.apexByNameAnon[domain.apex.anon]
+		if ok {
+			anon.ApexID = res.ID
+			s.updates.apexesAnon[anon.ID] = anon
+		}
 	}
 	return res, nil
 }
@@ -246,6 +291,13 @@ func (s *Store) getOrCreateFqdn(domain *domain) (*models.Fqdn, error) {
 		s.inserts.fqdns = append(s.inserts.fqdns, res)
 		s.fqdnByName[domain.fqdn.normal] = res
 		s.ids.fqdns++
+
+		// update anonymized model (if it exists)
+		anon, ok := s.fqdnByNameAnon[domain.fqdn.anon]
+		if ok {
+			anon.FqdnID = res.ID
+			s.updates.fqdnsAnon = append(s.updates.fqdnsAnon, anon)
+		}
 	}
 	return res, nil
 }
