@@ -7,66 +7,81 @@ import (
 	"strings"
 )
 
+type label struct {
+	normal, anon string
+}
+
+func newLabel(l string) label {
+	return label{normal: l}
+}
+
 type domain struct {
-	tld, publicSuffix, apex, fqdn string
+	tld, publicSuffix, apex, fqdn label
+}
+
+type Anonymizer struct {
+	fn func(string) string
+}
+
+func (a *Anonymizer) Anonymize(d *domain) {
+	d.tld.anon = a.fn(d.tld.normal)
+	d.publicSuffix.anon = a.fn(d.publicSuffix.normal)
+	d.apex.anon = a.fn(d.apex.normal)
+	d.fqdn.anon = a.fn(d.fqdn.normal)
 }
 
 func NewDomain(fqdn string) (*domain, error) {
 	d := &domain{
-		fqdn: fqdn,
+		fqdn: newLabel(fqdn),
 	}
 
 	splitted := strings.Split(fqdn, ".")
 
 	if len(splitted) == 1 {
 		// domain is a tld
-		d.tld = fqdn
+		d.tld = newLabel(fqdn)
 		return d, nil
 	}
 
 	tld := splitted[len(splitted)-1]
-	d.tld = tld
+	d.tld = newLabel(tld)
 
 	apex, err := publicsuffix.EffectiveTLDPlusOne(fqdn)
 	if err != nil {
 		if strings.HasSuffix(err.Error(), "is a suffix") {
 			// domain is a public suffix
-			d.publicSuffix = fqdn
+			d.publicSuffix = newLabel(fqdn)
 			return d, nil
 		}
 		return nil, err
 	}
 	suffix := strings.Join(strings.Split(apex, ".")[1:], ".")
 
-	d.publicSuffix = suffix
-	d.apex = apex
+	d.publicSuffix = newLabel(suffix)
+	d.apex = newLabel(apex)
 
 	return d, nil
 }
 
-func toApex(fqdn string) (string, error) {
-	return publicsuffix.EffectiveTLDPlusOne(fqdn)
-}
-
 func (s *Store) getOrCreateTld(domain *domain) (*models.Tld, error) {
-	res, ok := s.tldByName[domain.tld]
+	res, ok := s.tldByName[domain.tld.normal]
 	if !ok {
 		res = &models.Tld{
 			ID:  s.ids.tlds,
-			Tld: domain.tld,
+			Tld: domain.tld.normal,
 		}
 		if err := s.db.Insert(res); err != nil {
 			return nil, errors.Wrap(err, "insert tld")
 		}
 
-		s.tldByName[domain.tld] = res
+		s.tldByName[domain.tld.normal] = res
 		s.ids.tlds++
 	}
 	return res, nil
 }
 
 func (s *Store) getOrCreatePublicSuffix(domain *domain) (*models.PublicSuffix, error) {
-	res, ok := s.publicSuffixByName[domain.publicSuffix]
+	res, ok := s.publicSuffixByName[domain.publicSuffix.normal]
 	if !ok {
 		tld, err := s.getOrCreateTld(domain)
 		if err != nil {
@@ -75,20 +90,20 @@ func (s *Store) getOrCreatePublicSuffix(domain *domain) (*models.PublicSuffix, e
 
 		res = &models.PublicSuffix{
 			ID:           s.ids.pss,
-			PublicSuffix: domain.publicSuffix,
+			PublicSuffix: domain.publicSuffix.normal,
 			TldID:        tld.ID,
 		}
 		if err := s.db.Insert(res); err != nil {
 			return nil, errors.Wrap(err, "insert public suffix")
 		}
-		s.publicSuffixByName[domain.publicSuffix] = res
+		s.publicSuffixByName[domain.publicSuffix.normal] = res
 		s.ids.pss++
 	}
 	return res, nil
 }
 
 func (s *Store) getOrCreateApex(domain *domain) (*models.Apex, error) {
-	res, ok := s.apexByName[domain.apex]
+	res, ok := s.apexByName[domain.apex.normal]
 	if !ok {
 		ps, err := s.getOrCreatePublicSuffix(domain)
 		if err != nil {
@@ -97,12 +112,12 @@ func (s *Store) getOrCreateApex(domain *domain) (*models.Apex, error) {
 
 		model := &models.Apex{
 			ID:             s.ids.apexes,
-			Apex:           domain.apex,
+			Apex:           domain.apex.normal,
 			TldID:          ps.TldID,
 			PublicSuffixID: ps.ID,
 		}
 
-		s.apexByName[domain.apex] = model
+		s.apexByName[domain.apex.normal] = model
 		s.inserts.apexes[model.ID] = model
 		s.ids.apexes++
 
@@ -112,7 +127,7 @@ func (s *Store) getOrCreateApex(domain *domain) (*models.Apex, error) {
 }
 
 func (s *Store) getOrCreateFqdn(domain *domain) (*models.Fqdn, error) {
-	f, ok := s.fqdnByName[domain.fqdn]
+	f, ok := s.fqdnByName[domain.fqdn.normal]
 	if !ok {
 		a, err := s.getOrCreateApex(domain)
 		if err != nil {
@@ -121,13 +136,13 @@ func (s *Store) getOrCreateFqdn(domain *domain) (*models.Fqdn, error) {
 
 		f = &models.Fqdn{
 			ID:             s.ids.fqdns,
-			Fqdn:           domain.fqdn,
+			Fqdn:           domain.fqdn.normal,
 			ApexID:         a.ID,
 			TldID:          a.TldID,
 			PublicSuffixID: a.PublicSuffixID,
 		}
 		s.inserts.fqdns = append(s.inserts.fqdns, f)
-		s.fqdnByName[domain.fqdn] = f
+		s.fqdnByName[domain.fqdn.normal] = f
 		s.ids.fqdns++
 	}
 	return f, nil
