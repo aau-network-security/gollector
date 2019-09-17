@@ -11,6 +11,7 @@ import (
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/google/certificate-transparency-go/x509/pkix"
 	"math/big"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -123,7 +124,8 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 		}
 
 		if count != tc.count {
-			t.Fatalf("expected %d elements, but got %d", tc.count, count)
+			n := reflect.TypeOf(tc.model)
+			t.Fatalf("expected %d %s elements, but got %d", tc.count, n, count)
 		}
 	}
 }

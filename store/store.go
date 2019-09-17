@@ -61,11 +61,13 @@ func (c *Config) DSN() string {
 
 type ModelSet struct {
 	zoneEntries    map[uint]*models.ZonefileEntry
+	fqdns          []*models.Fqdn
+	fqdnsAnon      []*models.FqdnAnon
 	apexes         map[uint]*models.Apex
+	apexesAnon     map[uint]*models.ApexAnon
 	certs          []*models.Certificate
 	logEntries     []*models.LogEntry
 	certToFqdns    []*models.CertificateToFqdn
-	fqdns          []*models.Fqdn
 	passiveEntries []*models.PassiveEntry
 }
 
@@ -95,6 +97,14 @@ func (ms *ModelSet) apexList() []*models.Apex {
 	return res
 }
 
+func (ms *ModelSet) apexAnonList() []*models.ApexAnon {
+	var res []*models.ApexAnon
+	for _, v := range ms.apexesAnon {
+		res = append(res, v)
+	}
+	return res
+}
+
 func NewModelSet() ModelSet {
 	return ModelSet{
 		zoneEntries:    make(map[uint]*models.ZonefileEntry),
@@ -110,31 +120,49 @@ func NewModelSet() ModelSet {
 type postHook func(*Store) error
 
 type Ids struct {
-	zoneEntries, apexes, tlds, pss, certs, logs, fqdns, recordTypes, measurements, stages uint
+	zoneEntries  uint
+	tlds         uint
+	tldsAnon     uint
+	suffixes     uint
+	suffixesAnon uint
+	apexes       uint
+	apexesAnon   uint
+	fqdns        uint
+	fqdnsAnon    uint
+	certs        uint
+	logs         uint
+	recordTypes  uint
+	measurements uint
+	stages       uint
 }
 
 type Store struct {
-	conf                  Config
-	db                    *pg.DB
-	apexByName            map[string]*models.Apex
-	apexById              map[uint]*models.Apex
-	zoneEntriesByApexName map[string]*models.ZonefileEntry
-	tldByName             map[string]*models.Tld
-	publicSuffixByName    map[string]*models.PublicSuffix
-	certByFingerprint     map[string]*models.Certificate
-	logByUrl              map[string]*models.Log
-	fqdnByName            map[string]*models.Fqdn
-	recordTypeByName      map[string]*models.RecordType
-	passiveEntryByFqdn    splunkEntryMap
-	m                     *sync.Mutex
-	ids                   Ids
-	allowedInterval       time.Duration
-	batchSize             int
-	postHooks             []postHook
-	inserts               ModelSet
-	updates               ModelSet
-	curStage              *models.Stage
-	curMeasurement        *models.Measurement
+	conf                   Config
+	db                     *pg.DB
+	apexByName             map[string]*models.Apex
+	apexByNameAnon         map[string]*models.ApexAnon
+	apexById               map[uint]*models.Apex
+	zoneEntriesByApexName  map[string]*models.ZonefileEntry
+	tldByName              map[string]*models.Tld
+	tldAnonByName          map[string]*models.TldAnon
+	publicSuffixByName     map[string]*models.PublicSuffix
+	publicSuffixAnonByName map[string]*models.PublicSuffixAnon
+	certByFingerprint      map[string]*models.Certificate
+	logByUrl               map[string]*models.Log
+	fqdnByName             map[string]*models.Fqdn
+	fqdnByNameAnon         map[string]*models.FqdnAnon
+	recordTypeByName       map[string]*models.RecordType
+	passiveEntryByFqdn     splunkEntryMap
+	entradaEntryByFqdn     map[string]*models.EntradaEntry
+	m                      *sync.Mutex
+	ids                    Ids
+	allowedInterval        time.Duration
+	batchSize              int
+	postHooks              []postHook
+	inserts                ModelSet
+	updates                ModelSet
+	curStage               *models.Stage
+	curMeasurement         *models.Measurement
 }
 
 func (s *Store) RunPostHooks() error {
@@ -167,10 +195,15 @@ func (s *Store) migrate() error {
 	}
 
 	migrateExamples := []interface{}{
-		&models.Apex{},
 		&models.ZonefileEntry{},
 		&models.Tld{},
+		&models.TldAnon{},
+		&models.Apex{},
+		&models.ApexAnon{},
+		&models.PublicSuffix{},
+		&models.PublicSuffixAnon{},
 		&models.Fqdn{},
+		&models.FqdnAnon{},
 		&models.CertificateToFqdn{},
 		&models.Certificate{},
 		&models.LogEntry{},
@@ -179,7 +212,6 @@ func (s *Store) migrate() error {
 		&models.PassiveEntry{},
 		&models.Measurement{},
 		&models.Stage{},
-		&models.PublicSuffix{},
 	}
 	for _, ex := range migrateExamples {
 		if err := g.AutoMigrate(ex).Error; err != nil {
@@ -190,14 +222,6 @@ func (s *Store) migrate() error {
 }
 
 func (s *Store) init() error {
-	var apexes []*models.Apex
-	if err := s.db.Model(&apexes).Order("id ASC").Select(); err != nil {
-		return err
-	}
-	for _, apex := range apexes {
-		s.apexByName[apex.Apex] = apex
-		s.apexById[apex.ID] = apex
-	}
 
 	var entries []*models.ZonefileEntry
 	if err := s.db.Model(&entries).Order("id ASC").Select(); err != nil {
@@ -216,12 +240,45 @@ func (s *Store) init() error {
 		s.tldByName[tld.Tld] = tld
 	}
 
-	var pss []*models.PublicSuffix
-	if err := s.db.Model(&pss).Order("id ASC").Select(); err != nil {
+	var tldsAnon []*models.TldAnon
+	if err := s.db.Model(&tldsAnon).Order("id ASC").Select(); err != nil {
 		return err
 	}
-	for _, ps := range pss {
-		s.publicSuffixByName[ps.PublicSuffix] = ps
+	for _, tld := range tldsAnon {
+		s.tldAnonByName[tld.Tld.Tld] = tld
+	}
+
+	var suffixes []*models.PublicSuffix
+	if err := s.db.Model(&suffixes).Order("id ASC").Select(); err != nil {
+		return err
+	}
+	for _, suffix := range suffixes {
+		s.publicSuffixByName[suffix.PublicSuffix] = suffix
+	}
+
+	var suffixesAnon []*models.PublicSuffixAnon
+	if err := s.db.Model(&suffixesAnon).Order("id ASC").Select(); err != nil {
+		return err
+	}
+	for _, suffix := range suffixesAnon {
+		s.publicSuffixAnonByName[suffix.PublicSuffix.PublicSuffix] = suffix
+	}
+
+	var apexes []*models.Apex
+	if err := s.db.Model(&apexes).Order("id ASC").Select(); err != nil {
+		return err
+	}
+	for _, apex := range apexes {
+		s.apexByName[apex.Apex] = apex
+		s.apexById[apex.ID] = apex
+	}
+
+	var apexesAnon []*models.ApexAnon
+	if err := s.db.Model(&apexesAnon).Order("id ASC").Select(); err != nil {
+		return err
+	}
+	for _, apex := range apexesAnon {
+		s.apexByNameAnon[apex.Apex.Apex] = apex
 	}
 
 	var fqdns []*models.Fqdn
@@ -232,6 +289,14 @@ func (s *Store) init() error {
 	for _, fqdn := range fqdns {
 		s.fqdnByName[fqdn.Fqdn] = fqdn
 		fqdnsById[fqdn.ID] = fqdn
+	}
+
+	var fqdnsAnon []*models.FqdnAnon
+	if err := s.db.Model(&fqdnsAnon).Order("id ASC").Select(); err != nil {
+		return err
+	}
+	for _, fqdn := range fqdnsAnon {
+		s.fqdnByNameAnon[fqdn.Fqdn.Fqdn] = fqdn
 	}
 
 	var logs []*models.Log
@@ -280,10 +345,6 @@ func (s *Store) init() error {
 		return err
 	}
 
-	s.ids.apexes = 1
-	if len(apexes) > 0 {
-		s.ids.apexes = apexes[len(apexes)-1].ID + 1
-	}
 	s.ids.zoneEntries = 1
 	if len(entries) > 0 {
 		s.ids.zoneEntries = entries[len(entries)-1].ID + 1
@@ -292,13 +353,33 @@ func (s *Store) init() error {
 	if len(tlds) > 0 {
 		s.ids.tlds = tlds[len(tlds)-1].ID + 1
 	}
-	s.ids.pss = 1
-	if len(pss) > 1 {
-		s.ids.pss = pss[len(pss)-1].ID + 1
+	s.ids.tldsAnon = 1
+	if len(tldsAnon) > 0 {
+		s.ids.tldsAnon = tldsAnon[len(tldsAnon)-1].ID + 1
+	}
+	s.ids.suffixes = 1
+	if len(suffixes) > 1 {
+		s.ids.suffixes = suffixes[len(suffixes)-1].ID + 1
+	}
+	s.ids.suffixesAnon = 1
+	if len(suffixesAnon) > 1 {
+		s.ids.suffixesAnon = suffixesAnon[len(suffixesAnon)-1].ID + 1
+	}
+	s.ids.apexes = 1
+	if len(apexes) > 0 {
+		s.ids.apexes = apexes[len(apexes)-1].ID + 1
+	}
+	s.ids.apexesAnon = 1
+	if len(apexesAnon) > 0 {
+		s.ids.apexesAnon = apexesAnon[len(apexesAnon)-1].ID + 1
 	}
 	s.ids.fqdns = 1
 	if len(fqdns) > 0 {
 		s.ids.fqdns = fqdns[len(fqdns)-1].ID + 1
+	}
+	s.ids.fqdnsAnon = 1
+	if len(fqdnsAnon) > 0 {
+		s.ids.fqdnsAnon = fqdnsAnon[len(fqdnsAnon)-1].ID + 1
 	}
 	s.ids.logs = 1
 	if len(logs) > 0 {
@@ -340,25 +421,29 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 	db := pg.Connect(&pgOpts)
 
 	s := Store{
-		conf:                  conf,
-		db:                    db,
-		apexByName:            make(map[string]*models.Apex),
-		apexById:              make(map[uint]*models.Apex),
-		zoneEntriesByApexName: make(map[string]*models.ZonefileEntry),
-		tldByName:             make(map[string]*models.Tld),
-		publicSuffixByName:    make(map[string]*models.PublicSuffix),
-		fqdnByName:            make(map[string]*models.Fqdn),
-		logByUrl:              make(map[string]*models.Log),
-		certByFingerprint:     make(map[string]*models.Certificate),
-		passiveEntryByFqdn:    newSplunkEntryMap(),
-		recordTypeByName:      make(map[string]*models.RecordType),
-		allowedInterval:       opts.AllowedInterval,
-		batchSize:             opts.BatchSize,
-		m:                     &sync.Mutex{},
-		postHooks:             []postHook{},
-		inserts:               NewModelSet(),
-		updates:               NewModelSet(),
-		ids:                   Ids{},
+		conf:                   conf,
+		db:                     db,
+		tldByName:              make(map[string]*models.Tld),
+		tldAnonByName:          make(map[string]*models.TldAnon),
+		publicSuffixByName:     make(map[string]*models.PublicSuffix),
+		publicSuffixAnonByName: make(map[string]*models.PublicSuffixAnon),
+		apexByName:             make(map[string]*models.Apex),
+		apexByNameAnon:         make(map[string]*models.ApexAnon),
+		apexById:               make(map[uint]*models.Apex),
+		fqdnByName:             make(map[string]*models.Fqdn),
+		fqdnByNameAnon:         make(map[string]*models.FqdnAnon),
+		zoneEntriesByApexName:  make(map[string]*models.ZonefileEntry),
+		logByUrl:               make(map[string]*models.Log),
+		certByFingerprint:      make(map[string]*models.Certificate),
+		passiveEntryByFqdn:     newSplunkEntryMap(),
+		recordTypeByName:       make(map[string]*models.RecordType),
+		allowedInterval:        opts.AllowedInterval,
+		batchSize:              opts.BatchSize,
+		m:                      &sync.Mutex{},
+		postHooks:              []postHook{},
+		inserts:                NewModelSet(),
+		updates:                NewModelSet(),
+		ids:                    Ids{},
 	}
 
 	postHook := func(s *Store) error {
@@ -369,10 +454,26 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		defer tx.Rollback()
 
 		// inserts
+		if len(s.inserts.fqdns) > 0 {
+			if err := tx.Insert(&s.inserts.fqdns); err != nil {
+				return errs.Wrap(err, "insert fqdns")
+			}
+		}
+		if len(s.inserts.fqdnsAnon) > 0 {
+			if err := tx.Insert(&s.inserts.fqdnsAnon); err != nil {
+				return errs.Wrap(err, "insert anon fqdns")
+			}
+		}
 		if len(s.inserts.apexes) > 0 {
 			a := s.inserts.apexList()
 			if err := tx.Insert(&a); err != nil {
 				return errs.Wrap(err, "insert apexes")
+			}
+		}
+		if len(s.inserts.apexesAnon) > 0 {
+			a := s.inserts.apexAnonList()
+			if err := tx.Insert(&a); err != nil {
+				return errs.Wrap(err, "insert anon apexes")
 			}
 		}
 		if len(s.inserts.zoneEntries) > 0 {
@@ -394,11 +495,6 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		if len(s.inserts.certToFqdns) > 0 {
 			if err := tx.Insert(&s.inserts.certToFqdns); err != nil {
 				return errs.Wrap(err, "insert cert-to-fqdns")
-			}
-		}
-		if len(s.inserts.fqdns) > 0 {
-			if err := tx.Insert(&s.inserts.fqdns); err != nil {
-				return errs.Wrap(err, "insert fqdns")
 			}
 		}
 		if len(s.inserts.passiveEntries) > 0 {

@@ -5,6 +5,7 @@ import (
 )
 
 // ----- BEGIN DOMAIN -----
+
 type Tld struct {
 	ID  uint `gorm:"primary_key"`
 	Tld string
@@ -29,6 +30,26 @@ type Fqdn struct {
 	TldID          uint
 	PublicSuffixID uint
 	ApexID         uint
+}
+
+type TldAnon struct {
+	Tld
+	TldID uint
+}
+
+type PublicSuffixAnon struct {
+	PublicSuffix
+	PublicSuffixID uint
+}
+
+type ApexAnon struct {
+	Apex
+	ApexID uint
+}
+
+type FqdnAnon struct {
+	Fqdn
+	FqdnID uint
 }
 
 // ----- END DOMAIN -----
@@ -81,6 +102,10 @@ type PassiveEntry struct {
 	RecordTypeID uint
 	FirstSeen    time.Time
 	StageID      uint
+}
+
+type EntradaEntry struct {
+	PassiveEntry
 }
 
 type RecordType struct {
