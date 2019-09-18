@@ -38,6 +38,16 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
+	if !conf.Zone.Czds.IsValid() {
+		log.Fatal().Msgf("czds configuration is invalid")
+	}
+	if err := conf.Zone.Dk.IsValid(); err != nil {
+		log.Fatal().Msgf("dk configuration is invalid: %s", err)
+	}
+	if err := conf.Zone.Com.IsValid(); err != nil {
+		log.Fatal().Msgf("com configuration is invalid: %s", err)
+	}
+
 	log.Debug().Msgf("loading store..")
 	s, err := store.NewStore(conf.Store, store.DefaultOpts)
 	if err != nil {

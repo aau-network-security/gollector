@@ -7,9 +7,9 @@ services:
       dockerfile: app/zones/Dockerfile
     command: [ "--config", "/config/docker.yml" ]
     environment:
-      - COM_FTP_PASS=${COM_FTP_PASS?err}
-      - CZDS_PASS=${CZDS_PASS?err}
-      - DK_SSH_PASS=${DK_SSH_PASS?err}
+      - COM_FTP_PASS=${COM_FTP_PASS}
+      - CZDS_PASS=${CZDS_PASS}
+      - DK_SSH_PASS=${DK_SSH_PASS}
     volumes:
       - ./config:/config:ro # configuration files
       - ${SSH_DIR}:/ssh:ro  # ssh keys

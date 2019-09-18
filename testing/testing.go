@@ -18,9 +18,13 @@ func ResetDb(g *gorm.DB) error {
 	tables := []string{
 		"zonefile_entries",
 		"tlds",
+		"tlds_anon",
 		"public_suffixes",
+		"public_suffixes_anon",
 		"apexes",
+		"apexes_anon",
 		"fqdns",
+		"fqdns_anon",
 		"certificate_to_fqdns",
 		"certificates",
 		"log_entries",
@@ -29,6 +33,7 @@ func ResetDb(g *gorm.DB) error {
 		"passive_entries",
 		"measurements",
 		"stages",
+		"entrada_entries",
 	}
 
 	for _, table := range tables {
@@ -40,10 +45,15 @@ func ResetDb(g *gorm.DB) error {
 
 	migrateExamples := []interface{}{
 		&models.ZonefileEntry{},
+		&models.EntradaEntry{},
 		&models.Tld{},
+		&models.TldAnon{},
 		&models.PublicSuffix{},
+		&models.PublicSuffixAnon{},
 		&models.Apex{},
+		&models.ApexAnon{},
 		&models.Fqdn{},
+		&models.FqdnAnon{},
 		&models.CertificateToFqdn{},
 		&models.Certificate{},
 		&models.LogEntry{},

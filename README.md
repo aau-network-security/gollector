@@ -2,10 +2,11 @@
 A set of tools that are used to retrieve domain names from different sources, such as 
 - [x] Zone file
     - [x] `.com` zone
-    - [x] `.net` zone (or any zone that can be accessed via CZDS)
+    - [x] `.net` zone (or any zone that can be accessed via [CZDS](https://czds.icann.org/))
     - [x] `.dk` zone 
 - [x] DNS resolver (i.e Splunk) logs 
 - [x] CT logs
+- [x] [ENTRADA](https://entrada.sidnlabs.nl/), more specifically the underlying [Impala](https://impala.apache.org/) engine.
 
 **NOTE** the state of the database is kept in memory by each app, and this state is not synchronized across different instances.
 Therefore, it is NOT recommended to run multiple instances simultaniously, but rather suggest to run them sequentially.    

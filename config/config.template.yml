@@ -37,6 +37,12 @@ splunk:
     host: <host that runs measurement, for meta info storage purposes>
     description: <description of measurement>
   directory: <path to directory with Splunk JSON files>
+entrada:
+  meta:
+    host: <host that runs measurement, for meta info storage purposes>
+    description: <description of measurement>
+  host: <host>
+  port: <port>
 store:
   host: localhost
   port: 10001

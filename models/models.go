@@ -5,6 +5,7 @@ import (
 )
 
 // ----- BEGIN DOMAIN -----
+
 type Tld struct {
 	ID  uint `gorm:"primary_key"`
 	Tld string
@@ -29,6 +30,46 @@ type Fqdn struct {
 	TldID          uint
 	PublicSuffixID uint
 	ApexID         uint
+}
+
+type TldAnon struct {
+	Tld
+	tableName struct{} `sql:"tlds_anon"`
+	TldID     uint
+}
+
+func (TldAnon) TableName() string {
+	return "tlds_anon"
+}
+
+type PublicSuffixAnon struct {
+	PublicSuffix
+	tableName      struct{} `sql:"public_suffixes_anon"`
+	PublicSuffixID uint
+}
+
+func (t PublicSuffixAnon) TableName() string {
+	return "public_suffixes_anon"
+}
+
+type ApexAnon struct {
+	Apex
+	tableName struct{} `sql:"apexes_anon"`
+	ApexID    uint
+}
+
+func (t ApexAnon) TableName() string {
+	return "apexes_anon"
+}
+
+type FqdnAnon struct {
+	Fqdn
+	tableName struct{} `sql:"fqdns_anon"`
+	FqdnID    uint
+}
+
+func (t FqdnAnon) TableName() string {
+	return "fqdns_anon"
 }
 
 // ----- END DOMAIN -----
@@ -81,6 +122,13 @@ type PassiveEntry struct {
 	RecordTypeID uint
 	FirstSeen    time.Time
 	StageID      uint
+}
+
+type EntradaEntry struct {
+	ID        uint `gorm:"primary_key"`
+	FqdnID    uint
+	FirstSeen time.Time
+	StageID   uint
 }
 
 type RecordType struct {
