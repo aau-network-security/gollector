@@ -5,6 +5,12 @@ import (
 	"testing"
 )
 
+type TestLabelAnonymizer struct{}
+
+func (la *TestLabelAnonymizer) AnonymizeLabel(s string) string {
+	return s + "(anon)"
+}
+
 type expected struct {
 	tld, publicSuffix, apex, fqdn string
 }
@@ -24,29 +30,37 @@ func TestNewDomain(t *testing.T) {
 	}{
 		{
 			"empty",
-			"",
-			expected{},
+			".",
+			expected{
+				tld:          "",
+				publicSuffix: "",
+				apex:         "",
+				fqdn:         "",
+			},
 		},
 		{
 			"tld only",
-			"com",
+			"com.",
 			expected{
-				tld:  "com",
-				fqdn: "com",
+				tld:          "com",
+				publicSuffix: "com",
+				apex:         "com",
+				fqdn:         "com",
 			},
 		},
 		{
 			"suffix only",
-			"co.uk",
+			"co.uk.",
 			expected{
 				tld:          "uk",
 				publicSuffix: "co.uk",
+				apex:         "co.uk",
 				fqdn:         "co.uk",
 			},
 		},
 		{
 			"apex only",
-			"example.co.uk",
+			"example.co.uk.",
 			expected{
 				tld:          "uk",
 				publicSuffix: "co.uk",
@@ -56,7 +70,7 @@ func TestNewDomain(t *testing.T) {
 		},
 		{
 			"full fqdn",
-			"www.example.co.uk",
+			"www.example.co.uk.",
 			expected{
 				tld:          "uk",
 				publicSuffix: "co.uk",
@@ -80,9 +94,7 @@ func TestNewDomain(t *testing.T) {
 
 func TestAnonymizer(t *testing.T) {
 	a := Anonymizer{
-		func(s string) string {
-			return s + "(anon)"
-		},
+		la: &TestLabelAnonymizer{},
 	}
 	d := domain{
 		tld:          newLabel("a"),
@@ -120,9 +132,7 @@ func TestGetOrCreateFqdnAnon_NoUnanon(t *testing.T) {
 		t.Fatalf("failed to created new domain: %s", err)
 	}
 	anonymizer := Anonymizer{
-		func(s string) string {
-			return s + "(anon)"
-		},
+		la: &TestLabelAnonymizer{},
 	}
 	s = s.WithAnonymizer(&anonymizer)
 
@@ -195,9 +205,7 @@ func TestGetOrCreateFqdn_NoUnanon(t *testing.T) {
 		t.Fatalf("failed to created new domain: %s", err)
 	}
 	anonymizer := Anonymizer{
-		func(s string) string {
-			return s + "(anon)"
-		},
+		la: &TestLabelAnonymizer{},
 	}
 	s = s.WithAnonymizer(&anonymizer)
 
@@ -260,9 +268,7 @@ func TestGetOrCreateFqdn_WithUnanon(t *testing.T) {
 		t.Fatalf("failed to created new domain: %s", err)
 	}
 	anonymizer := Anonymizer{
-		func(s string) string {
-			return s + "(anon)"
-		},
+		la: &TestLabelAnonymizer{},
 	}
 	s = s.WithAnonymizer(&anonymizer)
 
@@ -320,7 +326,7 @@ func TestGetOrCreateFqdn_WithUnanon(t *testing.T) {
 	}
 }
 
-// check for correct creation of all db models for an anon fqdn when UNanon fqdn exists
+// check for correct creation of all db models for an anon fqdn when unanon fqdn exists
 func TestGetOrCreateFqdnAnon_WithUnanon(t *testing.T) {
 	conf := Config{
 		User:     "postgres",
@@ -341,9 +347,7 @@ func TestGetOrCreateFqdnAnon_WithUnanon(t *testing.T) {
 		t.Fatalf("failed to created new domain: %s", err)
 	}
 	anonymizer := Anonymizer{
-		func(s string) string {
-			return s + "(anon)"
-		},
+		la: &TestLabelAnonymizer{},
 	}
 	s = s.WithAnonymizer(&anonymizer)
 

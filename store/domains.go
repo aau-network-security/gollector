@@ -1,6 +1,8 @@
 package store
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"github.com/aau-network-security/go-domains/models"
 	"github.com/pkg/errors"
 	"github.com/weppos/publicsuffix-go/net/publicsuffix"
@@ -9,12 +11,48 @@ import (
 
 var (
 	AnonymizerErr     = errors.New("cannot anonymize without anonymizer")
-	DefaultAnonymizer = Anonymizer{
-		func(s string) string {
-			return s
-		},
-	}
+	DefaultAnonymizer = Anonymizer{&DefaultLabelAnonymizer{}}
 )
+
+type LabelAnonymizer interface {
+	AnonymizeLabel(string) string
+}
+
+type DefaultLabelAnonymizer struct{}
+
+func (la *DefaultLabelAnonymizer) AnonymizeLabel(s string) string {
+	return s
+}
+
+type Sha256LabelAnonymizer struct{}
+
+func (la *Sha256LabelAnonymizer) AnonymizeLabel(s string) string {
+	h := sha256.New()
+	h.Write([]byte(s))
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
+func NewSha256LabelAnonymizer() *Sha256LabelAnonymizer {
+	return &Sha256LabelAnonymizer{}
+}
+
+type Anonymizer struct {
+	la LabelAnonymizer
+}
+
+func (a *Anonymizer) Anonymize(d *domain) {
+	d.tld.anon = a.la.AnonymizeLabel(d.tld.normal)
+	d.publicSuffix.anon = a.la.AnonymizeLabel(d.publicSuffix.normal)
+	d.apex.anon = a.la.AnonymizeLabel(d.apex.normal)
+	d.fqdn.anon = a.la.AnonymizeLabel(d.fqdn.normal)
+	d.anonymized = true
+}
+
+func NewAnonymizer(la LabelAnonymizer) *Anonymizer {
+	return &Anonymizer{
+		la: la,
+	}
+}
 
 type label struct {
 	normal, anon string
@@ -29,39 +67,30 @@ type domain struct {
 	anonymized                    bool
 }
 
-type Anonymizer struct {
-	fn func(string) string
-}
-
-func (a *Anonymizer) Anonymize(d *domain) {
-	d.tld.anon = a.fn(d.tld.normal)
-	d.publicSuffix.anon = a.fn(d.publicSuffix.normal)
-	d.apex.anon = a.fn(d.apex.normal)
-	d.fqdn.anon = a.fn(d.fqdn.normal)
-	d.anonymized = true
-}
-
 func NewDomain(fqdn string) (*domain, error) {
+	fqdn = strings.TrimSuffix(fqdn, ".")
+
 	d := &domain{
 		fqdn: newLabel(fqdn),
 	}
 
 	splitted := strings.Split(fqdn, ".")
+	tld := splitted[len(splitted)-1]
+	d.tld = newLabel(tld)
 
 	if len(splitted) == 1 {
 		// domain is a tld
-		d.tld = newLabel(fqdn)
+		d.publicSuffix = newLabel(fqdn)
+		d.apex = newLabel(fqdn)
 		return d, nil
 	}
-
-	tld := splitted[len(splitted)-1]
-	d.tld = newLabel(tld)
 
 	apex, err := publicsuffix.EffectiveTLDPlusOne(fqdn)
 	if err != nil {
 		if strings.HasSuffix(err.Error(), "is a suffix") {
 			// domain is a public suffix
 			d.publicSuffix = newLabel(fqdn)
+			d.apex = newLabel(fqdn)
 			return d, nil
 		}
 		return nil, err

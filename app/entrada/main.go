@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"github.com/aau-network-security/go-domains/config"
 	"github.com/aau-network-security/go-domains/entrada"
 	"github.com/aau-network-security/go-domains/store"
@@ -34,6 +35,10 @@ func main() {
 		}
 	}()
 
+	la := store.NewSha256LabelAnonymizer()
+	a := store.NewAnonymizer(la)
+	s = s.WithAnonymizer(a)
+
 	if err := s.StartMeasurement(conf.Entrada.Meta.Description, conf.Entrada.Meta.Host); err != nil {
 		log.Fatal().Msgf("failed to start measurement: %s", err)
 	}
@@ -45,7 +50,8 @@ func main() {
 	}()
 
 	entryFn := func(fqdn string, t time.Time) error {
-		if _, err := s.StorePassiveEntry(fqdn, "", t); err != nil {
+		log.Debug().Msgf("storing fqdn: %s", fqdn)
+		if _, err := s.StoreEntradaEntry(fqdn, t); err != nil {
 			log.Debug().Msgf("failed to store entry: %s", err)
 		}
 		return nil
@@ -54,7 +60,11 @@ func main() {
 	ctx := context.Background()
 
 	src := entrada.NewSource(conf.Entrada.Host, conf.Entrada.Port)
-	if err := src.Process(ctx, entryFn, entrada.DefaultOptions); err != nil {
+	entradaOpts := entrada.Options{
+		Query: fmt.Sprintf("SELECT qname, unixtime FROM dns.queries LIMIT %d", 2),
+	}
+
+	if err := src.Process(ctx, entryFn, entradaOpts); err != nil {
 		log.Fatal().Msgf("error while processing impala source: %s", err)
 	}
 }
