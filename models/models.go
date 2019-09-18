@@ -125,7 +125,10 @@ type PassiveEntry struct {
 }
 
 type EntradaEntry struct {
-	PassiveEntry
+	ID        uint `gorm:"primary_key"`
+	FqdnID    uint
+	FirstSeen time.Time
+	StageID   uint
 }
 
 type RecordType struct {

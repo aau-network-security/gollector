@@ -69,6 +69,7 @@ type ModelSet struct {
 	logEntries     []*models.LogEntry
 	certToFqdns    []*models.CertificateToFqdn
 	passiveEntries []*models.PassiveEntry
+	entradaEntries []*models.EntradaEntry
 }
 
 func (s *ModelSet) Len() int {
@@ -116,6 +117,7 @@ func NewModelSet() ModelSet {
 		certs:          []*models.Certificate{},
 		logEntries:     []*models.LogEntry{},
 		passiveEntries: []*models.PassiveEntry{},
+		entradaEntries: []*models.EntradaEntry{},
 	}
 }
 
@@ -218,6 +220,7 @@ func (s *Store) migrate() error {
 		&models.Log{},
 		&models.RecordType{},
 		&models.PassiveEntry{},
+		&models.EntradaEntry{},
 		&models.Measurement{},
 		&models.Stage{},
 	}
@@ -508,6 +511,11 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		if len(s.inserts.passiveEntries) > 0 {
 			if err := tx.Insert(&s.inserts.passiveEntries); err != nil {
 				return errs.Wrap(err, "insert passive entries")
+			}
+		}
+		if len(s.inserts.entradaEntries) > 0 {
+			if err := tx.Insert(&s.inserts.entradaEntries); err != nil {
+				return errs.Wrap(err, "insert entrada entries")
 			}
 		}
 

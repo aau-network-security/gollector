@@ -31,7 +31,7 @@ func main() {
 	}
 	defer func() {
 		if err := s.RunPostHooks(); err != nil {
-			log.Fatal().Msgf("error while running storepost hooks")
+			log.Fatal().Msgf("error while running store posthooks: %s", err)
 		}
 	}()
 
@@ -50,7 +50,6 @@ func main() {
 	}()
 
 	entryFn := func(fqdn string, t time.Time) error {
-		log.Debug().Msgf("storing fqdn: %s", fqdn)
 		if _, err := s.StoreEntradaEntry(fqdn, t); err != nil {
 			log.Debug().Msgf("failed to store entry: %s", err)
 		}

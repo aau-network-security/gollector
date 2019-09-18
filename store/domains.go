@@ -380,7 +380,7 @@ func (s *Store) getOrCreateFqdnAnon(domain *domain) (*models.FqdnAnon, error) {
 			fqdnId = fqdn.ID
 		}
 
-		res := &models.FqdnAnon{
+		res = &models.FqdnAnon{
 			Fqdn: models.Fqdn{
 				ID:             s.ids.fqdnsAnon,
 				Fqdn:           domain.fqdn.anon,
