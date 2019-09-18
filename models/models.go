@@ -34,22 +34,42 @@ type Fqdn struct {
 
 type TldAnon struct {
 	Tld
-	TldID uint
+	tableName struct{} `sql:"tlds_anon"`
+	TldID     uint
+}
+
+func (TldAnon) TableName() string {
+	return "tlds_anon"
 }
 
 type PublicSuffixAnon struct {
 	PublicSuffix
+	tableName      struct{} `sql:"public_suffixes_anon"`
 	PublicSuffixID uint
+}
+
+func (t PublicSuffixAnon) TableName() string {
+	return "public_suffixes_anon"
 }
 
 type ApexAnon struct {
 	Apex
-	ApexID uint
+	tableName struct{} `sql:"apexes_anon"`
+	ApexID    uint
+}
+
+func (t ApexAnon) TableName() string {
+	return "apexes_anon"
 }
 
 type FqdnAnon struct {
 	Fqdn
-	FqdnID uint
+	tableName struct{} `sql:"fqdns_anon"`
+	FqdnID    uint
+}
+
+func (t FqdnAnon) TableName() string {
+	return "fqdns_anon"
 }
 
 // ----- END DOMAIN -----

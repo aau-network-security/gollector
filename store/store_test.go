@@ -10,11 +10,35 @@ import (
 	gct "github.com/google/certificate-transparency-go"
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/google/certificate-transparency-go/x509/pkix"
+	"github.com/jinzhu/gorm"
+	"github.com/pkg/errors"
 	"math/big"
 	"reflect"
 	"testing"
 	"time"
 )
+
+func openStore(conf Config) (*Store, *gorm.DB, error) {
+	g, err := conf.Open()
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to open gorm database")
+	}
+
+	if err := tst.ResetDb(g); err != nil {
+		return nil, nil, errors.Wrap(err, "failed to reset database")
+	}
+
+	opts := Opts{
+		BatchSize:       10,
+		AllowedInterval: 10 * time.Millisecond,
+	}
+
+	s, err := NewStore(conf, opts)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to open store")
+	}
+	return s, g, nil
+}
 
 func logEntryFromCertData(raw []byte, ts uint64) (*gct.LogEntry, error) {
 	cert, err := x509.ParseCertificate(raw)
@@ -69,21 +93,7 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 		Port:     10001,
 	}
 
-	g, err := conf.Open()
-	if err != nil {
-		t.Fatalf("failed to open gorm database: %s", err)
-	}
-
-	if err := tst.ResetDb(g); err != nil {
-		t.Fatalf("failed to reset database: %s", err)
-	}
-
-	opts := Opts{
-		BatchSize:       10,
-		AllowedInterval: 10 * time.Millisecond,
-	}
-
-	s, err := NewStore(conf, opts)
+	s, g, err := openStore(conf)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
@@ -139,21 +149,7 @@ func TestStore_StoreLogEntry(t *testing.T) {
 		Port:     10001,
 	}
 
-	g, err := conf.Open()
-	if err != nil {
-		t.Fatalf("failed to open gorm database: %s", err)
-	}
-
-	if err := tst.ResetDb(g); err != nil {
-		t.Fatalf("failed to reset database: %s", err)
-	}
-
-	opts := Opts{
-		BatchSize:       10,
-		AllowedInterval: 10 * time.Millisecond,
-	}
-
-	s, err := NewStore(conf, opts)
+	s, g, err := openStore(conf)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
@@ -218,7 +214,7 @@ func TestStore_StoreLogEntry(t *testing.T) {
 	}
 
 	// check initialization of new store
-	s, err = NewStore(conf, opts)
+	s, g, err = openStore(conf)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
@@ -318,21 +314,7 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 		Port:     10001,
 	}
 
-	g, err := conf.Open()
-	if err != nil {
-		t.Fatalf("failed to open gorm database: %s", err)
-	}
-
-	if err := tst.ResetDb(g); err != nil {
-		t.Fatalf("failed to reset database: %s", err)
-	}
-
-	opts := Opts{
-		BatchSize:       10,
-		AllowedInterval: 10 * time.Millisecond,
-	}
-
-	s, err := NewStore(conf, opts)
+	s, g, err := openStore(conf)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
@@ -410,7 +392,7 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 	}
 
 	// check initialization of new store
-	s, err = NewStore(conf, opts)
+	s, g, err = openStore(conf)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}

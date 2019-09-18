@@ -8,7 +8,12 @@ import (
 )
 
 var (
-	UnanonymizedErr = errors.New("domain is unanonymized")
+	UnanonymizedErr   = errors.New("domain is unanonymized")
+	DefaultAnonymizer = Anonymizer{
+		func(s string) string {
+			return s
+		},
+	}
 )
 
 type label struct {
@@ -70,6 +75,10 @@ func NewDomain(fqdn string) (*domain, error) {
 }
 
 func (s *Store) getOrCreateTld(domain *domain) (*models.Tld, error) {
+	if !domain.anonymized {
+		return nil, UnanonymizedErr
+	}
+
 	res, ok := s.tldByName[domain.tld.normal]
 	if !ok {
 		tx, err := s.db.Begin()
@@ -89,7 +98,7 @@ func (s *Store) getOrCreateTld(domain *domain) (*models.Tld, error) {
 		anon, ok := s.tldAnonByName[domain.tld.anon]
 		if ok {
 			anon.TldID = res.ID
-			if _, err := tx.Model(&anon).Column("tld_id").Update(); err != nil {
+			if err := tx.Update(anon); err != nil {
 				return nil, err
 			}
 		}
@@ -133,6 +142,10 @@ func (s *Store) getOrCreateTldAnon(domain *domain) (*models.TldAnon, error) {
 }
 
 func (s *Store) getOrCreatePublicSuffix(domain *domain) (*models.PublicSuffix, error) {
+	if !domain.anonymized {
+		return nil, UnanonymizedErr
+	}
+
 	res, ok := s.publicSuffixByName[domain.publicSuffix.normal]
 	if !ok {
 		tx, err := s.db.Begin()
@@ -159,7 +172,7 @@ func (s *Store) getOrCreatePublicSuffix(domain *domain) (*models.PublicSuffix, e
 		anon, ok := s.publicSuffixAnonByName[domain.publicSuffix.anon]
 		if ok {
 			anon.PublicSuffixID = res.ID
-			if _, err := tx.Model(&anon).Column("public_suffix_id").Update(); err != nil {
+			if err := tx.Update(anon); err != nil {
 				return nil, err
 			}
 		}
@@ -210,6 +223,10 @@ func (s *Store) getOrCreatePublicSuffixAnon(domain *domain) (*models.PublicSuffi
 }
 
 func (s *Store) getOrCreateApex(domain *domain) (*models.Apex, error) {
+	if !domain.anonymized {
+		return nil, UnanonymizedErr
+	}
+
 	res, ok := s.apexByName[domain.apex.normal]
 	if !ok {
 		ps, err := s.getOrCreatePublicSuffix(domain)
@@ -256,7 +273,7 @@ func (s *Store) getOrCreateApexAnon(domain *domain) (*models.ApexAnon, error) {
 			apexId = apex.ID
 		}
 
-		res := &models.ApexAnon{
+		res = &models.ApexAnon{
 			Apex: models.Apex{
 				ID:             s.ids.apexesAnon,
 				Apex:           domain.apex.anon,
@@ -274,6 +291,10 @@ func (s *Store) getOrCreateApexAnon(domain *domain) (*models.ApexAnon, error) {
 }
 
 func (s *Store) getOrCreateFqdn(domain *domain) (*models.Fqdn, error) {
+	if !domain.anonymized {
+		return nil, UnanonymizedErr
+	}
+
 	res, ok := s.fqdnByName[domain.fqdn.normal]
 	if !ok {
 		a, err := s.getOrCreateApex(domain)

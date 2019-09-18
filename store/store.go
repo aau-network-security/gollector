@@ -109,7 +109,9 @@ func NewModelSet() ModelSet {
 	return ModelSet{
 		zoneEntries:    make(map[uint]*models.ZonefileEntry),
 		apexes:         make(map[uint]*models.Apex),
+		apexesAnon:     make(map[uint]*models.ApexAnon),
 		fqdns:          []*models.Fqdn{},
+		fqdnsAnon:      []*models.FqdnAnon{},
 		certToFqdns:    []*models.CertificateToFqdn{},
 		certs:          []*models.Certificate{},
 		logEntries:     []*models.LogEntry{},
