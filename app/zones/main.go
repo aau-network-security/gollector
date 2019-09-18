@@ -127,12 +127,12 @@ func main() {
 		}
 
 		zoneConfigs = append([]zoneConfig{
-			//{
-			//	comZone,
-			//	[]zone.StreamWrapper{zone.GzipWrapper},
-			//	zone.ZoneFileHandler,
-			//	nil,
-			//},
+			{
+				comZone,
+				[]zone.StreamWrapper{zone.GzipWrapper},
+				zone.ZoneFileHandler,
+				nil,
+			},
 			{
 				dkZone,
 				nil,
