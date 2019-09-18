@@ -124,7 +124,7 @@ func TestGetOrCreateFqdnAnon_NoUnanon(t *testing.T) {
 			return s + "(anon)"
 		},
 	}
-	anonymizer.Anonymize(domain)
+	s = s.WithAnonymizer(&anonymizer)
 
 	if _, err := s.getOrCreateFqdnAnon(domain); err != nil {
 		t.Fatalf("failed to create anon fqdn: %s", err)
@@ -199,7 +199,7 @@ func TestGetOrCreateFqdn_NoUnanon(t *testing.T) {
 			return s + "(anon)"
 		},
 	}
-	anonymizer.Anonymize(domain)
+	s = s.WithAnonymizer(&anonymizer)
 
 	if _, err := s.getOrCreateFqdn(domain); err != nil {
 		t.Fatalf("failed to create anon fqdn: %s", err)
@@ -264,7 +264,7 @@ func TestGetOrCreateFqdn_WithUnanon(t *testing.T) {
 			return s + "(anon)"
 		},
 	}
-	anonymizer.Anonymize(domain)
+	s = s.WithAnonymizer(&anonymizer)
 
 	if _, err := s.getOrCreateFqdnAnon(domain); err != nil {
 		t.Fatalf("failed to create anon fqdn: %s", err)
@@ -345,7 +345,7 @@ func TestGetOrCreateFqdnAnon_WithUnanon(t *testing.T) {
 			return s + "(anon)"
 		},
 	}
-	anonymizer.Anonymize(domain)
+	s = s.WithAnonymizer(&anonymizer)
 
 	if _, err := s.getOrCreateFqdn(domain); err != nil {
 		t.Fatalf("failed to create fqdn: %s", err)

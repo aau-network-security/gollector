@@ -19,7 +19,7 @@ func (s *Store) StoreZoneEntry(t time.Time, fqdn string) (*models.ZonefileEntry,
 		return nil, err
 	}
 
-	existingZoneEntry, ok := s.zoneEntriesByApexName[apex.Apex]
+	existingZE, ok := s.zoneEntriesByApexName[apex.Apex]
 	if !ok {
 		// non-active domain, create a new zone entry
 		newZoneEntry := &models.ZonefileEntry{
@@ -42,14 +42,14 @@ func (s *Store) StoreZoneEntry(t time.Time, fqdn string) (*models.ZonefileEntry,
 		return newZoneEntry, nil
 	}
 
-	// active domain
-	if existingZoneEntry.LastSeen.Before(time.Now().Add(-s.allowedInterval)) {
+	limit := existingZE.LastSeen.Add(s.allowedInterval)
+	if t.After(limit) {
 		// detected re-registration, set old entry inactive and create new
 
-		existingZoneEntry.Active = false
-		s.updates.zoneEntries[existingZoneEntry.ID] = existingZoneEntry
+		existingZE.Active = false
+		s.updates.zoneEntries[existingZE.ID] = existingZE
 
-		newZoneEntry := &models.ZonefileEntry{
+		newZE := &models.ZonefileEntry{
 			ID:        s.ids.zoneEntries,
 			ApexID:    apex.ID,
 			FirstSeen: t,
@@ -58,24 +58,24 @@ func (s *Store) StoreZoneEntry(t time.Time, fqdn string) (*models.ZonefileEntry,
 			StageID:   s.curStage.ID,
 		}
 
-		s.zoneEntriesByApexName[apex.Apex] = newZoneEntry
-		s.inserts.zoneEntries[newZoneEntry.ID] = newZoneEntry
+		s.zoneEntriesByApexName[apex.Apex] = newZE
+		s.inserts.zoneEntries[newZE.ID] = newZE
 		s.ids.zoneEntries++
 
 		if err := s.conditionalPostHooks(); err != nil {
 			return nil, err
 		}
 
-		return newZoneEntry, nil
+		return newZE, nil
 	}
 
 	// update existing
-	existingZoneEntry.LastSeen = t
-	s.updates.zoneEntries[existingZoneEntry.ID] = existingZoneEntry
+	existingZE.LastSeen = t
+	s.updates.zoneEntries[existingZE.ID] = existingZE
 
 	if err := s.conditionalPostHooks(); err != nil {
 		return nil, err
 	}
 
-	return existingZoneEntry, nil
+	return existingZE, nil
 }

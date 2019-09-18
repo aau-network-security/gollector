@@ -8,7 +8,7 @@ import (
 )
 
 var (
-	UnanonymizedErr   = errors.New("domain is unanonymized")
+	AnonymizerErr     = errors.New("cannot anonymize without anonymizer")
 	DefaultAnonymizer = Anonymizer{
 		func(s string) string {
 			return s
@@ -74,9 +74,19 @@ func NewDomain(fqdn string) (*domain, error) {
 	return d, nil
 }
 
-func (s *Store) getOrCreateTld(domain *domain) (*models.Tld, error) {
+func (s *Store) ensureAnonymized(domain *domain) error {
 	if !domain.anonymized {
-		return nil, UnanonymizedErr
+		if s.anonymizer == nil {
+			return AnonymizerErr
+		}
+		s.anonymizer.Anonymize(domain)
+	}
+	return nil
+}
+
+func (s *Store) getOrCreateTld(domain *domain) (*models.Tld, error) {
+	if err := s.ensureAnonymized(domain); err != nil {
+		return nil, err
 	}
 
 	res, ok := s.tldByName[domain.tld.normal]
@@ -114,8 +124,8 @@ func (s *Store) getOrCreateTld(domain *domain) (*models.Tld, error) {
 }
 
 func (s *Store) getOrCreateTldAnon(domain *domain) (*models.TldAnon, error) {
-	if !domain.anonymized {
-		return nil, UnanonymizedErr
+	if err := s.ensureAnonymized(domain); err != nil {
+		return nil, err
 	}
 
 	res, ok := s.tldAnonByName[domain.tld.anon]
@@ -142,8 +152,8 @@ func (s *Store) getOrCreateTldAnon(domain *domain) (*models.TldAnon, error) {
 }
 
 func (s *Store) getOrCreatePublicSuffix(domain *domain) (*models.PublicSuffix, error) {
-	if !domain.anonymized {
-		return nil, UnanonymizedErr
+	if err := s.ensureAnonymized(domain); err != nil {
+		return nil, err
 	}
 
 	res, ok := s.publicSuffixByName[domain.publicSuffix.normal]
@@ -188,8 +198,8 @@ func (s *Store) getOrCreatePublicSuffix(domain *domain) (*models.PublicSuffix, e
 }
 
 func (s *Store) getOrCreatePublicSuffixAnon(domain *domain) (*models.PublicSuffixAnon, error) {
-	if !domain.anonymized {
-		return nil, UnanonymizedErr
+	if err := s.ensureAnonymized(domain); err != nil {
+		return nil, err
 	}
 
 	res, ok := s.publicSuffixAnonByName[domain.publicSuffix.anon]
@@ -223,8 +233,8 @@ func (s *Store) getOrCreatePublicSuffixAnon(domain *domain) (*models.PublicSuffi
 }
 
 func (s *Store) getOrCreateApex(domain *domain) (*models.Apex, error) {
-	if !domain.anonymized {
-		return nil, UnanonymizedErr
+	if err := s.ensureAnonymized(domain); err != nil {
+		return nil, err
 	}
 
 	res, ok := s.apexByName[domain.apex.normal]
@@ -256,8 +266,8 @@ func (s *Store) getOrCreateApex(domain *domain) (*models.Apex, error) {
 }
 
 func (s *Store) getOrCreateApexAnon(domain *domain) (*models.ApexAnon, error) {
-	if !domain.anonymized {
-		return nil, UnanonymizedErr
+	if err := s.ensureAnonymized(domain); err != nil {
+		return nil, err
 	}
 
 	res, ok := s.apexByNameAnon[domain.apex.anon]
@@ -291,8 +301,8 @@ func (s *Store) getOrCreateApexAnon(domain *domain) (*models.ApexAnon, error) {
 }
 
 func (s *Store) getOrCreateFqdn(domain *domain) (*models.Fqdn, error) {
-	if !domain.anonymized {
-		return nil, UnanonymizedErr
+	if err := s.ensureAnonymized(domain); err != nil {
+		return nil, err
 	}
 
 	res, ok := s.fqdnByName[domain.fqdn.normal]
@@ -324,8 +334,8 @@ func (s *Store) getOrCreateFqdn(domain *domain) (*models.Fqdn, error) {
 }
 
 func (s *Store) getOrCreateFqdnAnon(domain *domain) (*models.FqdnAnon, error) {
-	if !domain.anonymized {
-		return nil, UnanonymizedErr
+	if err := s.ensureAnonymized(domain); err != nil {
+		return nil, err
 	}
 
 	res, ok := s.fqdnByNameAnon[domain.fqdn.anon]

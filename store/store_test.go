@@ -83,7 +83,7 @@ func selfSignedCert(notBefore, notAfter time.Time, sans []string) ([]byte, error
 	return x509.CreateCertificate(rand.Reader, &template, &template, &priv.PublicKey, priv)
 }
 
-// test against locally running postgres server
+// check if storing a zone entry creates the correct db models
 func TestStore_StoreZoneEntry(t *testing.T) {
 	conf := Config{
 		User:     "postgres",
@@ -100,11 +100,15 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 
 	iterations := 3
 	for i := 0; i < iterations; i++ {
-		for j := 0; j < 10; j++ {
-			if _, err := s.StoreZoneEntry(time.Now(), "example.org"); err != nil {
-				t.Fatalf("error while storing entry: %s", err)
-			}
+		for j := 0; j < 2; j++ {
+			// this should only update the "last_seen" field of the current active zonefile entry
+			go func() {
+				if _, err := s.StoreZoneEntry(time.Now(), "example.org"); err != nil {
+					t.Fatalf("error while storing entry: %s", err)
+				}
+			}()
 		}
+		// this should enforce to create a new zonefile entry in the next loop iteration
 		time.Sleep(15 * time.Millisecond)
 	}
 	if err := s.RunPostHooks(); err != nil {
@@ -116,10 +120,11 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 		model      interface{}
 		whereQuery string
 	}{
-		{1, &models.Apex{}, ""},
-		{3, &models.ZonefileEntry{}, ""},
-		{1, &models.ZonefileEntry{}, "active = true"},
 		{1, &models.Tld{}, ""},
+		{1, &models.PublicSuffix{}, ""},
+		{1, &models.Apex{}, ""},
+		{uint(iterations), &models.ZonefileEntry{}, ""},
+		{1, &models.ZonefileEntry{}, "active = true"},
 	}
 
 	for _, tc := range counts {
@@ -214,7 +219,12 @@ func TestStore_StoreLogEntry(t *testing.T) {
 	}
 
 	// check initialization of new store
-	s, g, err = openStore(conf)
+	opts := Opts{
+		BatchSize:       10,
+		AllowedInterval: 10 * time.Millisecond,
+	}
+
+	s, err = NewStore(conf, opts)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
@@ -392,7 +402,12 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 	}
 
 	// check initialization of new store
-	s, g, err = openStore(conf)
+	opts := Opts{
+		BatchSize:       10,
+		AllowedInterval: 10 * time.Millisecond,
+	}
+
+	s, err = NewStore(conf, opts)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}

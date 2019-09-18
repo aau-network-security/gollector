@@ -165,6 +165,12 @@ type Store struct {
 	updates                ModelSet
 	curStage               *models.Stage
 	curMeasurement         *models.Measurement
+	anonymizer             *Anonymizer
+}
+
+func (s *Store) WithAnonymizer(a *Anonymizer) *Store {
+	s.anonymizer = a
+	return s
 }
 
 func (s *Store) RunPostHooks() error {
@@ -224,16 +230,6 @@ func (s *Store) migrate() error {
 }
 
 func (s *Store) init() error {
-
-	var entries []*models.ZonefileEntry
-	if err := s.db.Model(&entries).Order("id ASC").Select(); err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		apex := s.apexById[entry.ApexID]
-		s.zoneEntriesByApexName[apex.Apex] = entry
-	}
-
 	var tlds []*models.Tld
 	if err := s.db.Model(&tlds).Order("id ASC").Select(); err != nil {
 		return err
@@ -299,6 +295,15 @@ func (s *Store) init() error {
 	}
 	for _, fqdn := range fqdnsAnon {
 		s.fqdnByNameAnon[fqdn.Fqdn.Fqdn] = fqdn
+	}
+
+	var entries []*models.ZonefileEntry
+	if err := s.db.Model(&entries).Order("id ASC").Select(); err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		apex := s.apexById[entry.ApexID]
+		s.zoneEntriesByApexName[apex.Apex] = entry
 	}
 
 	var logs []*models.Log
@@ -446,6 +451,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		inserts:                NewModelSet(),
 		updates:                NewModelSet(),
 		ids:                    Ids{},
+		anonymizer:             &DefaultAnonymizer,
 	}
 
 	postHook := func(s *Store) error {
