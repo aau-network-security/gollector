@@ -20,6 +20,10 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
+	if err := conf.Entrada.IsValid(); err != nil {
+		log.Fatal().Msgf("invalid entrada configuration: %s", err)
+	}
+
 	opts := store.Opts{
 		AllowedInterval: 1 * time.Second, // field is unused, so we don't care about its value
 		BatchSize:       50000,
