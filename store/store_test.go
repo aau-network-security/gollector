@@ -103,7 +103,7 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 		for j := 0; j < 2; j++ {
 			// this should only update the "last_seen" field of the current active zonefile entry
 			go func() {
-				if _, err := s.StoreZoneEntry(time.Now(), "example.org"); err != nil {
+				if _, err := s.StoreZoneEntry("", time.Now(), "example.org"); err != nil {
 					t.Fatalf("error while storing entry: %s", err)
 				}
 			}()
@@ -159,11 +159,6 @@ func TestStore_StoreLogEntry(t *testing.T) {
 		t.Fatalf("failed to create store: %s", err)
 	}
 
-	l := ct.Log{
-		Url:         "localhost",
-		Description: "some description",
-	}
-
 	sanLists := [][]string{
 		{
 			"www.a.com",
@@ -181,12 +176,19 @@ func TestStore_StoreLogEntry(t *testing.T) {
 			t.Fatalf("unexpected error while creating self-signed certificate: %s", err)
 		}
 
-		le, err := logEntryFromCertData(raw, uint64(now.Unix()))
+		cert, err := x509.ParseCertificate(raw)
 		if err != nil {
-			t.Fatalf("unexpected error while creating log entry: %s", err)
+			t.Fatalf("unexpected error while parsing certificate: %s", err)
 		}
 
-		if err := s.StoreLogEntry(le, l); err != nil {
+		le := LogEntry{
+			Cert:  cert,
+			Index: 1,
+			Log:   ct.Log{},
+			Ts:    now,
+		}
+
+		if err := s.StoreLogEntry("", le); err != nil {
 			t.Fatalf("unexpected error while storing log entry: %s", err)
 		}
 	}
@@ -369,7 +371,7 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 	}
 
 	for _, entry := range entries {
-		if _, err := s.StorePassiveEntry(entry.query, entry.queryType, entry.tm); err != nil {
+		if _, err := s.StorePassiveEntry("", entry.query, entry.queryType, entry.tm); err != nil {
 			t.Fatalf("unexpected error while storing passive entry: %s", err)
 		}
 	}

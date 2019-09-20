@@ -144,6 +144,7 @@ type config struct {
 	Entrada Entrada      `yaml:"entrada"`
 	Store   store.Config `yaml:"store"`
 	Sentry  Sentry       `yaml:"sentry"`
+	Api     Api          `yaml:"api"`
 }
 
 type Sentry struct {
@@ -154,6 +155,11 @@ type Sentry struct {
 type Meta struct {
 	Description string `yaml:"description"`
 	Host        string `yaml:"host"`
+}
+
+type Api struct {
+	Host string
+	Port int
 }
 
 func ReadConfig(path string) (config, error) {

@@ -4,17 +4,36 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	api "github.com/aau-network-security/go-domains/api/proto"
 	"github.com/aau-network-security/go-domains/config"
 	"github.com/aau-network-security/go-domains/ct"
-	"github.com/aau-network-security/go-domains/store"
 	ct2 "github.com/google/certificate-transparency-go"
+	"github.com/google/certificate-transparency-go/x509"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/vbauerster/mpb"
 	"github.com/vbauerster/mpb/decor"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"sync"
 	"time"
 )
+
+var (
+	UnsupportedCertTypeErr = errors.New("provided certificate is not supported")
+)
+
+func certFromLogEntry(entry *ct2.LogEntry) (*x509.Certificate, error) {
+	var cert *x509.Certificate
+	if entry.Precert != nil {
+		cert = entry.Precert.TBSCertificate
+	} else if entry.X509Cert != nil {
+		cert = entry.X509Cert
+	} else {
+		return nil, UnsupportedCertTypeErr
+	}
+	return cert, nil
+}
 
 func main() {
 	ctx := context.Background()
@@ -32,23 +51,34 @@ func main() {
 		log.Fatal().Msgf("failed to parse time from config: %s", err)
 	}
 
-	opts := store.Opts{
-		AllowedInterval: 1 * time.Second, // field is unused, so we don't care about its value
-		BatchSize:       50000,
-	}
-
-	s, err := store.NewStore(conf.Store, opts)
+	cc, err := grpc.Dial("localhost:20000", grpc.WithInsecure())
 	if err != nil {
-		log.Fatal().Msgf("error while creating store: %s", err)
+		log.Fatal().Msgf("failed to dial: %s", err)
 	}
 
-	if err := s.StartMeasurement(conf.Ct.Meta.Description, conf.Ct.Meta.Host); err != nil {
+	mClient := api.NewMeasurementApiClient(cc)
+	ctClient := api.NewCtApiClient(cc)
+
+	meta := api.Meta{
+		Description: conf.Ct.Meta.Description,
+		Host:        conf.Ct.Meta.Host,
+	}
+	startResp, err := mClient.StartMeasurement(ctx, &meta)
+	if err != nil {
 		log.Fatal().Msgf("failed to start measurement: %s", err)
 	}
+	if startResp.Error.Error != "" {
+		log.Fatal().Msgf("failed to start measurement: %s", startResp.Error.Error)
+	}
+	mid := startResp.MeasurementId.Id
 
 	defer func() {
-		if err := s.StopMeasurement(); err != nil {
-			log.Fatal().Msgf("error while stopping measurement", err)
+		stopResp, err := mClient.StopMeasurement(ctx, startResp.MeasurementId)
+		if err != nil {
+			log.Fatal().Msgf("failed to stop measurement: %s", err)
+		}
+		if stopResp.Error != "" {
+			log.Fatal().Msgf("failed to stop measurement: %s", err)
 		}
 	}()
 
@@ -65,8 +95,8 @@ func main() {
 		}
 	}
 
-	logs := logList.Logs
-	//logs := []ct.Log{logList.Logs[0]}
+	//logs := logList.Logs
+	logs := []ct.Log{logList.Logs[2]}
 	//logs := logList.Logs[0:3]
 
 	wg := sync.WaitGroup{}
@@ -124,9 +154,48 @@ func main() {
 			defer bar.Abort(false)
 
 			entryFn := func(entry *ct2.LogEntry) error {
-				err := s.StoreLogEntry(entry, l)
 				bar.Increment()
-				return errors.Wrap(err, "store log entry")
+
+				cert, err := certFromLogEntry(entry)
+				if err != nil {
+					return err
+				}
+
+				var operatedBy []int64
+				for _, ob := range l.OperatedBy {
+					operatedBy = append(operatedBy, int64(ob))
+				}
+
+				log := api.Log{
+					Description:       l.Description,
+					Key:               l.Key,
+					Url:               l.Url,
+					MaximumMergeDelay: int64(l.MaximumMergeDelay),
+					OperatedBy:        operatedBy,
+					DnsApiEndpoint:    l.DnsApiEndpoint,
+				}
+
+				le := api.LogEntry{
+					Certificate: cert.Raw,
+					Index:       entry.Index,
+					Timestamp:   int64(entry.Leaf.TimestampedEntry.Timestamp),
+					Log:         &log,
+				}
+
+				md := metadata.New(map[string]string{
+					"mid": mid,
+				})
+				ctx := metadata.NewOutgoingContext(ctx, md)
+				//header := grpc.Header(&md)
+				//resp, err := ctClient.StoreLogEntries(ctx, &le, header)
+				resp, err := ctClient.StoreLogEntries(ctx, &le)
+				if err != nil {
+					return errors.Wrap(err, "error while sending log entry to server")
+				}
+				if resp.Error != "" {
+					return errors.New(fmt.Sprintf("failed to store log entry: %s", resp.Error))
+				}
+				return nil
 			}
 
 			errorFn := func(err error) {
@@ -136,7 +205,8 @@ func main() {
 			opts := ct.Options{
 				WorkerCount: conf.Ct.WorkerCount,
 				StartIndex:  start,
-				EndIndex:    end,
+				//EndIndex:    end,
+				EndIndex: start + 1,
 			}
 
 			count, err = ct.Scan(ctx, &l, entryFn, errorFn, opts)
@@ -149,8 +219,4 @@ func main() {
 		}(el, l)
 	}
 	p.Wait()
-
-	if err := s.RunPostHooks(); err != nil {
-		log.Fatal().Msgf("error while running post hooks: %s", err)
-	}
 }

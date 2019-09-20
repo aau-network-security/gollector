@@ -1,7 +1,6 @@
 package store
 
 import (
-	"errors"
 	"fmt"
 	"github.com/aau-network-security/go-domains/models"
 	"github.com/go-pg/pg"
@@ -13,8 +12,7 @@ import (
 )
 
 var (
-	UnsupportedCertTypeErr = errors.New("provided certificate is not supported")
-	DefaultOpts            = Opts{
+	DefaultOpts = Opts{
 		BatchSize:       20000,
 		AllowedInterval: 36 * time.Hour,
 	}
@@ -136,8 +134,6 @@ type Ids struct {
 	certs        uint
 	logs         uint
 	recordTypes  uint
-	measurements uint
-	stages       uint
 }
 
 type Store struct {
@@ -165,8 +161,7 @@ type Store struct {
 	postHooks              []postHook
 	inserts                ModelSet
 	updates                ModelSet
-	curStage               *models.Stage
-	curMeasurement         *models.Measurement
+	ms                     measurementState
 	anonymizer             *Anonymizer
 }
 
@@ -403,14 +398,6 @@ func (s *Store) init() error {
 	if len(rtypes) > 0 {
 		s.ids.recordTypes = rtypes[len(rtypes)-1].ID + 1
 	}
-	s.ids.measurements = 1
-	if len(measurements) > 0 {
-		s.ids.measurements = measurements[len(measurements)-1].ID + 1
-	}
-	s.ids.stages = 1
-	if len(stages) > 0 {
-		s.ids.stages = stages[len(stages)-1].ID + 1
-	}
 
 	return nil
 }
@@ -455,6 +442,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		updates:                NewModelSet(),
 		ids:                    Ids{},
 		anonymizer:             &DefaultAnonymizer,
+		ms:                     NewMeasurementState(),
 	}
 
 	postHook := func(s *Store) error {
@@ -554,9 +542,6 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 	if err := s.init(); err != nil {
 		return nil, errs.Wrap(err, "initialize database")
 	}
-
-	s.curStage = &models.Stage{}
-	s.curMeasurement = &models.Measurement{}
 
 	return &s, nil
 }

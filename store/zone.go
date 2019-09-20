@@ -5,9 +5,14 @@ import (
 	"time"
 )
 
-func (s *Store) StoreZoneEntry(t time.Time, fqdn string) (*models.ZonefileEntry, error) {
+func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.ZonefileEntry, error) {
 	s.m.Lock()
 	defer s.m.Unlock()
+
+	sid, ok := s.ms.SId(muid)
+	if !ok {
+		return nil, NoActiveStageErr
+	}
 
 	domain, err := NewDomain(fqdn)
 	if err != nil {
@@ -28,7 +33,7 @@ func (s *Store) StoreZoneEntry(t time.Time, fqdn string) (*models.ZonefileEntry,
 			FirstSeen: t,
 			LastSeen:  t,
 			Active:    true,
-			StageID:   s.curStage.ID,
+			StageID:   sid,
 		}
 
 		s.zoneEntriesByApexName[apex.Apex] = newZoneEntry
@@ -55,7 +60,7 @@ func (s *Store) StoreZoneEntry(t time.Time, fqdn string) (*models.ZonefileEntry,
 			FirstSeen: t,
 			LastSeen:  t,
 			Active:    true,
-			StageID:   s.curStage.ID,
+			StageID:   sid,
 		}
 
 		s.zoneEntriesByApexName[apex.Apex] = newZE

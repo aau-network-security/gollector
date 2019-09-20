@@ -6,9 +6,14 @@ import (
 	"time"
 )
 
-func (s *Store) StoreEntradaEntry(fqdn string, t time.Time) (*models.EntradaEntry, error) {
+func (s *Store) StoreEntradaEntry(muid string, fqdn string, t time.Time) (*models.EntradaEntry, error) {
 	s.m.Lock()
 	defer s.m.Unlock()
+
+	sid, ok := s.ms.SId(muid)
+	if !ok {
+		return nil, NoActiveStageErr
+	}
 
 	domain, err := NewDomain(fqdn)
 	if err != nil {
@@ -23,7 +28,7 @@ func (s *Store) StoreEntradaEntry(fqdn string, t time.Time) (*models.EntradaEntr
 	entry := &models.EntradaEntry{
 		FirstSeen: t,
 		FqdnID:    fqdnAnon.ID,
-		StageID:   s.curStage.ID,
+		StageID:   sid,
 	}
 
 	s.inserts.entradaEntries = append(s.inserts.entradaEntries, entry)

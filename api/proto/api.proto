@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+message Error {
+    string error = 1;
+}
+
+service MeasurementApi {
+    rpc StartMeasurement (Meta) returns (StartMeasurementResponse) {}
+    rpc StopMeasurement (MeasurementId) returns (Error) {}
+    rpc NextStage(MeasurementId) returns (Error) {}
+}
+
+message StartMeasurementResponse {
+    MeasurementId MeasurementId = 1;
+    Error Error = 2;
+}
+
+message Meta {
+    string Description = 1;
+    string Host = 2;
+}
+
+message MeasurementId {
+    string Id = 1;
+}
+
+service CtApi {
+    rpc StoreLogEntries (LogEntry) returns (Error) {}
+}
+
+message LogEntry {
+    bytes Certificate = 1; // ASN DER
+    int64 Index = 2;
+    int64 Timestamp = 3; // unix time in ms
+    Log Log = 4;
+}
+
+message Log { // as provided by https://www.certificate-transparency.org/known-logs
+    string Description = 1;
+    string Key = 2;
+    string Url = 3;
+    int64 MaximumMergeDelay = 4;
+    repeated int64 OperatedBy = 5;
+    string DnsApiEndpoint = 6;
+}

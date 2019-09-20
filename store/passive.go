@@ -60,7 +60,7 @@ func (s *Store) getorCreateRecordType(rtype string) (*models.RecordType, error) 
 	return rt, nil
 }
 
-func (s *Store) StorePassiveEntry(query string, queryType string, t time.Time) (*models.PassiveEntry, error) {
+func (s *Store) StorePassiveEntry(muid string, query string, queryType string, t time.Time) (*models.PassiveEntry, error) {
 	s.m.Lock()
 	defer s.m.Unlock()
 
@@ -70,6 +70,11 @@ func (s *Store) StorePassiveEntry(query string, queryType string, t time.Time) (
 	pe, ok := s.passiveEntryByFqdn.get(query, queryType)
 	if !ok {
 		// create a new entry
+		sid, ok := s.ms.SId(muid)
+		if !ok {
+			return nil, NoActiveStageErr
+		}
+
 		domain, err := NewDomain(query)
 		if err != nil {
 			return nil, err
@@ -89,7 +94,7 @@ func (s *Store) StorePassiveEntry(query string, queryType string, t time.Time) (
 			FqdnID:       fqdn.ID,
 			FirstSeen:    t,
 			RecordTypeID: rt.ID,
-			StageID:      s.curStage.ID,
+			StageID:      sid,
 		}
 
 		s.passiveEntryByFqdn.add(query, queryType, pe)

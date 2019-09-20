@@ -143,6 +143,7 @@ type RecordType struct {
 // Meta information for invidual measurements
 type Measurement struct {
 	ID          uint `gorm:"primary_key"`
+	Mid         string
 	Description string
 	Host        string
 	StartTime   time.Time
