@@ -20,24 +20,29 @@ func TestMeasurement(t *testing.T) {
 	}
 
 	// start measurement(1)
-	mid1, err := s.StartMeasurement("first", "test.local")
+	muid1, err := s.StartMeasurement("first", "test.local")
 	if err != nil {
 		t.Fatalf("failed to start first measurement: %s", err)
 	}
 
 	// start measurement(2)
-	mid2, err := s.StartMeasurement("second", "test.local")
+	muid2, err := s.StartMeasurement("second", "test.local")
 	if err != nil {
 		t.Fatalf("failed to start second measurement: %s", err)
 	}
 
-	// update stage(1)
-	if err := s.NextStage(mid1); err != nil {
+	// stop stage(1)
+	if err := s.StopStage(muid1); err != nil {
+		t.Fatalf("failed to stop stage for first measurements: %s", err)
+	}
+
+	// start stage(1)
+	if err := s.StartStage(muid1); err != nil {
 		t.Fatalf("failed to start next stage for first measurement: %s", err)
 	}
 
 	// stop measurement(2)
-	if err := s.StopMeasurement(mid2); err != nil {
+	if err := s.StopMeasurement(muid2); err != nil {
 		t.Fatalf("failed to stop second measurement: %s", err)
 	}
 

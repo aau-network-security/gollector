@@ -58,6 +58,7 @@ func main() {
 		log.Fatal().Msgf("failed to parse time from config: %s", err)
 	}
 
+	// todo: use host/port from config
 	cc, err := grpc.Dial("localhost:20000", grpc.WithInsecure())
 	if err != nil {
 		log.Fatal().Msgf("failed to dial: %s", err)
@@ -74,17 +75,10 @@ func main() {
 	if err != nil {
 		log.Fatal().Msgf("failed to start measurement: %s", err)
 	}
-	if startResp.Error.Error != "" {
-		log.Fatal().Msgf("failed to start measurement: %s", startResp.Error.Error)
-	}
-	mid := startResp.MeasurementId.Id
+	muid := startResp.MeasurementId.Id
 
 	defer func() {
-		stopResp, err := mClient.StopMeasurement(ctx, startResp.MeasurementId)
-		if err != nil {
-			log.Fatal().Msgf("failed to stop measurement: %s", err)
-		}
-		if stopResp.Error != "" {
+		if _, err := mClient.StopMeasurement(ctx, startResp.MeasurementId); err != nil {
 			log.Fatal().Msgf("failed to stop measurement: %s", err)
 		}
 	}()
@@ -190,15 +184,11 @@ func main() {
 				}
 
 				md := metadata.New(map[string]string{
-					"mid": mid,
+					"mid": muid,
 				})
 				ctx := metadata.NewOutgoingContext(ctx, md)
-				resp, err := ctClient.StoreLogEntries(ctx, &le)
-				if err != nil {
+				if _, err := ctClient.StoreLogEntries(ctx, &le); err != nil {
 					return errors.Wrap(err, "error while sending log entry to server")
-				}
-				if resp.Error != "" {
-					return errors.New(fmt.Sprintf("failed to store log entry: %s", resp.Error))
 				}
 				return nil
 			}

@@ -94,8 +94,15 @@ type Czds struct {
 	Creds czds.Credentials `yaml:"credentials"`
 }
 
-func (c *Czds) IsValid() bool {
-	return c.Creds.Password != ""
+func (c *Czds) IsValid() error {
+	ce := newConfigErr()
+	if c.Creds.Password == "" {
+		ce.add("password cannot be empty")
+	}
+	if ce.isError() {
+		return &ce
+	}
+	return nil
 }
 
 type Zone struct {

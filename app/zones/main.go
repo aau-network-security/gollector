@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	api "github.com/aau-network-security/go-domains/api/proto"
 	"github.com/aau-network-security/go-domains/app"
 	"github.com/aau-network-security/go-domains/collectors/zone"
 	"github.com/aau-network-security/go-domains/collectors/zone/czds"
@@ -11,12 +12,12 @@ import (
 	"github.com/aau-network-security/go-domains/collectors/zone/http"
 	"github.com/aau-network-security/go-domains/collectors/zone/ssh"
 	"github.com/aau-network-security/go-domains/config"
-	"github.com/aau-network-security/go-domains/store"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/text/encoding"
-	"golang.org/x/text/encoding/charmap"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
 	"net"
 	"sync"
 	"time"
@@ -30,6 +31,8 @@ type zoneConfig struct {
 }
 
 func main() {
+	ctx := context.Background()
+
 	confFile := flag.String("config", "config/config.yml", "location of configuration file")
 	flag.Parse()
 
@@ -38,8 +41,8 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
-	if !conf.Zone.Czds.IsValid() {
-		log.Fatal().Msgf("czds configuration is invalid")
+	if err := conf.Zone.Czds.IsValid(); err != nil {
+		log.Fatal().Msgf("czds configuration is invalid: %s", err)
 	}
 	if err := conf.Zone.Dk.IsValid(); err != nil {
 		log.Fatal().Msgf("dk configuration is invalid: %s", err)
@@ -48,13 +51,6 @@ func main() {
 		log.Fatal().Msgf("com configuration is invalid: %s", err)
 	}
 
-	log.Debug().Msgf("loading store..")
-	s, err := store.NewStore(conf.Store, store.DefaultOpts)
-	if err != nil {
-		log.Fatal().Msgf("error while creating store: %s", err)
-	}
-	log.Debug().Msgf("loaded store..!")
-
 	interval := 24 * time.Hour
 
 	st, err := zone.GetStartTime(conf.Store, interval)
@@ -62,13 +58,28 @@ func main() {
 		log.Fatal().Msgf("error while creating gorm database: %s", err)
 	}
 
-	if err := s.StartMeasurement(conf.Zone.Meta.Description, conf.Zone.Meta.Host); err != nil {
-		log.Fatal().Msgf("failed to start measurement: %s", err)
+	// todo: use host/port from config
+	cc, err := grpc.Dial("localhost:20000", grpc.WithInsecure())
+	if err != nil {
+		log.Fatal().Msgf("failed to dial: %s", err)
 	}
 
+	mClient := api.NewMeasurementApiClient(cc)
+	zfClient := api.NewZoneFileApiClient(cc)
+
+	meta := api.Meta{
+		Description: conf.Ct.Meta.Description,
+		Host:        conf.Ct.Meta.Host,
+	}
+	startResp, err := mClient.StartMeasurement(ctx, &meta)
+	if err != nil {
+		log.Fatal().Msgf("failed to start measurement: %s", err)
+	}
+	muid := startResp.MeasurementId.Id
+
 	defer func() {
-		if err := s.StopMeasurement(); err != nil {
-			log.Fatal().Msgf("error while stopping measurement", err)
+		if _, err := mClient.StopMeasurement(ctx, startResp.MeasurementId); err != nil {
+			log.Fatal().Msgf("failed to stop measurement: %s", err)
 		}
 	}()
 
@@ -81,7 +92,6 @@ func main() {
 	}
 
 	authenticator := czds.NewAuthenticator(conf.Zone.Czds.Creds)
-	ctx := context.Background()
 
 	c := 0
 	fn := func(t time.Time) error {
@@ -89,8 +99,8 @@ func main() {
 			c++
 		}()
 		if c != 0 {
-			if err := s.NextStage(); err != nil {
-				log.Fatal().Msgf("error while starting next stage", err)
+			if _, err := mClient.StartStage(ctx, startResp.MeasurementId); err != nil {
+				return err
 			}
 		}
 		wg := sync.WaitGroup{}
@@ -126,20 +136,22 @@ func main() {
 			return errors.Wrap(err, "failed to create .dk zone retriever")
 		}
 
-		zoneConfigs = append([]zoneConfig{
-			{
-				comZone,
-				[]zone.StreamWrapper{zone.GzipWrapper},
-				zone.ZoneFileHandler,
-				nil,
-			},
-			{
-				dkZone,
-				nil,
-				zone.ListHandler,
-				charmap.ISO8859_1.NewDecoder(),
-			},
-		}, zoneConfigs...)
+		_, _ = comZone, dkZone
+
+		//zoneConfigs = append([]zoneConfig{
+		//	{
+		//		comZone,
+		//		[]zone.StreamWrapper{zone.GzipWrapper},
+		//		zone.ZoneFileHandler,
+		//		nil,
+		//	},
+		//	{
+		//		dkZone,
+		//		nil,
+		//		zone.ListHandler,
+		//		charmap.ISO8859_1.NewDecoder(), // must decode Danish domains in zone file
+		//	},
+		//}, zoneConfigs...)
 
 		sem := semaphore.NewWeighted(10) // allow 10 concurrent zone files to be retrieved
 		wg.Add(len(zoneConfigs))
@@ -175,11 +187,22 @@ func main() {
 						}
 					}
 
-					_, err := s.StoreZoneEntry(t, string(domain))
-					if err != nil {
-						tags := map[string]string{
-							"domain": string(domain),
-						}
+					ts := t.UnixNano() / 1e06
+
+					ze := api.ZoneEntry{
+						Timestamp: ts,
+						Apex:      string(domain),
+					}
+
+					md := metadata.New(map[string]string{
+						"mid": muid,
+					})
+					ctx = metadata.NewOutgoingContext(ctx, md)
+
+					tags := map[string]string{
+						"domain": string(domain),
+					}
+					if _, err := zfClient.StoreZoneEntry(ctx, &ze); err != nil {
 						el.Log(err, config.LogOptions{
 							Tags: tags,
 							Msg:  "failed to store domain",
@@ -207,12 +230,17 @@ func main() {
 					Str("progress", fmt.Sprintf("%d/%d", progress, len(zoneConfigs))).
 					Int("processed domains", c).
 					Msgf("finished zone '%s'", zc.zone.Tld())
+
 			}(el, zc)
 		}
 
 		wg.Wait()
 
-		return s.RunPostHooks()
+		if _, err := mClient.StopStage(ctx, startResp.MeasurementId); err != nil {
+			return err
+		}
+
+		return nil
 	}
 
 	// retrieve all zone files on a daily basis

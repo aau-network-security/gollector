@@ -1,17 +1,16 @@
 syntax = "proto3";
 
-message Error {
-    string error = 1;
-}
+message Empty {}
 
 service MeasurementApi {
     rpc StartMeasurement (Meta) returns (StartMeasurementResponse) {}
-    rpc StopMeasurement (MeasurementId) returns (Error) {}
-    rpc NextStage(MeasurementId) returns (Error) {}
+    rpc StopMeasurement (MeasurementId) returns (Empty) {}
+    rpc StartStage(MeasurementId) returns (Empty) {}
+    rpc StopStage(MeasurementId) returns (Empty) {}
 }
+
 message StartMeasurementResponse {
-    MeasurementId MeasurementId = 1;
-    Error Error = 2;
+    string MeasurementId = 1;
 }
 
 message Meta {
@@ -24,7 +23,7 @@ message MeasurementId {
 }
 
 service CtApi {
-    rpc StoreLogEntries (LogEntry) returns (Error) {}
+    rpc StoreLogEntries (LogEntry) returns (Empty) {}
 }
 
 message LogEntry {
@@ -44,10 +43,10 @@ message Log { // as provided by https://www.certificate-transparency.org/known-l
 }
 
 service ZoneFileApi {
-    rpc StoreZoneEntry(ZoneEntry) returns (Error) {}
+    rpc StoreZoneEntry(ZoneEntry) returns (Empty) {}
 }
 
 message ZoneEntry {
-    string Fqdn = 1;
+    string Apex = 1;
     int64 Timestamp = 2;
 }

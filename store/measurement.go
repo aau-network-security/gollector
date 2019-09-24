@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"github.com/aau-network-security/go-domains/store/models"
+	"github.com/go-pg/pg"
 	"github.com/google/uuid"
 	"strings"
 	"time"
@@ -42,7 +43,7 @@ func (ms *measurementState) SId(muid string) (uint, bool) {
 	return stage.ID, true
 }
 
-func newMId() string {
+func newMuId() string {
 	uuid := uuid.New()
 	return strings.Replace(uuid.String(), "-", "", -1)
 }
@@ -56,9 +57,9 @@ func (s *Store) StartMeasurement(description, host string) (string, error) {
 	defer tx.Rollback()
 
 	tm := time.Now()
-	mid := newMId()
+	muid := newMuId()
 	measure := &models.Measurement{
-		Mid:         mid,
+		Mid:         muid,
 		Description: description,
 		Host:        host,
 		StartTime:   tm,
@@ -69,90 +70,41 @@ func (s *Store) StartMeasurement(description, host string) (string, error) {
 		return "", err
 	}
 
-	stage := &models.Stage{
-		MeasurementID: measure.ID,
-		Stage:         1,
-		StartTime:     tm,
-	}
-
-	if err := tx.Insert(stage); err != nil {
-		return "", err
-	}
-
-	if err := tx.Commit(); err != nil {
-		return "", err
-	}
-
-	s.ms.measurements[mid] = measure
-	s.ms.stages[mid] = stage
-
-	return mid, nil
-}
-
-func (s *Store) NextStage(mid string) error {
-	tx, err := s.db.Begin()
+	stage, err := s.startStage(tx, muid, measure.ID, tm)
 	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	curStage, ok := s.ms.stages[mid]
-	if !ok {
-		return NoActiveStageErr
-	}
-	tm := time.Now()
-
-	curStage.StopTime = tm
-
-	if err := tx.Update(curStage); err != nil {
-		return err
-	}
-
-	newStage := &models.Stage{
-		StartTime:     time.Now(),
-		MeasurementID: curStage.MeasurementID,
-		Stage:         curStage.ID + 1,
-	}
-
-	if err := tx.Insert(newStage); err != nil {
-		return err
+		return "", err
 	}
 
 	if err := tx.Commit(); err != nil {
-		return nil
+		return "", err
 	}
 
-	s.ms.stages[mid] = newStage
+	s.ms.measurements[muid] = measure
+	s.ms.stages[muid] = stage
 
-	return nil
+	return muid, nil
 }
 
 // stops the currently running measurements
-func (s *Store) StopMeasurement(mid string) error {
+func (s *Store) StopMeasurement(muid string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	measure, ok := s.ms.measurements[mid]
+	measure, ok := s.ms.measurements[muid]
 	if !ok {
 		return NoActiveMeasurementErr
 	}
 
-	stage, ok := s.ms.stages[mid]
-	if !ok {
-		return NoActiveStageErr
-	}
-	tm := time.Now()
-
 	// stop stage
-	stage.StopTime = tm
-	if err := tx.Update(stage); err != nil {
+	if err := s.stopStage(tx, muid); err != nil {
 		return err
 	}
 
-	measure.EndTime = tm
+	// stop measurement
+	measure.EndTime = time.Now()
 	if err := tx.Update(measure); err != nil {
 		return err
 	}
@@ -161,8 +113,87 @@ func (s *Store) StopMeasurement(mid string) error {
 		return err
 	}
 
-	delete(s.ms.measurements, mid)
-	delete(s.ms.stages, mid)
+	delete(s.ms.measurements, muid)
+	delete(s.ms.stages, muid)
+
+	return s.RunPostHooks()
+}
+
+// starts a new stage
+func (s *Store) startStage(tx *pg.Tx, muid string, mid uint, tm time.Time) (*models.Stage, error) {
+	curStage, ok := s.ms.stages[muid]
+	var stageId uint
+	switch ok {
+	case true:
+		// bump stage id
+		stageId = curStage.ID + 1
+	case false:
+		// first stage of measurement
+		stageId = 1
+	}
+
+	newStage := &models.Stage{
+		MeasurementID: mid,
+		Stage:         stageId,
+		StartTime:     tm,
+	}
+
+	return newStage, tx.Insert(newStage)
+}
+
+func (s *Store) StartStage(muid string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	measure, ok := s.ms.measurements[muid]
+	if !ok {
+		return NoActiveMeasurementErr
+	}
+
+	newStage, err := s.startStage(tx, muid, measure.ID, time.Now())
+	if err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	s.ms.stages[muid] = newStage
+
+	return nil
+}
+
+// stops the stage that is currently running
+func (s *Store) stopStage(tx *pg.Tx, muid string) error {
+	curStage, ok := s.ms.stages[muid]
+	if !ok {
+		return NoActiveStageErr
+	}
+	tm := time.Now()
+
+	curStage.StopTime = tm
+
+	return tx.Update(curStage)
+}
+
+func (s *Store) StopStage(muid string) error {
+	tx, err := s.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if err := s.stopStage(tx, muid); err != nil {
+		return err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return err
+	}
 
 	return s.RunPostHooks()
 }
