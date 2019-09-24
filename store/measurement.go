@@ -2,7 +2,7 @@ package store
 
 import (
 	"errors"
-	"github.com/aau-network-security/go-domains/models"
+	"github.com/aau-network-security/go-domains/store/models"
 	"github.com/google/uuid"
 	"strings"
 	"time"
@@ -164,5 +164,5 @@ func (s *Store) StopMeasurement(mid string) error {
 	delete(s.ms.measurements, mid)
 	delete(s.ms.stages, mid)
 
-	return nil
+	return s.RunPostHooks()
 }

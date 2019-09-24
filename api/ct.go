@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 	prt "github.com/aau-network-security/go-domains/api/proto"
-	"github.com/aau-network-security/go-domains/ct"
+	"github.com/aau-network-security/go-domains/collectors/ct"
 	"github.com/aau-network-security/go-domains/store"
 	"github.com/google/certificate-transparency-go/x509"
 )
@@ -11,7 +11,7 @@ import (
 func (s *Server) StoreLogEntries(ctx context.Context, inp *prt.LogEntry) (*prt.Error, error) {
 	resp := &prt.Error{}
 
-	mid, err := midFromContext(ctx)
+	muid, err := muidFromContext(ctx)
 	if err != nil {
 		resp.Error = err.Error()
 		return resp, nil
@@ -36,7 +36,7 @@ func (s *Server) StoreLogEntries(ctx context.Context, inp *prt.LogEntry) (*prt.E
 		Ts:    timeFromUnix(inp.Timestamp),
 		Log:   l,
 	}
-	if err := s.Store.StoreLogEntry(mid, entry); err != nil {
+	if err := s.Store.StoreLogEntry(muid, entry); err != nil {
 		resp.Error = err.Error()
 		return resp, nil
 	}

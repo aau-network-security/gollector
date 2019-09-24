@@ -2,7 +2,7 @@ package http
 
 import (
 	"fmt"
-	"github.com/aau-network-security/go-domains/zone"
+	zone2 "github.com/aau-network-security/go-domains/collectors/zone"
 	"io"
 	"net/http"
 )
@@ -45,7 +45,7 @@ func (z *httpZone) Stream() (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
-func New(conf Config, client *http.Client) (zone.Zone, error) {
+func New(conf Config, client *http.Client) (zone2.Zone, error) {
 	if client == nil {
 		client = http.DefaultClient
 	}

@@ -4,10 +4,8 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"fmt"
-	"github.com/aau-network-security/go-domains/ct"
-	"github.com/aau-network-security/go-domains/models"
+	"github.com/aau-network-security/go-domains/store/models"
 	tst "github.com/aau-network-security/go-domains/testing"
-	gct "github.com/google/certificate-transparency-go"
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/google/certificate-transparency-go/x509/pkix"
 	"github.com/jinzhu/gorm"
@@ -38,27 +36,6 @@ func openStore(conf Config) (*Store, *gorm.DB, error) {
 		return nil, nil, errors.Wrap(err, "failed to open store")
 	}
 	return s, g, nil
-}
-
-func logEntryFromCertData(raw []byte, ts uint64) (*gct.LogEntry, error) {
-	cert, err := x509.ParseCertificate(raw)
-	if err != nil {
-		return nil, err
-	}
-	le := &gct.LogEntry{
-		Leaf: gct.MerkleTreeLeaf{
-			TimestampedEntry: &gct.TimestampedEntry{
-				EntryType: gct.X509LogEntryType,
-				X509Entry: &gct.ASN1Cert{
-					Data: raw,
-				},
-				Timestamp: ts,
-			},
-		},
-		X509Cert: cert,
-	}
-
-	return le, nil
 }
 
 func selfSignedCert(notBefore, notAfter time.Time, sans []string) ([]byte, error) {
@@ -141,124 +118,6 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 		if count != tc.count {
 			n := reflect.TypeOf(tc.model)
 			t.Fatalf("expected %d %s elements, but got %d", tc.count, n, count)
-		}
-	}
-}
-
-func TestStore_StoreLogEntry(t *testing.T) {
-	conf := Config{
-		User:     "postgres",
-		Password: "postgres",
-		DBName:   "domains",
-		Host:     "localhost",
-		Port:     10001,
-	}
-
-	s, g, err := openStore(conf)
-	if err != nil {
-		t.Fatalf("failed to create store: %s", err)
-	}
-
-	sanLists := [][]string{
-		{
-			"www.a.com",
-			"www.b.com",
-		},
-		{
-			"mail.a.com",
-			"www.c.com",
-		},
-	}
-	for _, sanList := range sanLists {
-		now := time.Now()
-		raw, err := selfSignedCert(now, now, sanList)
-		if err != nil {
-			t.Fatalf("unexpected error while creating self-signed certificate: %s", err)
-		}
-
-		cert, err := x509.ParseCertificate(raw)
-		if err != nil {
-			t.Fatalf("unexpected error while parsing certificate: %s", err)
-		}
-
-		le := LogEntry{
-			Cert:  cert,
-			Index: 1,
-			Log:   ct.Log{},
-			Ts:    now,
-		}
-
-		if err := s.StoreLogEntry("", le); err != nil {
-			t.Fatalf("unexpected error while storing log entry: %s", err)
-		}
-	}
-	if err := s.RunPostHooks(); err != nil {
-		t.Fatalf("unexpected error while running post hooks: %s", err)
-	}
-
-	// test for correct entry count in database
-	counts := []struct {
-		count uint
-		model interface{}
-	}{
-		{4, &models.Fqdn{}},
-		{3, &models.Apex{}},
-		{4, &models.CertificateToFqdn{}},
-		{2, &models.Certificate{}},
-		{2, &models.LogEntry{}},
-		{1, &models.Tld{}},
-	}
-
-	for _, tc := range counts {
-		var count uint
-		if err := g.Model(tc.model).Count(&count).Error; err != nil {
-			t.Fatalf("failed to retrieve apex count: %s", err)
-		}
-
-		if count != tc.count {
-			t.Fatalf("expected %d elements, but got %d", tc.count, count)
-		}
-	}
-
-	// check initialization of new store
-	opts := Opts{
-		BatchSize:       10,
-		AllowedInterval: 10 * time.Millisecond,
-	}
-
-	s, err = NewStore(conf, opts)
-	if err != nil {
-		t.Fatalf("failed to create store: %s", err)
-	}
-
-	comparisons := []struct {
-		name             string
-		actual, expected int
-	}{
-		{
-			"fqdnByName",
-			len(s.fqdnByName),
-			4,
-		},
-		{
-			"apexByName",
-			len(s.apexByName),
-			3,
-		},
-		{
-			"certByFingerprint",
-			len(s.certByFingerprint),
-			2,
-		},
-		{
-			"logByUrl",
-			len(s.logByUrl),
-			1,
-		},
-	}
-	for _, c := range comparisons {
-		if c.actual != c.expected {
-			t.Fatalf("expected map %s to contain %d values, but got %d", c.name, c.expected, c.actual)
 		}
 	}
 }

@@ -18,16 +18,16 @@ var (
 	MissingMidErr = errors.New("request is missing a measured id")
 )
 
-func midFromContext(ctx context.Context) (string, error) {
+func muidFromContext(ctx context.Context) (string, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
 		return "", MissingMidErr
 	}
-	mids := md.Get("mid")
-	if len(mids) == 0 || mids[0] == "" {
+	muids := md.Get("mid")
+	if len(muids) == 0 || muids[0] == "" {
 		return "", MissingMidErr
 	}
-	return mids[0], nil
+	return muids[0], nil
 }
 
 func timeFromUnix(ts int64) time.Time {

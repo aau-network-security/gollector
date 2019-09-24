@@ -2,8 +2,8 @@ package main
 
 import (
 	"flag"
+	"github.com/aau-network-security/go-domains/collectors/splunk"
 	"github.com/aau-network-security/go-domains/config"
-	"github.com/aau-network-security/go-domains/splunk"
 	"github.com/aau-network-security/go-domains/store"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"

@@ -1,7 +1,7 @@
 package czds
 
 import (
-	"github.com/aau-network-security/go-domains/zone"
+	zone2 "github.com/aau-network-security/go-domains/collectors/zone"
 	"io"
 )
 
@@ -23,7 +23,7 @@ func (z *czdsZone) Stream() (io.ReadCloser, error) {
 	return z.client.GetZone(z.tld)
 }
 
-func New(authenticator *Authenticator, tld string) zone.Zone {
+func New(authenticator *Authenticator, tld string) zone2.Zone {
 	client := NewClient(authenticator)
 
 	zone := czdsZone{

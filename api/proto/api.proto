@@ -9,7 +9,6 @@ service MeasurementApi {
     rpc StopMeasurement (MeasurementId) returns (Error) {}
     rpc NextStage(MeasurementId) returns (Error) {}
 }
-
 message StartMeasurementResponse {
     MeasurementId MeasurementId = 1;
     Error Error = 2;
@@ -42,4 +41,13 @@ message Log { // as provided by https://www.certificate-transparency.org/known-l
     int64 MaximumMergeDelay = 4;
     repeated int64 OperatedBy = 5;
     string DnsApiEndpoint = 6;
+}
+
+service ZoneFileApi {
+    rpc StoreZoneEntry(ZoneEntry) returns (Error) {}
+}
+
+message ZoneEntry {
+    string Fqdn = 1;
+    int64 Timestamp = 2;
 }

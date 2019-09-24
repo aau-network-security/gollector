@@ -5,8 +5,8 @@ import (
 	"flag"
 	"fmt"
 	api "github.com/aau-network-security/go-domains/api/proto"
+	"github.com/aau-network-security/go-domains/collectors/ct"
 	"github.com/aau-network-security/go-domains/config"
-	"github.com/aau-network-security/go-domains/ct"
 	ct2 "github.com/google/certificate-transparency-go"
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/pkg/errors"
@@ -27,6 +27,13 @@ func certFromLogEntry(entry *ct2.LogEntry) (*x509.Certificate, error) {
 	var cert *x509.Certificate
 	if entry.Precert != nil {
 		cert = entry.Precert.TBSCertificate
+		// todo: revert
+		//encoded := &bytes.Buffer{}
+		//encoder := base64.NewEncoder(base64.StdEncoding, encoded)
+		//defer encoder.Close()
+		//encoder.Write(cert.Raw)
+		//encodedStr := fmt.Sprintf("%s", encoded)
+		//_ = encodedStr
 	} else if entry.X509Cert != nil {
 		cert = entry.X509Cert
 	} else {
@@ -186,8 +193,6 @@ func main() {
 					"mid": mid,
 				})
 				ctx := metadata.NewOutgoingContext(ctx, md)
-				//header := grpc.Header(&md)
-				//resp, err := ctClient.StoreLogEntries(ctx, &le, header)
 				resp, err := ctClient.StoreLogEntries(ctx, &le)
 				if err != nil {
 					return errors.Wrap(err, "error while sending log entry to server")
@@ -206,7 +211,7 @@ func main() {
 				WorkerCount: conf.Ct.WorkerCount,
 				StartIndex:  start,
 				//EndIndex:    end,
-				EndIndex: start + 1,
+				EndIndex: start + 100,
 			}
 
 			count, err = ct.Scan(ctx, &l, entryFn, errorFn, opts)

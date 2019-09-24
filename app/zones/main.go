@@ -4,14 +4,14 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"github.com/aau-network-security/go-domains/app"
+	"github.com/aau-network-security/go-domains/collectors/zone"
+	"github.com/aau-network-security/go-domains/collectors/zone/czds"
+	"github.com/aau-network-security/go-domains/collectors/zone/ftp"
+	"github.com/aau-network-security/go-domains/collectors/zone/http"
+	"github.com/aau-network-security/go-domains/collectors/zone/ssh"
 	"github.com/aau-network-security/go-domains/config"
-	"github.com/aau-network-security/go-domains/generic"
 	"github.com/aau-network-security/go-domains/store"
-	"github.com/aau-network-security/go-domains/zone"
-	"github.com/aau-network-security/go-domains/zone/czds"
-	"github.com/aau-network-security/go-domains/zone/ftp"
-	"github.com/aau-network-security/go-domains/zone/http"
-	"github.com/aau-network-security/go-domains/zone/ssh"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/semaphore"
@@ -216,7 +216,7 @@ func main() {
 	}
 
 	// retrieve all zone files on a daily basis
-	if err := generic.Repeat(fn, st, interval, -1); err != nil {
+	if err := app.Repeat(fn, st, interval, -1); err != nil {
 		log.Fatal().Msgf("error while retrieving zone files: %s", err)
 	}
 }

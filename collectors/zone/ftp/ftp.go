@@ -1,7 +1,7 @@
 package ftp
 
 import (
-	"github.com/aau-network-security/go-domains/zone"
+	zone2 "github.com/aau-network-security/go-domains/collectors/zone"
 	"github.com/jlaffaye/ftp"
 	"io"
 	"net"
@@ -49,7 +49,7 @@ func (z *ftpZone) Stream() (io.ReadCloser, error) {
 	return z.client.Retr(z.conf.File)
 }
 
-func New(conf Config, dialFunc func(network, address string) (net.Conn, error)) (zone.Zone, error) {
+func New(conf Config, dialFunc func(network, address string) (net.Conn, error)) (zone2.Zone, error) {
 	var opts []ftp.DialOption
 	if dialFunc != nil {
 		opts = append(opts, ftp.DialWithDialFunc(dialFunc))

@@ -1,7 +1,7 @@
 package ftp
 
 import (
-	"github.com/aau-network-security/go-domains/zone"
+	zone2 "github.com/aau-network-security/go-domains/collectors/zone"
 	"io"
 	"os"
 	"testing"
@@ -32,13 +32,13 @@ func TestProcess(t *testing.T) {
 		return nil
 	}
 
-	opts := zone.ProcessOpts{
+	opts := zone2.ProcessOpts{
 		DomainFn:       f,
-		StreamWrappers: []zone.StreamWrapper{zone.GzipWrapper},
-		StreamHandler:  zone.ZoneFileHandler,
+		StreamWrappers: []zone2.StreamWrapper{zone2.GzipWrapper},
+		StreamHandler:  zone2.ZoneFileHandler,
 	}
 
-	if err := zone.Process(&z, opts); err != nil {
+	if err := zone2.Process(&z, opts); err != nil {
 		t.Fatalf("Error while processing ftp zone file: %s", err)
 	}
 

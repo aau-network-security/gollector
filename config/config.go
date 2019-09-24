@@ -1,11 +1,11 @@
 package config
 
 import (
+	"github.com/aau-network-security/go-domains/collectors/zone/czds"
+	"github.com/aau-network-security/go-domains/collectors/zone/ftp"
+	"github.com/aau-network-security/go-domains/collectors/zone/http"
+	"github.com/aau-network-security/go-domains/collectors/zone/ssh"
 	"github.com/aau-network-security/go-domains/store"
-	"github.com/aau-network-security/go-domains/zone/czds"
-	"github.com/aau-network-security/go-domains/zone/ftp"
-	"github.com/aau-network-security/go-domains/zone/http"
-	"github.com/aau-network-security/go-domains/zone/ssh"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
