@@ -10,7 +10,7 @@ service MeasurementApi {
 }
 
 message StartMeasurementResponse {
-    string MeasurementId = 1;
+    MeasurementId MeasurementId = 1;
 }
 
 message Meta {
@@ -43,10 +43,15 @@ message Log { // as provided by https://www.certificate-transparency.org/known-l
 }
 
 service ZoneFileApi {
-    rpc StoreZoneEntry(ZoneEntry) returns (Empty) {}
+    rpc StoreZoneEntry(stream ZoneEntry) returns (stream Result) {}
 }
 
 message ZoneEntry {
     string Apex = 1;
     int64 Timestamp = 2;
+}
+
+message Result {
+    bool Ok = 1;
+    string Error = 2;
 }

@@ -16,8 +16,10 @@ import (
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"io"
 	"net"
 	"sync"
 	"time"
@@ -65,7 +67,6 @@ func main() {
 	}
 
 	mClient := api.NewMeasurementApiClient(cc)
-	zfClient := api.NewZoneFileApiClient(cc)
 
 	meta := api.Meta{
 		Description: conf.Ct.Meta.Description,
@@ -82,6 +83,11 @@ func main() {
 			log.Fatal().Msgf("failed to stop measurement: %s", err)
 		}
 	}()
+
+	md := metadata.New(map[string]string{
+		"mid": muid,
+	})
+	ctx = metadata.NewOutgoingContext(ctx, md)
 
 	var h *config.SentryHub
 	if conf.Sentry.Enabled {
@@ -103,6 +109,29 @@ func main() {
 				return err
 			}
 		}
+
+		// obtain stream to daemon
+		stream, err := api.NewZoneFileApiClient(cc).StoreZoneEntry(ctx)
+		if err != nil {
+			log.Fatal().Msgf("failed to obtain stream to api: %s", err)
+		}
+
+		// asynchronously read messages from stream and output
+		go func() {
+			for {
+				res, err := stream.Recv()
+				if err == io.EOF {
+					return
+				}
+				if err != nil {
+					log.Error().Msgf("failed to receive message: %s", err)
+				}
+				if !res.Ok {
+					log.Error().Msgf("error while processing zone file entry: %s", res.Error)
+				}
+			}
+		}()
+
 		wg := sync.WaitGroup{}
 		var zoneConfigs []zoneConfig
 
@@ -138,20 +167,20 @@ func main() {
 
 		_, _ = comZone, dkZone
 
-		//zoneConfigs = append([]zoneConfig{
-		//	{
-		//		comZone,
-		//		[]zone.StreamWrapper{zone.GzipWrapper},
-		//		zone.ZoneFileHandler,
-		//		nil,
-		//	},
-		//	{
-		//		dkZone,
-		//		nil,
-		//		zone.ListHandler,
-		//		charmap.ISO8859_1.NewDecoder(), // must decode Danish domains in zone file
-		//	},
-		//}, zoneConfigs...)
+		zoneConfigs = append([]zoneConfig{
+			//{
+			//	comZone,
+			//	[]zone.StreamWrapper{zone.GzipWrapper},
+			//	zone.ZoneFileHandler,
+			//	nil,
+			//},
+			{
+				dkZone,
+				nil,
+				zone.ListHandler,
+				charmap.ISO8859_1.NewDecoder(), // must decode Danish domains in zone file
+			},
+		}, zoneConfigs...)
 
 		sem := semaphore.NewWeighted(10) // allow 10 concurrent zone files to be retrieved
 		wg.Add(len(zoneConfigs))
@@ -202,7 +231,7 @@ func main() {
 					tags := map[string]string{
 						"domain": string(domain),
 					}
-					if _, err := zfClient.StoreZoneEntry(ctx, &ze); err != nil {
+					if err := stream.Send(&ze); err != nil {
 						el.Log(err, config.LogOptions{
 							Tags: tags,
 							Msg:  "failed to store domain",
@@ -235,6 +264,10 @@ func main() {
 		}
 
 		wg.Wait()
+
+		if err := stream.CloseSend(); err != nil {
+			log.Debug().Msgf("failed to close stream: %s", err)
+		}
 
 		if _, err := mClient.StopStage(ctx, startResp.MeasurementId); err != nil {
 			return err

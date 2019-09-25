@@ -1,22 +1,44 @@
 package api
 
 import (
-	"context"
 	prt "github.com/aau-network-security/go-domains/api/proto"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"io"
 )
 
-func (s *Server) StoreZoneEntry(ctx context.Context, ze *prt.ZoneEntry) (*prt.Empty, error) {
-	muid, err := muidFromContext(ctx)
+func (s *Server) StoreZoneEntry(server prt.ZoneFileApi_StoreZoneEntryServer) error {
+	muid, err := muidFromContext(server.Context())
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+		return status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	t := timeFromUnix(ze.Timestamp)
+	for {
+		ze, err := server.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
 
-	if _, err := s.Store.StoreZoneEntry(muid, t, ze.Apex); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		t := timeFromUnix(ze.Timestamp)
+
+		res := &prt.Result{
+			Ok:    true,
+			Error: "",
+		}
+		if _, err := s.Store.StoreZoneEntry(muid, t, ze.Apex); err != nil {
+			res = &prt.Result{
+				Ok:    false,
+				Error: err.Error(),
+			}
+		}
+		if err := server.Send(res); err != nil {
+			log.Debug().Msgf("failed to send response to client")
+		}
 	}
-	return &prt.Empty{}, nil
+
+	return nil
 }
