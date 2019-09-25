@@ -32,6 +32,65 @@ type zoneConfig struct {
 	decoder        *encoding.Decoder
 }
 
+type bufferedStream struct {
+	stream api.ZoneFileApi_StoreZoneEntryClient
+	size   int
+	buffer []*api.ZoneEntry
+	sem    *semaphore.Weighted
+	l      sync.Mutex
+}
+
+func (bs *bufferedStream) Recv() (*api.Result, error) {
+	res, err := bs.stream.Recv()
+	if err != io.EOF {
+		bs.sem.Release(1)
+	}
+	return res, err
+}
+
+func (bs *bufferedStream) Send(ctx context.Context, ze *api.ZoneEntry) error {
+	bs.l.Lock()
+	defer bs.l.Unlock()
+	bs.buffer = append(bs.buffer, ze)
+	if len(bs.buffer) >= bs.size {
+		batch := api.ZoneEntryBatch{
+			ZoneEntries: []*api.ZoneEntry{},
+		}
+
+		if err := bs.sem.Acquire(ctx, int64(len(bs.buffer))); err != nil {
+			return err
+		}
+
+		for _, ze := range bs.buffer {
+			batch.ZoneEntries = append(batch.ZoneEntries, ze)
+		}
+
+		if err := bs.stream.Send(&batch); err != nil {
+			return err
+		}
+
+		bs.buffer = []*api.ZoneEntry{}
+	}
+	return nil
+}
+
+func newBufferedStream(ctx context.Context, cc *grpc.ClientConn, batchSize int, windowSize int64) (*bufferedStream, error) {
+	str, err := api.NewZoneFileApiClient(cc).StoreZoneEntry(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sem := semaphore.NewWeighted(windowSize)
+
+	bs := bufferedStream{
+		stream: str,
+		size:   batchSize,
+		buffer: []*api.ZoneEntry{},
+		sem:    sem,
+		l:      sync.Mutex{},
+	}
+	return &bs, nil
+}
+
 func main() {
 	ctx := context.Background()
 
@@ -84,11 +143,6 @@ func main() {
 		}
 	}()
 
-	md := metadata.New(map[string]string{
-		"mid": muid,
-	})
-	ctx = metadata.NewOutgoingContext(ctx, md)
-
 	var h *config.SentryHub
 	if conf.Sentry.Enabled {
 		h, err = config.NewSentryHub(conf)
@@ -111,7 +165,12 @@ func main() {
 		}
 
 		// obtain stream to daemon
-		stream, err := api.NewZoneFileApiClient(cc).StoreZoneEntry(ctx)
+		md := metadata.New(map[string]string{
+			"mid": muid,
+		})
+		ctx = metadata.NewOutgoingContext(ctx, md)
+
+		bs, err := newBufferedStream(ctx, cc, 1000, 10000)
 		if err != nil {
 			log.Fatal().Msgf("failed to obtain stream to api: %s", err)
 		}
@@ -119,7 +178,7 @@ func main() {
 		// asynchronously read messages from stream and output
 		go func() {
 			for {
-				res, err := stream.Recv()
+				res, err := bs.Recv()
 				if err == io.EOF {
 					return
 				}
@@ -182,7 +241,7 @@ func main() {
 			},
 		}, zoneConfigs...)
 
-		sem := semaphore.NewWeighted(10) // allow 10 concurrent zone files to be retrieved
+		zfSem := semaphore.NewWeighted(10) // allow 10 concurrent zone files to be retrieved
 		wg.Add(len(zoneConfigs))
 		progress := 0
 		for _, zc := range zoneConfigs {
@@ -199,11 +258,11 @@ func main() {
 
 			go func(el config.ErrLogger, zc zoneConfig) {
 				defer wg.Done()
-				if err := sem.Acquire(ctx, 1); err != nil {
+				if err := zfSem.Acquire(ctx, 1); err != nil {
 					el.Log(err, config.LogOptions{Msg: "failed to acquire semaphore"})
 					return
 				}
-				defer sem.Release(1)
+				defer zfSem.Release(1)
 
 				c := 0
 				domainFn := func(domain []byte) error {
@@ -231,7 +290,8 @@ func main() {
 					tags := map[string]string{
 						"domain": string(domain),
 					}
-					if err := stream.Send(&ze); err != nil {
+
+					if err := bs.Send(ctx, &ze); err != nil {
 						el.Log(err, config.LogOptions{
 							Tags: tags,
 							Msg:  "failed to store domain",
@@ -265,7 +325,7 @@ func main() {
 
 		wg.Wait()
 
-		if err := stream.CloseSend(); err != nil {
+		if err := bs.stream.CloseSend(); err != nil {
 			log.Debug().Msgf("failed to close stream: %s", err)
 		}
 

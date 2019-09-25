@@ -43,7 +43,11 @@ message Log { // as provided by https://www.certificate-transparency.org/known-l
 }
 
 service ZoneFileApi {
-    rpc StoreZoneEntry(stream ZoneEntry) returns (stream Result) {}
+    rpc StoreZoneEntry(stream ZoneEntryBatch) returns (stream Result) {}
+}
+
+message ZoneEntryBatch {
+    repeated ZoneEntry ZoneEntries = 1;
 }
 
 message ZoneEntry {

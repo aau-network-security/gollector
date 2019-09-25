@@ -15,7 +15,7 @@ func (s *Server) StoreZoneEntry(server prt.ZoneFileApi_StoreZoneEntryServer) err
 	}
 
 	for {
-		ze, err := server.Recv()
+		batch, err := server.Recv()
 		if err == io.EOF {
 			break
 		}
@@ -23,21 +23,24 @@ func (s *Server) StoreZoneEntry(server prt.ZoneFileApi_StoreZoneEntryServer) err
 			return err
 		}
 
-		t := timeFromUnix(ze.Timestamp)
+		for _, ze := range batch.ZoneEntries {
+			t := timeFromUnix(ze.Timestamp)
 
-		res := &prt.Result{
-			Ok:    true,
-			Error: "",
-		}
-		if _, err := s.Store.StoreZoneEntry(muid, t, ze.Apex); err != nil {
-			res = &prt.Result{
-				Ok:    false,
-				Error: err.Error(),
+			res := &prt.Result{
+				Ok:    true,
+				Error: "",
+			}
+			if _, err := s.Store.StoreZoneEntry(muid, t, ze.Apex); err != nil {
+				res = &prt.Result{
+					Ok:    false,
+					Error: err.Error(),
+				}
+			}
+			if err := server.Send(res); err != nil {
+				log.Debug().Msgf("failed to send response to client")
 			}
 		}
-		if err := server.Send(res); err != nil {
-			log.Debug().Msgf("failed to send response to client")
-		}
+
 	}
 
 	return nil
