@@ -50,6 +50,7 @@ func (s *Server) Run() error {
 	prt.RegisterCtApiServer(serv, s)
 	prt.RegisterMeasurementApiServer(serv, s)
 	prt.RegisterZoneFileApiServer(serv, s)
+	prt.RegisterSplunkApiServer(serv, s)
 
 	log.Debug().Msgf("running gRPC server on %s", addr)
 	return serv.Serve(lis)

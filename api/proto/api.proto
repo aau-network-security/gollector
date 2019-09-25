@@ -59,3 +59,17 @@ message Result {
     bool Ok = 1;
     string Error = 2;
 }
+
+service SplunkApi {
+    rpc StorePassiveEntry(stream SplunkEntryBatch) returns (stream Result) {}
+}
+
+message SplunkEntryBatch {
+    repeated SplunkEntry SplunkEntries = 1;
+}
+
+message SplunkEntry {
+    string Query = 1;
+    string QueryType = 2;
+    int64 Timestamp = 3;
+}

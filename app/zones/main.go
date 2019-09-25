@@ -282,16 +282,10 @@ func main() {
 						Apex:      string(domain),
 					}
 
-					md := metadata.New(map[string]string{
-						"mid": muid,
-					})
-					ctx = metadata.NewOutgoingContext(ctx, md)
-
-					tags := map[string]string{
-						"domain": string(domain),
-					}
-
 					if err := bs.Send(ctx, &ze); err != nil {
+						tags := map[string]string{
+							"domain": string(domain),
+						}
 						el.Log(err, config.LogOptions{
 							Tags: tags,
 							Msg:  "failed to store domain",
