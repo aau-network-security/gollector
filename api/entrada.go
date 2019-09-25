@@ -1,7 +1,7 @@
 package api
 
 import (
-	prt "github.com/aau-network-security/go-domains/api/proto"
+	api "github.com/aau-network-security/go-domains/api/proto"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -9,7 +9,7 @@ import (
 	"sync"
 )
 
-func (s *Server) StoreZoneEntry(str prt.ZoneFileApi_StoreZoneEntryServer) error {
+func (s *Server) StoreEntradaEntry(str api.EntradaApi_StoreEntradaEntryServer) error {
 	muid, err := muidFromContext(str.Context())
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
@@ -26,15 +26,16 @@ func (s *Server) StoreZoneEntry(str prt.ZoneFileApi_StoreZoneEntryServer) error 
 			return status.Error(codes.Internal, err.Error())
 		}
 
-		for _, ze := range batch.ZoneEntries {
-			ts := timeFromUnix(ze.Timestamp)
+		for _, ee := range batch.EntradaEntries {
+			ts := timeFromUnix(ee.Timestamp)
 
-			res := &prt.Result{
+			res := &api.Result{
 				Ok:    true,
 				Error: "",
 			}
-			if _, err := s.Store.StoreZoneEntry(muid, ts, ze.Apex); err != nil {
-				res = &prt.Result{
+
+			if _, err := s.Store.StoreEntradaEntry(muid, ee.Fqdn, ts); err != nil {
+				res = &api.Result{
 					Ok:    false,
 					Error: err.Error(),
 				}

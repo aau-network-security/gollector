@@ -38,6 +38,7 @@ type bufferedStream struct {
 	buffer []*api.ZoneEntry
 	sem    *semaphore.Weighted
 	l      sync.Mutex
+	done   chan bool
 }
 
 func (bs *bufferedStream) Recv() (*api.Result, error) {
@@ -70,6 +71,19 @@ func (bs *bufferedStream) Send(ctx context.Context, ze *api.ZoneEntry) error {
 		}
 
 		bs.buffer = []*api.ZoneEntry{}
+	}
+	return nil
+}
+
+func (bs *bufferedStream) CloseSend(ctx context.Context) error {
+	if err := bs.stream.CloseSend(); err != nil {
+		return err
+	}
+	select {
+	case <-bs.done:
+		break
+	case <-ctx.Done():
+		break
 	}
 	return nil
 }
@@ -180,7 +194,7 @@ func main() {
 			for {
 				res, err := bs.Recv()
 				if err == io.EOF {
-					return
+					break
 				}
 				if err != nil {
 					log.Error().Msgf("failed to receive message: %s", err)
@@ -189,6 +203,7 @@ func main() {
 					log.Error().Msgf("error while processing zone file entry: %s", res.Error)
 				}
 			}
+			bs.done <- true
 		}()
 
 		wg := sync.WaitGroup{}
@@ -327,7 +342,7 @@ func main() {
 			return err
 		}
 
-		return nil
+		return bs.CloseSend(ctx)
 	}
 
 	// retrieve all zone files on a daily basis

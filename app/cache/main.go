@@ -28,6 +28,10 @@ func main() {
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}
 
+	la := store.NewSha256LabelAnonymizer()
+	a := store.NewAnonymizer(la)
+	s = s.WithAnonymizer(a)
+
 	serv := api.Server{
 		Conf:  conf.Api,
 		Store: s,

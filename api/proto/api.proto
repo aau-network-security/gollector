@@ -73,3 +73,16 @@ message SplunkEntry {
     string QueryType = 2;
     int64 Timestamp = 3;
 }
+
+service EntradaApi {
+    rpc StoreEntradaEntry(stream EntradaEntryBatch) returns (stream Result) {}
+}
+
+message EntradaEntryBatch {
+    repeated EntradaEntry EntradaEntries = 1;
+}
+
+message EntradaEntry {
+    string Fqdn = 1;
+    int64 Timestamp = 2;
+}

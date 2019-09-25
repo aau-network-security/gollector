@@ -27,13 +27,13 @@ func (s *Server) StorePassiveEntry(str api.SplunkApi_StorePassiveEntryServer) er
 		}
 
 		for _, se := range batch.SplunkEntries {
-			t := timeFromUnix(se.Timestamp)
+			ts := timeFromUnix(se.Timestamp)
 
 			res := &api.Result{
 				Ok:    true,
 				Error: "",
 			}
-			if _, err := s.Store.StorePassiveEntry(muid, se.Query, se.QueryType, t); err != nil {
+			if _, err := s.Store.StorePassiveEntry(muid, se.Query, se.QueryType, ts); err != nil {
 				res = &api.Result{
 					Ok:    false,
 					Error: err.Error(),
