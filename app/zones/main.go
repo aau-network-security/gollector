@@ -54,28 +54,40 @@ func (bs *bufferedStream) Send(ctx context.Context, ze *api.ZoneEntry) error {
 	defer bs.l.Unlock()
 	bs.buffer = append(bs.buffer, ze)
 	if len(bs.buffer) >= bs.size {
-		batch := api.ZoneEntryBatch{
-			ZoneEntries: []*api.ZoneEntry{},
-		}
-
-		if err := bs.sem.Acquire(ctx, int64(len(bs.buffer))); err != nil {
+		if err := bs.flush(ctx); err != nil {
 			return err
 		}
-
-		for _, ze := range bs.buffer {
-			batch.ZoneEntries = append(batch.ZoneEntries, ze)
-		}
-
-		if err := bs.stream.Send(&batch); err != nil {
-			return err
-		}
-
-		bs.buffer = []*api.ZoneEntry{}
 	}
 	return nil
 }
 
+func (bs *bufferedStream) flush(ctx context.Context) error {
+	batch := api.ZoneEntryBatch{
+		ZoneEntries: []*api.ZoneEntry{},
+	}
+
+	if err := bs.sem.Acquire(ctx, int64(len(bs.buffer))); err != nil {
+		return err
+	}
+
+	for _, ze := range bs.buffer {
+		batch.ZoneEntries = append(batch.ZoneEntries, ze)
+	}
+
+	if err := bs.stream.Send(&batch); err != nil {
+		return err
+	}
+
+	bs.buffer = []*api.ZoneEntry{}
+
+	return nil
+}
+
 func (bs *bufferedStream) CloseSend(ctx context.Context) error {
+	if err := bs.flush(ctx); err != nil {
+		return err
+	}
+
 	if err := bs.stream.CloseSend(); err != nil {
 		return err
 	}

@@ -45,7 +45,7 @@ func (s *Server) StoreEntradaEntry(str api.EntradaApi_StoreEntradaEntryServer) e
 			go func() {
 				defer wg.Done()
 				if err := str.Send(res); err != nil {
-					log.Debug().Msgf("failed to send response to client")
+					log.Debug().Msgf("failed to send response to client: %s", err)
 				}
 			}()
 		}

@@ -13,8 +13,10 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/vbauerster/mpb"
 	"github.com/vbauerster/mpb/decor"
+	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"io"
 	"sync"
 	"time"
 )
@@ -27,19 +29,97 @@ func certFromLogEntry(entry *ct2.LogEntry) (*x509.Certificate, error) {
 	var cert *x509.Certificate
 	if entry.Precert != nil {
 		cert = entry.Precert.TBSCertificate
-		// todo: revert
-		//encoded := &bytes.Buffer{}
-		//encoder := base64.NewEncoder(base64.StdEncoding, encoded)
-		//defer encoder.Close()
-		//encoder.Write(cert.Raw)
-		//encodedStr := fmt.Sprintf("%s", encoded)
-		//_ = encodedStr
 	} else if entry.X509Cert != nil {
 		cert = entry.X509Cert
 	} else {
 		return nil, UnsupportedCertTypeErr
 	}
 	return cert, nil
+}
+
+type bufferedStream struct {
+	stream api.CtApi_StoreLogEntriesClient
+	size   int
+	buffer []*api.LogEntry
+	sem    *semaphore.Weighted
+	l      sync.Mutex
+	done   chan bool
+}
+
+func (bs *bufferedStream) Recv() (*api.Result, error) {
+	res, err := bs.stream.Recv()
+	if err != io.EOF {
+		bs.sem.Release(1)
+	}
+	return res, err
+}
+
+func (bs *bufferedStream) Send(ctx context.Context, le *api.LogEntry) error {
+	bs.l.Lock()
+	defer bs.l.Unlock()
+	bs.buffer = append(bs.buffer, le)
+	if len(bs.buffer) >= bs.size {
+		if err := bs.flush(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (bs *bufferedStream) flush(ctx context.Context) error {
+	batch := api.LogEntryBatch{
+		LogEntries: []*api.LogEntry{},
+	}
+	if err := bs.sem.Acquire(ctx, int64(len(bs.buffer))); err != nil {
+		return err
+	}
+
+	for _, se := range bs.buffer {
+		batch.LogEntries = append(batch.LogEntries, se)
+	}
+
+	if err := bs.stream.Send(&batch); err != nil {
+		return err
+	}
+
+	bs.buffer = []*api.LogEntry{}
+
+	return nil
+}
+
+func (bs *bufferedStream) CloseSend(ctx context.Context) error {
+	if err := bs.flush(ctx); err != nil {
+		return err
+	}
+
+	if err := bs.stream.CloseSend(); err != nil {
+		return err
+	}
+	select {
+	case <-bs.done:
+		break
+	case <-ctx.Done():
+		break
+	}
+	return nil
+}
+
+func newBufferedStream(ctx context.Context, cc *grpc.ClientConn, batchSize int, windowSize int64) (*bufferedStream, error) {
+	str, err := api.NewCtApiClient(cc).StoreLogEntries(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sem := semaphore.NewWeighted(windowSize)
+
+	bs := bufferedStream{
+		stream: str,
+		size:   batchSize,
+		buffer: []*api.LogEntry{},
+		sem:    sem,
+		l:      sync.Mutex{},
+		done:   make(chan bool),
+	}
+	return &bs, nil
 }
 
 func main() {
@@ -65,7 +145,6 @@ func main() {
 	}
 
 	mClient := api.NewMeasurementApiClient(cc)
-	ctClient := api.NewCtApiClient(cc)
 
 	meta := api.Meta{
 		Description: conf.Ct.Meta.Description,
@@ -81,6 +160,34 @@ func main() {
 		if _, err := mClient.StopMeasurement(ctx, startResp.MeasurementId); err != nil {
 			log.Fatal().Msgf("failed to stop measurement: %s", err)
 		}
+	}()
+
+	// obtain stream to daemon
+	md := metadata.New(map[string]string{
+		"mid": muid,
+	})
+	ctx = metadata.NewOutgoingContext(ctx, md)
+
+	bs, err := newBufferedStream(ctx, cc, 1000, 10000)
+	if err != nil {
+		log.Fatal().Msgf("failed to obtain stream to api: %s", err)
+	}
+
+	// asynchronously read messages from stream and output
+	go func() {
+		for {
+			res, err := bs.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				log.Error().Msgf("failed to receive message: %s", err)
+			}
+			if !res.Ok {
+				log.Error().Msgf("error while processing log entry: %s", res.Error)
+			}
+		}
+		bs.done <- true
 	}()
 
 	logList, err := ct.AllLogs()
@@ -183,11 +290,7 @@ func main() {
 					Log:         &log,
 				}
 
-				md := metadata.New(map[string]string{
-					"mid": muid,
-				})
-				ctx := metadata.NewOutgoingContext(ctx, md)
-				if _, err := ctClient.StoreLogEntries(ctx, &le); err != nil {
+				if err := bs.Send(ctx, &le); err != nil {
 					return errors.Wrap(err, "error while sending log entry to server")
 				}
 				return nil
@@ -214,4 +317,8 @@ func main() {
 		}(el, l)
 	}
 	p.Wait()
+
+	if err := bs.CloseSend(ctx); err != nil {
+		log.Fatal().Msgf("error while closing connection to server: %s", err)
+	}
 }

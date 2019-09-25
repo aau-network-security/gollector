@@ -23,7 +23,11 @@ message MeasurementId {
 }
 
 service CtApi {
-    rpc StoreLogEntries (LogEntry) returns (Empty) {}
+    rpc StoreLogEntries (stream LogEntryBatch) returns (stream Result) {}
+}
+
+message LogEntryBatch {
+    repeated LogEntry LogEntries = 1;
 }
 
 message LogEntry {

@@ -37,27 +37,39 @@ func (bs *bufferedStream) Send(ctx context.Context, se *api.SplunkEntry) error {
 	defer bs.l.Unlock()
 	bs.buffer = append(bs.buffer, se)
 	if len(bs.buffer) >= bs.size {
-		batch := api.SplunkEntryBatch{
-			SplunkEntries: []*api.SplunkEntry{},
-		}
-		if err := bs.sem.Acquire(ctx, int64(len(bs.buffer))); err != nil {
+		if err := bs.flush(ctx); err != nil {
 			return err
 		}
-
-		for _, ze := range bs.buffer {
-			batch.SplunkEntries = append(batch.SplunkEntries, ze)
-		}
-
-		if err := bs.stream.Send(&batch); err != nil {
-			return err
-		}
-
-		bs.buffer = []*api.SplunkEntry{}
 	}
 	return nil
 }
 
+func (bs *bufferedStream) flush(ctx context.Context) error {
+	batch := api.SplunkEntryBatch{
+		SplunkEntries: []*api.SplunkEntry{},
+	}
+	if err := bs.sem.Acquire(ctx, int64(len(bs.buffer))); err != nil {
+		return err
+	}
+
+	for _, ze := range bs.buffer {
+		batch.SplunkEntries = append(batch.SplunkEntries, ze)
+	}
+
+	if err := bs.stream.Send(&batch); err != nil {
+		return err
+	}
+
+	bs.buffer = []*api.SplunkEntry{}
+
+	return nil
+}
+
 func (bs *bufferedStream) CloseSend(ctx context.Context) error {
+	if err := bs.flush(ctx); err != nil {
+		return err
+	}
+
 	if err := bs.stream.CloseSend(); err != nil {
 		return err
 	}
@@ -158,7 +170,7 @@ func main() {
 				log.Error().Msgf("failed to receive message: %s", err)
 			}
 			if !res.Ok {
-				log.Error().Msgf("error while processing zone file entry: %s", res.Error)
+				log.Error().Msgf("error while processing splunk entry: %s", res.Error)
 			}
 		}
 		bs.done <- true

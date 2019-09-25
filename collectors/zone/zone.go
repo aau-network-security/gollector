@@ -76,12 +76,15 @@ func ZoneFileHandler(str io.Reader, f DomainFunc) error {
 // this handler reads files that contains a list of domain names
 func ListHandler(str io.Reader, f DomainFunc) error {
 	scanner := bufio.NewScanner(str)
+	start := time.Now()
 	for scanner.Scan() {
 		b := scanner.Bytes()
 		if err := f(b); err != nil {
 			return nil
 		}
 	}
+	passed := time.Now().Sub(start)
+	log.Debug().Msgf("Took %.1f ms", float64(passed.Nanoseconds())/1e06)
 	return nil
 }
 

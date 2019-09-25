@@ -44,7 +44,7 @@ func (s *Server) StoreZoneEntry(str prt.ZoneFileApi_StoreZoneEntryServer) error 
 			go func() {
 				defer wg.Done()
 				if err := str.Send(res); err != nil {
-					log.Debug().Msgf("failed to send response to client")
+					log.Debug().Msgf("failed to send response to client: %s", err)
 				}
 			}()
 		}
