@@ -6,8 +6,11 @@ import (
 	"fmt"
 	prt "github.com/aau-network-security/go-domains/api/proto"
 	"github.com/aau-network-security/go-domains/store"
+	"github.com/go-acme/lego/providers/dns/cloudflare"
+	"github.com/mholt/certmagic"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
 	"net"
 	"time"
@@ -45,7 +48,29 @@ func (s *Server) Run() error {
 		return err
 	}
 
-	serv := grpc.NewServer()
+	var opts []grpc.ServerOption
+	if s.Conf.Api.Tls.Enabled {
+		provider, err := cloudflare.NewDNSProviderConfig(s.Conf.Api.Tls.Auth.ToCertmagicConfig())
+		if err != nil {
+			return err
+		}
+		certmagic.Default.DNSProvider = provider
+
+		domains := []string{s.Conf.Api.Host}
+		if err := certmagic.Manage(domains); err != nil {
+			return err
+		}
+
+		creds, err := credentials.NewServerTLSFromFile(
+			s.Conf.Api.Tls.CertificateFile,
+			s.Conf.Api.Tls.KeyFile,
+		)
+		if err != nil {
+			return err
+		}
+		opts = append(opts, grpc.Creds(creds))
+	}
+	serv := grpc.NewServer(opts...)
 	prt.RegisterCtApiServer(serv, s)
 	prt.RegisterMeasurementApiServer(serv, s)
 	prt.RegisterZoneFileApiServer(serv, s)

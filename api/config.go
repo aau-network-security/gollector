@@ -1,6 +1,9 @@
 package api
 
-import "github.com/aau-network-security/go-domains/store"
+import (
+	"github.com/aau-network-security/go-domains/store"
+	"github.com/go-acme/lego/providers/dns/cloudflare"
+)
 
 type Config struct {
 	Store store.Config `yaml:"store"`
@@ -10,9 +13,24 @@ type Config struct {
 type Api struct {
 	Host string `yaml:"host"`
 	Port int    `yaml:"port"`
-	Tls  struct {
-		Enabled         bool   `yaml:"enabled"`
-		CertificateFile string `yaml:"certificate-file"`
-		KeyFile         string `yaml:"key-file"`
-	} `yaml:"tls"`
+	Tls  Tls    `yaml:"tls"`
+}
+
+type Tls struct {
+	Enabled         bool           `yaml:"enabled"`
+	CertificateFile string         `yaml:"certificate-file"`
+	KeyFile         string         `yaml:"key-file"`
+	Auth            CloudflareAuth `yaml:"auth"`
+}
+
+type CloudflareAuth struct {
+	Email  string `yaml:"email"`
+	ApiKey string `yaml:"api-key"`
+}
+
+func (auth *CloudflareAuth) ToCertmagicConfig() *cloudflare.Config {
+	conf := cloudflare.NewDefaultConfig()
+	conf.AuthEmail = auth.Email
+	conf.AuthKey = auth.ApiKey
+	return conf
 }
