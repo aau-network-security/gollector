@@ -1,4 +1,4 @@
-package config
+package app
 
 import (
 	"github.com/getsentry/sentry-go"
@@ -19,9 +19,14 @@ type SentryHub struct {
 	client *sentry.Client
 }
 
-func NewSentryHub(conf config) (*SentryHub, error) {
+type Sentry struct {
+	Enabled bool   `yaml:"enabled"`
+	Dsn     string `yaml:"dsn"`
+}
+
+func NewSentryHub(conf Sentry) (*SentryHub, error) {
 	opts := sentry.ClientOptions{
-		Dsn: conf.Sentry.Dsn,
+		Dsn: conf.Dsn,
 	}
 	c, err := sentry.NewClient(opts)
 	if err != nil {

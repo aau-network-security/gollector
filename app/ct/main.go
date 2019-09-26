@@ -6,7 +6,6 @@ import (
 	"fmt"
 	api "github.com/aau-network-security/go-domains/api/proto"
 	"github.com/aau-network-security/go-domains/collectors/ct"
-	"github.com/aau-network-security/go-domains/config"
 	ct2 "github.com/google/certificate-transparency-go"
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/pkg/errors"
@@ -128,12 +127,12 @@ func main() {
 	confFile := flag.String("config", "config/config.yml", "location of configuration file")
 	flag.Parse()
 
-	conf, err := config.ReadConfig(*confFile)
+	conf, err := readConfig(*confFile)
 	if err != nil {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
-	t, err := time.Parse("2006-01-02", conf.Ct.Time)
+	t, err := time.Parse("2006-01-02", conf.Time)
 	if err != nil {
 		log.Fatal().Msgf("failed to parse time from config: %s", err)
 	}
@@ -147,8 +146,8 @@ func main() {
 	mClient := api.NewMeasurementApiClient(cc)
 
 	meta := api.Meta{
-		Description: conf.Ct.Meta.Description,
-		Host:        conf.Ct.Meta.Host,
+		Description: conf.Meta.Description,
+		Host:        conf.Meta.Host,
 	}
 	startResp, err := mClient.StartMeasurement(ctx, &meta)
 	if err != nil {
@@ -195,14 +194,6 @@ func main() {
 		log.Fatal().Msgf("error while retrieving list of existing logs: %s", err)
 	}
 
-	var h *config.SentryHub
-	if conf.Sentry.Enabled {
-		h, err = config.NewSentryHub(conf)
-		if err != nil {
-			log.Fatal().Msgf("error while creating sentry hub: %s", err)
-		}
-	}
-
 	//logs := logList.Logs
 	logs := []ct.Log{logList.Logs[2]}
 	//logs := logList.Logs[0:3]
@@ -216,18 +207,7 @@ func main() {
 	progress := 0
 
 	for _, l := range logs {
-		tags := map[string]string{
-			"app": "ct",
-			"log": l.Name(),
-		}
-		zl := config.NewZeroLogger(tags)
-		el := config.NewErrLogChain(zl)
-		if conf.Sentry.Enabled {
-			sl := h.GetLogger(tags)
-			el.Add(sl)
-		}
-
-		go func(el config.ErrLogger, l ct.Log) {
+		go func(l ct.Log) {
 			var count int64
 
 			defer func() {
@@ -243,10 +223,6 @@ func main() {
 
 			start, end, err := ct.IndexByDate(ctx, &l, t)
 			if err != nil {
-				opts := config.LogOptions{
-					Msg: "error while getting index by date",
-				}
-				el.Log(err, opts)
 				return
 			}
 
@@ -296,25 +272,18 @@ func main() {
 				return nil
 			}
 
-			errorFn := func(err error) {
-				el.Log(err, config.LogOptions{})
-			}
-
 			opts := ct.Options{
-				WorkerCount: conf.Ct.WorkerCount,
+				WorkerCount: conf.WorkerCount,
 				StartIndex:  start,
 				//EndIndex:    end,
 				EndIndex: start + 100,
 			}
 
-			count, err = ct.Scan(ctx, &l, entryFn, errorFn, opts)
+			count, err = ct.Scan(ctx, &l, entryFn, opts)
 			if err != nil {
-				opts := config.LogOptions{
-					Msg: "error while retrieving logs",
-				}
-				el.Log(err, opts)
+				log.Debug().Str("log", l.Name()).Msgf("error while scanning log: %s", l.Url)
 			}
-		}(el, l)
+		}(l)
 	}
 	p.Wait()
 

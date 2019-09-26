@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	prt "github.com/aau-network-security/go-domains/api/proto"
-	"github.com/aau-network-security/go-domains/config"
 	"github.com/aau-network-security/go-domains/store"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
@@ -35,12 +34,12 @@ func timeFromUnix(ts int64) time.Time {
 }
 
 type Server struct {
-	Conf  config.Api
+	Conf  Config
 	Store *store.Store
 }
 
 func (s *Server) Run() error {
-	addr := fmt.Sprintf("%s:%d", s.Conf.Host, s.Conf.Port)
+	addr := fmt.Sprintf("%s:%d", s.Conf.Api.Host, s.Conf.Api.Port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err

@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"github.com/aau-network-security/go-domains/api"
-	"github.com/aau-network-security/go-domains/config"
 	"github.com/aau-network-security/go-domains/store"
 	"github.com/rs/zerolog/log"
 	"time"
@@ -13,7 +12,7 @@ func main() {
 	confFile := flag.String("config", "config/config.yml", "location of configuration file")
 	flag.Parse()
 
-	conf, err := config.ReadConfig(*confFile)
+	conf, err := readConfig(*confFile)
 	if err != nil {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
@@ -23,7 +22,7 @@ func main() {
 		BatchSize:       50000,
 	}
 
-	s, err := store.NewStore(conf.Store, opts)
+	s, err := store.NewStore(conf.Api.Store, opts)
 	if err != nil {
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}

@@ -6,7 +6,6 @@ import (
 	"fmt"
 	api "github.com/aau-network-security/go-domains/api/proto"
 	"github.com/aau-network-security/go-domains/collectors/entrada"
-	"github.com/aau-network-security/go-domains/config"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
@@ -107,12 +106,12 @@ func main() {
 	confFile := flag.String("config", "config/config.yml", "location of configuration file")
 	flag.Parse()
 
-	conf, err := config.ReadConfig(*confFile)
+	conf, err := readConfig(*confFile)
 	if err != nil {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
-	if err := conf.Entrada.IsValid(); err != nil {
+	if err := conf.isValid(); err != nil {
 		log.Fatal().Msgf("invalid entrada configuration: %s", err)
 	}
 
@@ -124,8 +123,8 @@ func main() {
 	mClient := api.NewMeasurementApiClient(cc)
 
 	meta := api.Meta{
-		Description: conf.Ct.Meta.Description,
-		Host:        conf.Ct.Meta.Host,
+		Description: conf.Meta.Description,
+		Host:        conf.Meta.Host,
 	}
 	startResp, err := mClient.StartMeasurement(ctx, &meta)
 	if err != nil {
@@ -181,7 +180,7 @@ func main() {
 	}
 
 	// todo: remove limit
-	src := entrada.NewSource(conf.Entrada.Host, conf.Entrada.Port)
+	src := entrada.NewSource(conf.Host, conf.Port)
 	entradaOpts := entrada.Options{
 		Query: fmt.Sprintf("SELECT qname, unixtime FROM dns.queries LIMIT %d", 10000),
 	}

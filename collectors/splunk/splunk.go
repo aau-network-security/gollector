@@ -3,7 +3,6 @@ package splunk
 import (
 	"bufio"
 	"encoding/json"
-	"github.com/aau-network-security/go-domains/config"
 	"os"
 	"path/filepath"
 	"time"
@@ -60,7 +59,7 @@ func (e *Entry) QueryResults() []QueryResult {
 
 type EntryFunc func(Entry) error
 
-func Process(conf config.Splunk, entryFn EntryFunc) error {
+func Process(dir string, entryFn EntryFunc) error {
 	walkFn := func(path string, info os.FileInfo, err error) error {
 		// ignore errors
 		if err != nil {
@@ -88,5 +87,5 @@ func Process(conf config.Splunk, entryFn EntryFunc) error {
 		}
 		return nil
 	}
-	return filepath.Walk(conf.Directory, walkFn)
+	return filepath.Walk(dir, walkFn)
 }

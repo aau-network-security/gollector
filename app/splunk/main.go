@@ -5,7 +5,6 @@ import (
 	"flag"
 	api "github.com/aau-network-security/go-domains/api/proto"
 	"github.com/aau-network-security/go-domains/collectors/splunk"
-	"github.com/aau-network-security/go-domains/config"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/semaphore"
@@ -106,23 +105,9 @@ func main() {
 	confFile := flag.String("config", "config/config.yml", "location of configuration file")
 	flag.Parse()
 
-	conf, err := config.ReadConfig(*confFile)
+	conf, err := readConfig(*confFile)
 	if err != nil {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
-	}
-
-	tags := map[string]string{
-		"app": "splunk",
-	}
-	zl := config.NewZeroLogger(tags)
-	el := config.NewErrLogChain(zl)
-	if conf.Sentry.Enabled {
-		h, err := config.NewSentryHub(conf)
-		if err != nil {
-			log.Fatal().Msgf("error while creating sentry hub: %s", err)
-		}
-		sl := h.GetLogger(tags)
-		el.Add(sl)
 	}
 
 	cc, err := grpc.Dial("localhost:20000", grpc.WithInsecure())
@@ -133,8 +118,8 @@ func main() {
 	mClient := api.NewMeasurementApiClient(cc)
 
 	meta := api.Meta{
-		Description: conf.Ct.Meta.Description,
-		Host:        conf.Ct.Meta.Host,
+		Description: conf.Meta.Description,
+		Host:        conf.Meta.Host,
 	}
 	startResp, err := mClient.StartMeasurement(ctx, &meta)
 	if err != nil {
@@ -193,11 +178,8 @@ func main() {
 		return nil
 	}
 
-	if err := splunk.Process(conf.Splunk, entryFn); err != nil {
-		opts := config.LogOptions{
-			Msg: "error while processing splunk files",
-		}
-		el.Log(err, opts)
+	if err := splunk.Process(conf.Directory, entryFn); err != nil {
+		log.Error().Msgf("error while processing splunk logs: %s", err)
 	}
 
 	if err := bs.CloseSend(ctx); err != nil {

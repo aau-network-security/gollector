@@ -48,6 +48,15 @@ message Log { // as provided by https://www.certificate-transparency.org/known-l
 
 service ZoneFileApi {
     rpc StoreZoneEntry(stream ZoneEntryBatch) returns (stream Result) {}
+    rpc GetStartTime(Interval) returns (StartTime) {}
+}
+
+message Interval {
+    int64 Interval = 1; // in milliseconds
+}
+
+message StartTime {
+    int64 Timestamp = 1; // unix time in ms
 }
 
 message ZoneEntryBatch {

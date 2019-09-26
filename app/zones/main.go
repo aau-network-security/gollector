@@ -7,11 +7,10 @@ import (
 	api "github.com/aau-network-security/go-domains/api/proto"
 	"github.com/aau-network-security/go-domains/app"
 	"github.com/aau-network-security/go-domains/collectors/zone"
-	"github.com/aau-network-security/go-domains/collectors/zone/czds"
+	czds2 "github.com/aau-network-security/go-domains/collectors/zone/czds"
 	"github.com/aau-network-security/go-domains/collectors/zone/ftp"
 	"github.com/aau-network-security/go-domains/collectors/zone/http"
 	"github.com/aau-network-security/go-domains/collectors/zone/ssh"
-	"github.com/aau-network-security/go-domains/config"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/semaphore"
@@ -123,26 +122,19 @@ func main() {
 	confFile := flag.String("config", "config/config.yml", "location of configuration file")
 	flag.Parse()
 
-	conf, err := config.ReadConfig(*confFile)
+	conf, err := readConfig(*confFile)
 	if err != nil {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
-	if err := conf.Zone.Czds.IsValid(); err != nil {
+	if err := conf.czds.IsValid(); err != nil {
 		log.Fatal().Msgf("czds configuration is invalid: %s", err)
 	}
-	if err := conf.Zone.Dk.IsValid(); err != nil {
+	if err := conf.dk.IsValid(); err != nil {
 		log.Fatal().Msgf("dk configuration is invalid: %s", err)
 	}
-	if err := conf.Zone.Com.IsValid(); err != nil {
+	if err := conf.com.IsValid(); err != nil {
 		log.Fatal().Msgf("com configuration is invalid: %s", err)
-	}
-
-	interval := 24 * time.Hour
-
-	st, err := zone.GetStartTime(conf.Store, interval)
-	if err != nil {
-		log.Fatal().Msgf("error while creating gorm database: %s", err)
 	}
 
 	// todo: use host/port from config
@@ -154,8 +146,8 @@ func main() {
 	mClient := api.NewMeasurementApiClient(cc)
 
 	meta := api.Meta{
-		Description: conf.Ct.Meta.Description,
-		Host:        conf.Ct.Meta.Host,
+		Description: conf.meta.Description,
+		Host:        conf.meta.Host,
 	}
 	startResp, err := mClient.StartMeasurement(ctx, &meta)
 	if err != nil {
@@ -169,15 +161,18 @@ func main() {
 		}
 	}()
 
-	var h *config.SentryHub
-	if conf.Sentry.Enabled {
-		h, err = config.NewSentryHub(conf)
-		if err != nil {
-			log.Fatal().Msgf("error while creating sentry hub: %s", err)
-		}
+	// todo: get start time
+	interval := 24 * time.Hour
+	zfClient := api.NewZoneFileApiClient(cc)
+	in := api.Interval{
+		Interval: int64(interval.Nanoseconds() / 1e06),
+	}
+	stResp, err := zfClient.GetStartTime(ctx, &in)
+	if err != nil {
+		log.Fatal().Msgf("failed to acquire starting time: %s", err)
 	}
 
-	authenticator := czds.NewAuthenticator(conf.Zone.Czds.Creds)
+	authenticator := czds2.NewAuthenticator(conf.czds.Creds)
 
 	c := 0
 	fn := func(t time.Time) error {
@@ -221,8 +216,8 @@ func main() {
 		wg := sync.WaitGroup{}
 		var zoneConfigs []zoneConfig
 
-		for _, tld := range conf.Zone.Czds.Tlds {
-			z := czds.New(authenticator, tld)
+		for _, tld := range conf.czds.Tlds {
+			z := czds2.New(authenticator, tld)
 			zc := zoneConfig{
 				z,
 				[]zone.StreamWrapper{zone.GzipWrapper},
@@ -234,19 +229,19 @@ func main() {
 		}
 
 		var sshDialFunc func(network, address string) (net.Conn, error)
-		if conf.Zone.Com.SshEnabled {
-			sshDialFunc, err = ssh.DialFunc(conf.Zone.Com.Ssh)
+		if conf.com.SshEnabled {
+			sshDialFunc, err = ssh.DialFunc(conf.com.Ssh)
 			if err != nil {
 				return errors.Wrap(err, "failed to create SSH dial func")
 			}
 		}
-		comZone, err := ftp.New(conf.Zone.Com.Ftp, sshDialFunc)
+		comZone, err := ftp.New(conf.com.Ftp, sshDialFunc)
 		if err != nil {
 			return errors.Wrap(err, "failed to create .com zone retriever")
 		}
 
-		httpClient, err := ssh.HttpClient(conf.Zone.Dk.Ssh)
-		dkZone, err := http.New(conf.Zone.Dk.Http, httpClient)
+		httpClient, err := ssh.HttpClient(conf.dk.Ssh)
+		dkZone, err := http.New(conf.dk.Http, httpClient)
 		if err != nil {
 			return errors.Wrap(err, "failed to create .dk zone retriever")
 		}
@@ -272,22 +267,10 @@ func main() {
 		wg.Add(len(zoneConfigs))
 		progress := 0
 		for _, zc := range zoneConfigs {
-			tags := map[string]string{
-				"app": "zones",
-				"tld": zc.zone.Tld(),
-			}
-			zl := config.NewZeroLogger(tags)
-			el := config.NewErrLogChain(zl)
-			if conf.Sentry.Enabled {
-				sl := h.GetLogger(tags)
-				el.Add(sl)
-			}
-
-			go func(el config.ErrLogger, zc zoneConfig) {
+			go func(zc zoneConfig) {
 				defer wg.Done()
 				if err := zfSem.Acquire(ctx, 1); err != nil {
-					el.Log(err, config.LogOptions{Msg: "failed to acquire semaphore"})
-					return
+					log.Error().Msgf("failed to acquire semaphore: %s", err)
 				}
 				defer zfSem.Release(1)
 
@@ -310,13 +293,7 @@ func main() {
 					}
 
 					if err := bs.Send(ctx, &ze); err != nil {
-						tags := map[string]string{
-							"domain": string(domain),
-						}
-						el.Log(err, config.LogOptions{
-							Tags: tags,
-							Msg:  "failed to store domain",
-						})
+						log.Error().Msgf("failed to store domain: %s", err)
 					}
 					c++
 					return nil
@@ -330,7 +307,7 @@ func main() {
 
 				resultStatus := "ok"
 				if err := zone.Process(zc.zone, opts); err != nil {
-					el.Log(err, config.LogOptions{Msg: "error while processing zone file"})
+					log.Error().Msgf("error while processing zone file: %s", err)
 					resultStatus = "failed"
 				}
 				progress++
@@ -341,7 +318,7 @@ func main() {
 					Int("processed domains", c).
 					Msgf("finished zone '%s'", zc.zone.Tld())
 
-			}(el, zc)
+			}(zc)
 		}
 
 		wg.Wait()
@@ -356,6 +333,8 @@ func main() {
 
 		return bs.CloseSend(ctx)
 	}
+
+	st := app.TimeFromUnix(stResp.Timestamp)
 
 	// retrieve all zone files on a daily basis
 	if err := app.Repeat(fn, st, interval, -1); err != nil {

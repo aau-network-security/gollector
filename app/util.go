@@ -55,3 +55,8 @@ func Repeat(f RepeatFunc, startTime time.Time, interval time.Duration, n int) er
 
 	return nil
 }
+
+// unix time in milliseconds
+func TimeFromUnix(ts int64) time.Time {
+	return time.Unix(int64(ts/1000), int64(ts%1000))
+}

@@ -1,12 +1,15 @@
 package api
 
 import (
+	"context"
 	prt "github.com/aau-network-security/go-domains/api/proto"
+	"github.com/aau-network-security/go-domains/collectors/zone"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io"
 	"sync"
+	"time"
 )
 
 func (s *Server) StoreZoneEntry(str prt.ZoneFileApi_StoreZoneEntryServer) error {
@@ -52,4 +55,16 @@ func (s *Server) StoreZoneEntry(str prt.ZoneFileApi_StoreZoneEntryServer) error 
 	wg.Wait()
 
 	return nil
+}
+
+func (s *Server) GetStartTime(ctx context.Context, iv *prt.Interval) (*prt.StartTime, error) {
+	st, err := zone.GetStartTime(s.Conf.Store, time.Duration(iv.Interval)*time.Millisecond)
+	if err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+	ts := st.UnixNano() / 1e06
+	resp := &prt.StartTime{
+		Timestamp: ts,
+	}
+	return resp, nil
 }
