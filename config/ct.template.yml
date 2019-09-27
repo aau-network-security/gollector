@@ -1,0 +1,9 @@
+time: <day to start from> # <yyyy-mm-dd>
+worker_count: <number of workers to use>
+api-address:
+  secure: <true | false>
+  host: <host>
+  port: <port>
+meta:
+  host: <host that runs measurement, for meta info storage purposes>
+  description: <description of measurement>

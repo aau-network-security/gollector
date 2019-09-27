@@ -3,33 +3,15 @@ package store
 import (
 	"crypto/sha256"
 	"fmt"
-	"github.com/aau-network-security/go-domains/ct"
-	"github.com/aau-network-security/go-domains/models"
-	ct2 "github.com/google/certificate-transparency-go"
+	"github.com/aau-network-security/go-domains/collectors/ct"
+	"github.com/aau-network-security/go-domains/store/models"
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/pkg/errors"
 	"time"
 )
 
-func timeFromLogEntry(entry *ct2.LogEntry) time.Time {
-	ts := entry.Leaf.TimestampedEntry.Timestamp
-	return time.Unix(int64(ts/1000), int64(ts%1000))
-}
-
-func certFromLogEntry(entry *ct2.LogEntry) (*x509.Certificate, error) {
-	var cert *x509.Certificate
-	if entry.Precert != nil {
-		cert = entry.Precert.TBSCertificate
-	} else if entry.X509Cert != nil {
-		cert = entry.X509Cert
-	} else {
-		return nil, UnsupportedCertTypeErr
-	}
-	return cert, nil
-}
-
 func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
-	l, ok := s.logByUrl[log.Url]
+	l, ok := s.cache.logByUrl[log.Url]
 	if !ok {
 		l = &models.Log{
 			ID:          s.ids.logs,
@@ -40,21 +22,16 @@ func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
 			return nil, errors.Wrap(err, "insert log")
 		}
 
-		s.logByUrl[log.Url] = l
+		s.cache.logByUrl[log.Url] = l
 		s.ids.logs++
 	}
 	return l, nil
 }
 
-func (s *Store) getOrCreateCertificate(entry *ct2.LogEntry) (*models.Certificate, error) {
-	c, err := certFromLogEntry(entry)
-	if err != nil {
-		return nil, err
-	}
-
+func (s *Store) getOrCreateCertificate(c *x509.Certificate) (*models.Certificate, error) {
 	fp := fmt.Sprintf("%x", sha256.Sum256(c.Raw))
 
-	cert, ok := s.certByFingerprint[fp]
+	cert, ok := s.cache.certByFingerprint[fp]
 	if !ok {
 		cert = &models.Certificate{
 			ID:                s.ids.certs,
@@ -80,34 +57,44 @@ func (s *Store) getOrCreateCertificate(entry *ct2.LogEntry) (*models.Certificate
 		}
 
 		s.inserts.certs = append(s.inserts.certs, cert)
-		s.certByFingerprint[fp] = cert
+		s.cache.certByFingerprint[fp] = cert
 		s.ids.certs++
 	}
 	return cert, nil
 }
 
-func (s *Store) StoreLogEntry(entry *ct2.LogEntry, log ct.Log) error {
+type LogEntry struct {
+	Cert  *x509.Certificate
+	Index uint
+	Ts    time.Time
+	Log   ct.Log
+}
+
+func (s *Store) StoreLogEntry(muid string, entry LogEntry) error {
 	s.m.Lock()
 	defer s.m.Unlock()
 
-	l, err := s.getOrCreateLog(log)
+	sid, ok := s.ms.SId(muid)
+	if !ok {
+		return NoActiveStageErr
+	}
+
+	l, err := s.getOrCreateLog(entry.Log)
 	if err != nil {
 		return err
 	}
 
-	cert, err := s.getOrCreateCertificate(entry)
+	cert, err := s.getOrCreateCertificate(entry.Cert)
 	if err != nil {
 		return err
 	}
-
-	ts := timeFromLogEntry(entry)
 
 	le := models.LogEntry{
 		LogID:         l.ID,
-		Index:         uint(entry.Index),
+		Index:         entry.Index,
 		CertificateID: cert.ID,
-		Timestamp:     ts,
-		StageID:       s.curStage.ID,
+		Timestamp:     entry.Ts,
+		StageID:       sid,
 	}
 
 	s.inserts.logEntries = append(s.inserts.logEntries, &le)

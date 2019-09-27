@@ -1,0 +1,18 @@
+api:
+  store:
+    host: localhost
+    port: 10001
+    user: postgres
+    password: postgres
+    dbname: domains
+  api:
+    host: localhost
+    port: 20000
+    tls:
+      enabled: <true | false>
+      cloudflare-auth:
+        email: <email address>
+        api-key: <api key>
+sentry:
+  enabled: true
+  dsn: <dsn that includes key and host>

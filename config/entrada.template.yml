@@ -1,0 +1,9 @@
+host: <host>
+port: <port>
+api-address:
+  secure: <true | false>
+  host: <host>
+  port: <port>
+meta:
+  host: <host that runs measurement, for meta info storage purposes>
+  description: <description of measurement>

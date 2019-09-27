@@ -1,0 +1,101 @@
+syntax = "proto3";
+
+message Empty {}
+
+service MeasurementApi {
+    rpc StartMeasurement (Meta) returns (StartMeasurementResponse) {}
+    rpc StopMeasurement (MeasurementId) returns (Empty) {}
+    rpc StartStage(MeasurementId) returns (Empty) {}
+    rpc StopStage(MeasurementId) returns (Empty) {}
+}
+
+message StartMeasurementResponse {
+    MeasurementId MeasurementId = 1;
+}
+
+message Meta {
+    string Description = 1;
+    string Host = 2;
+}
+
+message MeasurementId {
+    string Id = 1;
+}
+
+service CtApi {
+    rpc StoreLogEntries (stream LogEntryBatch) returns (stream Result) {}
+}
+
+message LogEntryBatch {
+    repeated LogEntry LogEntries = 1;
+}
+
+message LogEntry {
+    bytes Certificate = 1; // ASN DER
+    int64 Index = 2;
+    int64 Timestamp = 3; // unix time in ms
+    Log Log = 4;
+}
+
+message Log { // as provided by https://www.certificate-transparency.org/known-logs
+    string Description = 1;
+    string Key = 2;
+    string Url = 3;
+    int64 MaximumMergeDelay = 4;
+    repeated int64 OperatedBy = 5;
+    string DnsApiEndpoint = 6;
+}
+
+service ZoneFileApi {
+    rpc StoreZoneEntry(stream ZoneEntryBatch) returns (stream Result) {}
+    rpc GetStartTime(Interval) returns (StartTime) {}
+}
+
+message Interval {
+    int64 Interval = 1; // in milliseconds
+}
+
+message StartTime {
+    int64 Timestamp = 1; // unix time in ms
+}
+
+message ZoneEntryBatch {
+    repeated ZoneEntry ZoneEntries = 1;
+}
+
+message ZoneEntry {
+    string Apex = 1;
+    int64 Timestamp = 2;
+}
+
+message Result {
+    bool Ok = 1;
+    string Error = 2;
+}
+
+service SplunkApi {
+    rpc StorePassiveEntry(stream SplunkEntryBatch) returns (stream Result) {}
+}
+
+message SplunkEntryBatch {
+    repeated SplunkEntry SplunkEntries = 1;
+}
+
+message SplunkEntry {
+    string Query = 1;
+    string QueryType = 2;
+    int64 Timestamp = 3;
+}
+
+service EntradaApi {
+    rpc StoreEntradaEntry(stream EntradaEntryBatch) returns (stream Result) {}
+}
+
+message EntradaEntryBatch {
+    repeated EntradaEntry EntradaEntries = 1;
+}
+
+message EntradaEntry {
+    string Fqdn = 1;
+    int64 Timestamp = 2;
+}

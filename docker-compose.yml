@@ -1,11 +1,29 @@
 version: '2.4'
 services:
+  cache:
+    container_name: go-domains-cache
+    build:
+      context: .
+      dockerfile: app/cache/Dockerfile
+    command: [ "--config", "/config/cache.yml" ]
+    volumes:
+      - ./config:/config:ro # configuration files
+    ports:
+      - "${GRPC_PORT}:${GRPC_PORT}"
+  entrada:
+    container_name: go-domains-entrada
+    build:
+      context: .
+      dockerfile: app/entrada/Dockerfile
+    command: [ "--config", "/config/entrada.yml" ]
+    volumes:
+      - ./config:/config:ro # configuration files
   zones:
     container_name: go-domains-zones
     build:
       context: .
       dockerfile: app/zones/Dockerfile
-    command: [ "--config", "/config/docker.yml" ]
+    command: [ "--config", "/config/zones.yml" ]
     environment:
       - COM_FTP_PASS=${COM_FTP_PASS}
       - CZDS_PASS=${CZDS_PASS}
@@ -18,7 +36,7 @@ services:
     build:
       context: .
       dockerfile: app/ct/Dockerfile
-    command: [ "--config", "/config/docker.yml", "-logtostderr" ]
+    command: [ "--config", "/config/ct.yml", "-logtostderr" ]
     volumes:
       - ./config:/config:ro # configuration files
   splunk:
@@ -26,7 +44,7 @@ services:
     build:
       context: .
       dockerfile: app/splunk/Dockerfile
-    command: [ "--config", "/config/docker.yml", "-logtostderr" ]
+    command: [ "--config", "/config/splunk.yml", "-logtostderr" ]
     volumes:
       - ./config:/config:ro # configuration files
       - ${SPLUNK_DIR}:/splunk # directory containing Splunk JSON logs
@@ -40,4 +58,4 @@ services:
       - ./db:/docker-entrypoint-initdb.d      # initialization scripts, only executed first time
       - ${DB_VOLUME?err}:/var/lib/postgresql/data # persistent storage of database
     ports:
-      - "127.0.0.1:${POSTGRES_PORT?err}:5432"
+      - "${POSTGRES_HOST?err}:${POSTGRES_PORT?err}:5432"

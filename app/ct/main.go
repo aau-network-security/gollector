@@ -4,17 +4,122 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"github.com/aau-network-security/go-domains/config"
-	"github.com/aau-network-security/go-domains/ct"
-	"github.com/aau-network-security/go-domains/store"
+	api "github.com/aau-network-security/go-domains/api/proto"
+	"github.com/aau-network-security/go-domains/collectors/ct"
 	ct2 "github.com/google/certificate-transparency-go"
+	"github.com/google/certificate-transparency-go/x509"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/vbauerster/mpb"
 	"github.com/vbauerster/mpb/decor"
+	"golang.org/x/sync/semaphore"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/metadata"
+	"io"
 	"sync"
 	"time"
 )
+
+var (
+	UnsupportedCertTypeErr = errors.New("provided certificate is not supported")
+)
+
+func certFromLogEntry(entry *ct2.LogEntry) (*x509.Certificate, error) {
+	var cert *x509.Certificate
+	if entry.Precert != nil {
+		cert = entry.Precert.TBSCertificate
+	} else if entry.X509Cert != nil {
+		cert = entry.X509Cert
+	} else {
+		return nil, UnsupportedCertTypeErr
+	}
+	return cert, nil
+}
+
+type bufferedStream struct {
+	stream api.CtApi_StoreLogEntriesClient
+	size   int
+	buffer []*api.LogEntry
+	sem    *semaphore.Weighted
+	l      sync.Mutex
+	done   chan bool
+}
+
+func (bs *bufferedStream) Recv() (*api.Result, error) {
+	res, err := bs.stream.Recv()
+	if err != io.EOF {
+		bs.sem.Release(1)
+	}
+	return res, err
+}
+
+func (bs *bufferedStream) Send(ctx context.Context, le *api.LogEntry) error {
+	bs.l.Lock()
+	defer bs.l.Unlock()
+	bs.buffer = append(bs.buffer, le)
+	if len(bs.buffer) >= bs.size {
+		if err := bs.flush(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (bs *bufferedStream) flush(ctx context.Context) error {
+	batch := api.LogEntryBatch{
+		LogEntries: []*api.LogEntry{},
+	}
+	if err := bs.sem.Acquire(ctx, int64(len(bs.buffer))); err != nil {
+		return err
+	}
+
+	for _, se := range bs.buffer {
+		batch.LogEntries = append(batch.LogEntries, se)
+	}
+
+	if err := bs.stream.Send(&batch); err != nil {
+		return err
+	}
+
+	bs.buffer = []*api.LogEntry{}
+
+	return nil
+}
+
+func (bs *bufferedStream) CloseSend(ctx context.Context) error {
+	if err := bs.flush(ctx); err != nil {
+		return err
+	}
+
+	if err := bs.stream.CloseSend(); err != nil {
+		return err
+	}
+	select {
+	case <-bs.done:
+		break
+	case <-ctx.Done():
+		break
+	}
+	return nil
+}
+
+func newBufferedStream(ctx context.Context, cc *grpc.ClientConn, batchSize int, windowSize int64) (*bufferedStream, error) {
+	str, err := api.NewCtApiClient(cc).StoreLogEntries(ctx)
+	if err != nil {
+		return nil, err
+	}
+	sem := semaphore.NewWeighted(windowSize)
+
+	bs := bufferedStream{
+		stream: str,
+		size:   batchSize,
+		buffer: []*api.LogEntry{},
+		sem:    sem,
+		l:      sync.Mutex{},
+		done:   make(chan bool),
+	}
+	return &bs, nil
+}
 
 func main() {
 	ctx := context.Background()
@@ -22,34 +127,65 @@ func main() {
 	confFile := flag.String("config", "config/config.yml", "location of configuration file")
 	flag.Parse()
 
-	conf, err := config.ReadConfig(*confFile)
+	conf, err := readConfig(*confFile)
 	if err != nil {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
-	t, err := time.Parse("2006-01-02", conf.Ct.Time)
+	t, err := time.Parse("2006-01-02", conf.Time)
 	if err != nil {
 		log.Fatal().Msgf("failed to parse time from config: %s", err)
 	}
 
-	opts := store.Opts{
-		AllowedInterval: 1 * time.Second, // field is unused, so we don't care about its value
-		BatchSize:       50000,
-	}
-
-	s, err := store.NewStore(conf.Store, opts)
+	cc, err := conf.ApiAddr.Dial()
 	if err != nil {
-		log.Fatal().Msgf("error while creating store: %s", err)
+		log.Fatal().Msgf("failed to dial: %s", err)
 	}
 
-	if err := s.StartMeasurement(conf.Ct.Meta.Description, conf.Ct.Meta.Host); err != nil {
+	mClient := api.NewMeasurementApiClient(cc)
+
+	meta := api.Meta{
+		Description: conf.Meta.Description,
+		Host:        conf.Meta.Host,
+	}
+	startResp, err := mClient.StartMeasurement(ctx, &meta)
+	if err != nil {
 		log.Fatal().Msgf("failed to start measurement: %s", err)
 	}
+	muid := startResp.MeasurementId.Id
 
 	defer func() {
-		if err := s.StopMeasurement(); err != nil {
-			log.Fatal().Msgf("error while stopping measurement", err)
+		if _, err := mClient.StopMeasurement(ctx, startResp.MeasurementId); err != nil {
+			log.Fatal().Msgf("failed to stop measurement: %s", err)
 		}
+	}()
+
+	// obtain stream to daemon
+	md := metadata.New(map[string]string{
+		"mid": muid,
+	})
+	ctx = metadata.NewOutgoingContext(ctx, md)
+
+	bs, err := newBufferedStream(ctx, cc, 1000, 10000)
+	if err != nil {
+		log.Fatal().Msgf("failed to obtain stream to api: %s", err)
+	}
+
+	// asynchronously read messages from stream and output
+	go func() {
+		for {
+			res, err := bs.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				log.Error().Msgf("failed to receive message: %s", err)
+			}
+			if !res.Ok {
+				log.Error().Msgf("error while processing log entry: %s", res.Error)
+			}
+		}
+		bs.done <- true
 	}()
 
 	logList, err := ct.AllLogs()
@@ -57,16 +193,8 @@ func main() {
 		log.Fatal().Msgf("error while retrieving list of existing logs: %s", err)
 	}
 
-	var h *config.SentryHub
-	if conf.Sentry.Enabled {
-		h, err = config.NewSentryHub(conf)
-		if err != nil {
-			log.Fatal().Msgf("error while creating sentry hub: %s", err)
-		}
-	}
-
-	logs := logList.Logs
-	//logs := []ct.Log{logList.Logs[0]}
+	//logs := logList.Logs
+	logs := []ct.Log{logList.Logs[2]}
 	//logs := logList.Logs[0:3]
 
 	wg := sync.WaitGroup{}
@@ -78,18 +206,7 @@ func main() {
 	progress := 0
 
 	for _, l := range logs {
-		tags := map[string]string{
-			"app": "ct",
-			"log": l.Name(),
-		}
-		zl := config.NewZeroLogger(tags)
-		el := config.NewErrLogChain(zl)
-		if conf.Sentry.Enabled {
-			sl := h.GetLogger(tags)
-			el.Add(sl)
-		}
-
-		go func(el config.ErrLogger, l ct.Log) {
+		go func(l ct.Log) {
 			var count int64
 
 			defer func() {
@@ -105,10 +222,6 @@ func main() {
 
 			start, end, err := ct.IndexByDate(ctx, &l, t)
 			if err != nil {
-				opts := config.LogOptions{
-					Msg: "error while getting index by date",
-				}
-				el.Log(err, opts)
 				return
 			}
 
@@ -124,33 +237,56 @@ func main() {
 			defer bar.Abort(false)
 
 			entryFn := func(entry *ct2.LogEntry) error {
-				err := s.StoreLogEntry(entry, l)
 				bar.Increment()
-				return errors.Wrap(err, "store log entry")
-			}
 
-			errorFn := func(err error) {
-				el.Log(err, config.LogOptions{})
+				cert, err := certFromLogEntry(entry)
+				if err != nil {
+					return err
+				}
+
+				var operatedBy []int64
+				for _, ob := range l.OperatedBy {
+					operatedBy = append(operatedBy, int64(ob))
+				}
+
+				log := api.Log{
+					Description:       l.Description,
+					Key:               l.Key,
+					Url:               l.Url,
+					MaximumMergeDelay: int64(l.MaximumMergeDelay),
+					OperatedBy:        operatedBy,
+					DnsApiEndpoint:    l.DnsApiEndpoint,
+				}
+
+				le := api.LogEntry{
+					Certificate: cert.Raw,
+					Index:       entry.Index,
+					Timestamp:   int64(entry.Leaf.TimestampedEntry.Timestamp),
+					Log:         &log,
+				}
+
+				if err := bs.Send(ctx, &le); err != nil {
+					return errors.Wrap(err, "error while sending log entry to server")
+				}
+				return nil
 			}
 
 			opts := ct.Options{
-				WorkerCount: conf.Ct.WorkerCount,
+				WorkerCount: conf.WorkerCount,
 				StartIndex:  start,
-				EndIndex:    end,
+				//EndIndex:    end,
+				EndIndex: start + 100,
 			}
 
-			count, err = ct.Scan(ctx, &l, entryFn, errorFn, opts)
+			count, err = ct.Scan(ctx, &l, entryFn, opts)
 			if err != nil {
-				opts := config.LogOptions{
-					Msg: "error while retrieving logs",
-				}
-				el.Log(err, opts)
+				log.Debug().Str("log", l.Name()).Msgf("error while scanning log: %s", l.Url)
 			}
-		}(el, l)
+		}(l)
 	}
 	p.Wait()
 
-	if err := s.RunPostHooks(); err != nil {
-		log.Fatal().Msgf("error while running post hooks: %s", err)
+	if err := bs.CloseSend(ctx); err != nil {
+		log.Fatal().Msgf("error while closing connection to server: %s", err)
 	}
 }

@@ -1,7 +1,7 @@
 FROM alpine:latest as certs
 RUN apk --update add ca-certificates
 
-FROM golang:1.11 AS builder
+FROM golang:1.13 AS builder
 WORKDIR /go/src/github.com/aau-network-security/go-domains
 COPY ./ ./
 WORKDIR /go/src/github.com/aau-network-security/go-domains/app/splunk
