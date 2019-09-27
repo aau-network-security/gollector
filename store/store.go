@@ -195,6 +195,31 @@ func newCache() cache {
 	}
 }
 
+type Ready struct {
+	isReady bool
+	c       chan bool
+}
+
+func (r *Ready) IsReady() bool {
+	return r.isReady
+}
+
+func (r *Ready) Wait() {
+	<-r.c
+	r.isReady = true
+}
+
+func (r *Ready) Finish() {
+	r.c <- true
+}
+
+func NewReady() *Ready {
+	return &Ready{
+		isReady: false,
+		c:       make(chan bool),
+	}
+}
+
 type Store struct {
 	conf            Config
 	db              *pg.DB
@@ -208,11 +233,18 @@ type Store struct {
 	updates         ModelSet
 	ms              measurementState
 	anonymizer      *Anonymizer
+	Ready           *Ready
 }
 
 func (s *Store) WithAnonymizer(a *Anonymizer) *Store {
 	s.anonymizer = a
 	return s
+}
+
+func (s *Store) ensureReady() {
+	if !s.Ready.isReady {
+		s.Ready.Wait()
+	}
 }
 
 func (s *Store) RunPostHooks() error {
@@ -475,6 +507,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		ids:             Ids{},
 		anonymizer:      &DefaultAnonymizer,
 		ms:              NewMeasurementState(),
+		Ready:           NewReady(),
 	}
 
 	postHook := func(s *Store) error {
@@ -571,11 +604,15 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		return nil, errs.Wrap(err, "migrate models")
 	}
 
-	if err := s.init(); err != nil {
-		return nil, errs.Wrap(err, "initialize database")
-	}
+	go func() {
+		if err := s.init(); err != nil {
+			log.Error().Msgf("error while initializing database: %s", err)
+		}
 
-	s.cache.describe()
+		s.cache.describe()
+
+		s.Ready.Finish()
+	}()
 
 	return &s, nil
 }

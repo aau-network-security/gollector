@@ -9,6 +9,8 @@ func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.Z
 	s.m.Lock()
 	defer s.m.Unlock()
 
+	s.ensureReady()
+
 	sid, ok := s.ms.SId(muid)
 	if !ok {
 		return nil, NoActiveStageErr

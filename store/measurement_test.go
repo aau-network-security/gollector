@@ -14,7 +14,7 @@ func TestMeasurement(t *testing.T) {
 		DBName:   "domains",
 	}
 
-	s, g, err := openStore(conf)
+	s, g, _, err := openStore(conf)
 	if err != nil {
 		t.Fatalf("error while opening store: %s", err)
 	}

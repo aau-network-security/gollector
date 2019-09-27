@@ -64,6 +64,8 @@ func (s *Store) StorePassiveEntry(muid string, query string, queryType string, t
 	s.m.Lock()
 	defer s.m.Unlock()
 
+	s.ensureReady()
+
 	query = strings.ToLower(query)
 	queryType = strings.ToLower(queryType)
 

@@ -67,6 +67,7 @@ func TestGetStartTime(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected error while creating store: %s", err)
 			}
+			s.WaitUntilReady()
 
 			for _, entry := range test.entries {
 				if _, err := s.StoreZoneEntry(entry.tm, entry.domain); err != nil {

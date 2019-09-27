@@ -74,6 +74,8 @@ func (s *Store) StoreLogEntry(muid string, entry LogEntry) error {
 	s.m.Lock()
 	defer s.m.Unlock()
 
+	s.ensureReady()
+
 	sid, ok := s.ms.SId(muid)
 	if !ok {
 		return NoActiveStageErr

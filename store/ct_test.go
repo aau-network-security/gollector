@@ -17,14 +17,9 @@ func TestStore_StoreLogEntry(t *testing.T) {
 		Port:     10001,
 	}
 
-	s, g, err := openStore(conf)
+	s, g, muid, err := openStore(conf)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
-	}
-
-	muid, err := s.StartMeasurement("test", "test.local")
-	if err != nil {
-		t.Fatalf("failed to start measurement: %s", err)
 	}
 
 	sanLists := [][]string{
@@ -99,6 +94,7 @@ func TestStore_StoreLogEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
+	s.Ready.Wait()
 
 	comparisons := []struct {
 		name             string

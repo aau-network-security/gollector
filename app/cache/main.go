@@ -31,8 +31,13 @@ func main() {
 	if err != nil {
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}
-	diff := time.Now().Sub(start)
-	log.Info().Msgf("Loading store took %s", diff.String())
+
+	go func() {
+		s.Ready.Wait()
+
+		diff := time.Now().Sub(start)
+		log.Info().Msgf("Loading store took %s", diff.String())
+	}()
 
 	la := store.NewSha256LabelAnonymizer()
 	a := store.NewAnonymizer(la)

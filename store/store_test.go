@@ -16,14 +16,14 @@ import (
 	"time"
 )
 
-func openStore(conf Config) (*Store, *gorm.DB, error) {
+func openStore(conf Config) (*Store, *gorm.DB, string, error) {
 	g, err := conf.Open()
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to open gorm database")
+		return nil, nil, "", errors.Wrap(err, "failed to open gorm database")
 	}
 
 	if err := tst.ResetDb(g); err != nil {
-		return nil, nil, errors.Wrap(err, "failed to reset database")
+		return nil, nil, "", errors.Wrap(err, "failed to reset database")
 	}
 
 	opts := Opts{
@@ -33,9 +33,16 @@ func openStore(conf Config) (*Store, *gorm.DB, error) {
 
 	s, err := NewStore(conf, opts)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to open store")
+		return nil, nil, "", errors.Wrap(err, "failed to open store")
 	}
-	return s, g, nil
+	s.Ready.Wait()
+
+	muid, err := s.StartMeasurement("test", "test.local")
+	if err != nil {
+		return nil, nil, "", errors.Wrap(err, "failed to start measurement")
+	}
+
+	return s, g, muid, nil
 }
 
 func selfSignedCert(notBefore, notAfter time.Time, sans []string) ([]byte, error) {
@@ -70,7 +77,7 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 		Port:     10001,
 	}
 
-	s, g, err := openStore(conf)
+	s, g, muid, err := openStore(conf)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
@@ -80,7 +87,7 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 		for j := 0; j < 2; j++ {
 			// this should only update the "last_seen" field of the current active zonefile entry
 			go func() {
-				if _, err := s.StoreZoneEntry("", time.Now(), "example.org"); err != nil {
+				if _, err := s.StoreZoneEntry(muid, time.Now(), "example.org"); err != nil {
 					t.Fatalf("error while storing entry: %s", err)
 				}
 			}()
@@ -185,7 +192,7 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 		Port:     10001,
 	}
 
-	s, g, err := openStore(conf)
+	s, g, muid, err := openStore(conf)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
@@ -230,7 +237,7 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 	}
 
 	for _, entry := range entries {
-		if _, err := s.StorePassiveEntry("", entry.query, entry.queryType, entry.tm); err != nil {
+		if _, err := s.StorePassiveEntry(muid, entry.query, entry.queryType, entry.tm); err != nil {
 			t.Fatalf("unexpected error while storing passive entry: %s", err)
 		}
 	}
@@ -272,6 +279,7 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
+	s.Ready.Wait()
 
 	comparisons := []struct {
 		name             string
@@ -343,6 +351,7 @@ func TestInit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
+	s.Ready.Wait()
 
 	if s.ids.apexes != 11 {
 		t.Fatalf("expected next id to be %d, but got %d", 11, s.ids.apexes)

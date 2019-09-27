@@ -35,6 +35,7 @@ func openStore(conf store.Config) (*store.Store, *gorm.DB, string, error) {
 	if err != nil {
 		return nil, nil, "", errors.Wrap(err, "failed to open store")
 	}
+	s.Ready.Wait()
 
 	mid, err := s.StartMeasurement("test", "test.local")
 	if err != nil {

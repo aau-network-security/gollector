@@ -10,6 +10,8 @@ func (s *Store) StoreEntradaEntry(muid string, fqdn string, t time.Time) (*model
 	s.m.Lock()
 	defer s.m.Unlock()
 
+	s.ensureReady()
+
 	sid, ok := s.ms.SId(muid)
 	if !ok {
 		return nil, NoActiveStageErr
