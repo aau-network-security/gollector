@@ -83,6 +83,8 @@ func (bs *bufferedStream) flush(ctx context.Context) error {
 }
 
 func (bs *bufferedStream) CloseSend(ctx context.Context) error {
+	bs.l.Lock()
+	defer bs.l.Unlock()
 	if err := bs.flush(ctx); err != nil {
 		return err
 	}
@@ -106,14 +108,35 @@ func newBufferedStream(ctx context.Context, cc *grpc.ClientConn, batchSize int, 
 	}
 	sem := semaphore.NewWeighted(windowSize)
 
-	bs := bufferedStream{
+	bs := &bufferedStream{
 		stream: str,
 		size:   batchSize,
 		buffer: []*api.ZoneEntry{},
 		sem:    sem,
 		l:      sync.Mutex{},
+		done:   make(chan bool),
 	}
-	return &bs, nil
+
+	// asynchronously read messages from stream and output
+	go func() {
+		for {
+			res, err := bs.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				log.Error().Msgf("failed to receive message: %s", err)
+				break
+			}
+			if !res.Ok {
+				log.Error().Msgf("error while processing zone file entry: %s", res.Error)
+			}
+		}
+		log.Debug().Msgf("bs.done <- true [%p]", bs)
+		bs.done <- true
+	}()
+
+	return bs, nil
 }
 
 func main() {
@@ -193,23 +216,6 @@ func main() {
 		if err != nil {
 			log.Fatal().Msgf("failed to obtain stream to api: %s", err)
 		}
-
-		// asynchronously read messages from stream and output
-		go func() {
-			for {
-				res, err := bs.Recv()
-				if err == io.EOF {
-					break
-				}
-				if err != nil {
-					log.Error().Msgf("failed to receive message: %s", err)
-				}
-				if !res.Ok {
-					log.Error().Msgf("error while processing zone file entry: %s", res.Error)
-				}
-			}
-			bs.done <- true
-		}()
 
 		wg := sync.WaitGroup{}
 		var zoneConfigs []zoneConfig
@@ -327,7 +333,7 @@ func main() {
 
 		wg.Wait()
 
-		if err := bs.stream.CloseSend(); err != nil {
+		if err := bs.CloseSend(ctx); err != nil {
 			log.Debug().Msgf("failed to close stream: %s", err)
 		}
 
@@ -335,7 +341,7 @@ func main() {
 			return err
 		}
 
-		return bs.CloseSend(ctx)
+		return nil
 	}
 
 	st := app.TimeFromUnix(stResp.Timestamp)
