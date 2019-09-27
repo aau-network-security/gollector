@@ -279,27 +279,27 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 	}{
 		{
 			"tldByName",
-			len(s.tldByName),
+			len(s.cache.tldByName),
 			2,
 		},
 		{
 			"apexByName",
-			len(s.apexByName),
+			len(s.cache.apexByName),
 			2,
 		},
 		{
 			"fqdnByName",
-			len(s.fqdnByName),
+			len(s.cache.fqdnByName),
 			3,
 		},
 		{
 			"passiveEntryByFqdn",
-			s.passiveEntryByFqdn.len(),
+			s.cache.passiveEntryByFqdn.len(),
 			4,
 		},
 		{
 			"recordTypeByName",
-			len(s.recordTypeByName),
+			len(s.cache.recordTypeByName),
 			2,
 		},
 	}

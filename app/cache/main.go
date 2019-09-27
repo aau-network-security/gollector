@@ -4,11 +4,15 @@ import (
 	"flag"
 	"github.com/aau-network-security/go-domains/api"
 	"github.com/aau-network-security/go-domains/store"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"os"
 	"time"
 )
 
 func main() {
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+
 	confFile := flag.String("config", "config/config.yml", "location of configuration file")
 	flag.Parse()
 

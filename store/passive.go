@@ -44,7 +44,7 @@ func newSplunkEntryMap() splunkEntryMap {
 }
 
 func (s *Store) getorCreateRecordType(rtype string) (*models.RecordType, error) {
-	rt, ok := s.recordTypeByName[rtype]
+	rt, ok := s.cache.recordTypeByName[rtype]
 	if !ok {
 		rt = &models.RecordType{
 			ID:   s.ids.recordTypes,
@@ -54,7 +54,7 @@ func (s *Store) getorCreateRecordType(rtype string) (*models.RecordType, error) 
 			return nil, errors.Wrap(err, "insert record type")
 		}
 
-		s.recordTypeByName[rtype] = rt
+		s.cache.recordTypeByName[rtype] = rt
 		s.ids.recordTypes++
 	}
 	return rt, nil
@@ -67,7 +67,7 @@ func (s *Store) StorePassiveEntry(muid string, query string, queryType string, t
 	query = strings.ToLower(query)
 	queryType = strings.ToLower(queryType)
 
-	pe, ok := s.passiveEntryByFqdn.get(query, queryType)
+	pe, ok := s.cache.passiveEntryByFqdn.get(query, queryType)
 	if !ok {
 		// create a new entry
 		sid, ok := s.ms.SId(muid)
@@ -97,7 +97,7 @@ func (s *Store) StorePassiveEntry(muid string, query string, queryType string, t
 			StageID:      sid,
 		}
 
-		s.passiveEntryByFqdn.add(query, queryType, pe)
+		s.cache.passiveEntryByFqdn.add(query, queryType, pe)
 		s.inserts.passiveEntries = append(s.inserts.passiveEntries, pe)
 	} else if t.Before(pe.FirstSeen) {
 		// see if we must update the existing one

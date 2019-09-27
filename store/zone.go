@@ -24,7 +24,7 @@ func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.Z
 		return nil, err
 	}
 
-	existingZE, ok := s.zoneEntriesByApexName[apex.Apex]
+	existingZE, ok := s.cache.zoneEntriesByApexName[apex.Apex]
 	if !ok {
 		// non-active domain, create a new zone entry
 		newZoneEntry := &models.ZonefileEntry{
@@ -36,7 +36,7 @@ func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.Z
 			StageID:   sid,
 		}
 
-		s.zoneEntriesByApexName[apex.Apex] = newZoneEntry
+		s.cache.zoneEntriesByApexName[apex.Apex] = newZoneEntry
 		s.inserts.zoneEntries[newZoneEntry.ID] = newZoneEntry
 		s.ids.zoneEntries++
 
@@ -63,7 +63,7 @@ func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.Z
 			StageID:   sid,
 		}
 
-		s.zoneEntriesByApexName[apex.Apex] = newZE
+		s.cache.zoneEntriesByApexName[apex.Apex] = newZE
 		s.inserts.zoneEntries[newZE.ID] = newZE
 		s.ids.zoneEntries++
 

@@ -106,22 +106,22 @@ func TestStore_StoreLogEntry(t *testing.T) {
 	}{
 		{
 			"fqdnByName",
-			len(s.fqdnByName),
+			len(s.cache.fqdnByName),
 			4,
 		},
 		{
 			"apexByName",
-			len(s.apexByName),
+			len(s.cache.apexByName),
 			3,
 		},
 		{
 			"certByFingerprint",
-			len(s.certByFingerprint),
+			len(s.cache.certByFingerprint),
 			2,
 		},
 		{
 			"logByUrl",
-			len(s.logByUrl),
+			len(s.cache.logByUrl),
 			1,
 		},
 	}

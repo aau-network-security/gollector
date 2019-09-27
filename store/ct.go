@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
-	l, ok := s.logByUrl[log.Url]
+	l, ok := s.cache.logByUrl[log.Url]
 	if !ok {
 		l = &models.Log{
 			ID:          s.ids.logs,
@@ -22,7 +22,7 @@ func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
 			return nil, errors.Wrap(err, "insert log")
 		}
 
-		s.logByUrl[log.Url] = l
+		s.cache.logByUrl[log.Url] = l
 		s.ids.logs++
 	}
 	return l, nil
@@ -31,7 +31,7 @@ func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
 func (s *Store) getOrCreateCertificate(c *x509.Certificate) (*models.Certificate, error) {
 	fp := fmt.Sprintf("%x", sha256.Sum256(c.Raw))
 
-	cert, ok := s.certByFingerprint[fp]
+	cert, ok := s.cache.certByFingerprint[fp]
 	if !ok {
 		cert = &models.Certificate{
 			ID:                s.ids.certs,
@@ -57,7 +57,7 @@ func (s *Store) getOrCreateCertificate(c *x509.Certificate) (*models.Certificate
 		}
 
 		s.inserts.certs = append(s.inserts.certs, cert)
-		s.certByFingerprint[fp] = cert
+		s.cache.certByFingerprint[fp] = cert
 		s.ids.certs++
 	}
 	return cert, nil
