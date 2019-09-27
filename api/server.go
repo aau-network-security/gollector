@@ -42,7 +42,7 @@ type Server struct {
 }
 
 func (s *Server) Run() error {
-	addr := fmt.Sprintf("%s:%d", s.Conf.Api.Host, s.Conf.Api.Port)
+	addr := fmt.Sprintf(":%d", s.Conf.Api.Port)
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
 		return err
@@ -56,6 +56,7 @@ func (s *Server) Run() error {
 			return err
 		}
 		certConf.DNSProvider = provider
+		certConf.Agreed = true
 
 		domains := []string{s.Conf.Api.Host}
 		if err := certConf.Manage(domains); err != nil {

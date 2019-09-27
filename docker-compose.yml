@@ -6,12 +6,18 @@ services:
       context: .
       dockerfile: app/cache/Dockerfile
     command: [ "--config", "/config/cache.yml" ]
+    volumes:
+      - ./config:/config:ro # configuration files
+    ports:
+      - "${GRPC_PORT}:${GRPC_PORT}"
   entrada:
     container_name: go-domains-entrada
     build:
       context: .
       dockerfile: app/entrada/Dockerfile
     command: [ "--config", "/config/entrada.yml" ]
+    volumes:
+      - ./config:/config:ro # configuration files
   zones:
     container_name: go-domains-zones
     build:
