@@ -1,20 +1,24 @@
 com:
+  enabled: <true | false>
   ftp:
     tld: com
     host: rz.verisign-grs.com
     username: <username>
     file: com.zone.gz
+  ssh-enabled: <true | false>
   ssh:
     host: <host for SSH proxy>
     user: <user>
     authtype: key
     key: <path to key>
 czds:
+  enabled: <true | false>
   tlds:
     - xyz
   credentials:
     username: <username>
 dk:
+  enabled: <true | false>
   http:
     tld: dk
     url: <url>

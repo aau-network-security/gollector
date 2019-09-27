@@ -26,10 +26,13 @@ func main() {
 		BatchSize:       50000,
 	}
 
+	start := time.Now()
 	s, err := store.NewStore(conf.Api.Store, opts)
 	if err != nil {
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}
+	diff := time.Now().Sub(start)
+	log.Info().Msgf("Loading store took %s", diff.String())
 
 	la := store.NewSha256LabelAnonymizer()
 	a := store.NewAnonymizer(la)

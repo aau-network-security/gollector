@@ -19,12 +19,16 @@ const (
 )
 
 type com struct {
+	Enabled    bool       `yaml:"enabled"`
 	Ftp        ftp.Config `yaml:"ftp"`
 	SshEnabled bool       `yaml:"ssh-enabled"`
 	Ssh        ssh.Config `yaml:"ssh"`
 }
 
 func (c *com) IsValid() error {
+	if c.Enabled {
+		return nil
+	}
 	if c.SshEnabled {
 		ce := app.NewConfigErr()
 		if c.Ssh.AuthType != "key" {
@@ -41,11 +45,15 @@ func (c *com) IsValid() error {
 }
 
 type dk struct {
-	Http http.Config `yaml:"http"`
-	Ssh  ssh.Config  `yaml:"ssh"`
+	Enabled bool        `yaml:"enabled"`
+	Http    http.Config `yaml:"http"`
+	Ssh     ssh.Config  `yaml:"ssh"`
 }
 
 func (d *dk) IsValid() error {
+	if !d.Enabled {
+		return nil
+	}
 	ce := app.NewConfigErr()
 	if d.Ssh.AuthType != "password" {
 		ce.Add("SSH auth type must be 'password'")
@@ -60,11 +68,15 @@ func (d *dk) IsValid() error {
 }
 
 type czds struct {
-	Tlds  []string          `yaml:"tlds"`
-	Creds czds2.Credentials `yaml:"credentials"`
+	Enabled bool              `yaml:"enabled"`
+	Tlds    []string          `yaml:"tlds"`
+	Creds   czds2.Credentials `yaml:"credentials"`
 }
 
 func (c *czds) IsValid() error {
+	if !c.Enabled {
+		return nil
+	}
 	ce := app.NewConfigErr()
 	if c.Creds.Password == "" {
 		ce.Add("password cannot be empty")

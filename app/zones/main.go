@@ -160,7 +160,6 @@ func main() {
 		}
 	}()
 
-	// todo: get start time
 	interval := 24 * time.Hour
 	zfClient := api.NewZoneFileApiClient(cc)
 	in := api.Interval{
@@ -215,52 +214,58 @@ func main() {
 		wg := sync.WaitGroup{}
 		var zoneConfigs []zoneConfig
 
-		for _, tld := range conf.Czds.Tlds {
-			z := czds2.New(authenticator, tld)
-			zc := zoneConfig{
-				z,
-				[]zone.StreamWrapper{zone.GzipWrapper},
-				zone.ZoneFileHandler,
-				nil,
-			}
+		if conf.Czds.Enabled {
+			for _, tld := range conf.Czds.Tlds {
+				z := czds2.New(authenticator, tld)
+				zc := zoneConfig{
+					z,
+					[]zone.StreamWrapper{zone.GzipWrapper},
+					zone.ZoneFileHandler,
+					nil,
+				}
 
-			zoneConfigs = append(zoneConfigs, zc)
+				zoneConfigs = append(zoneConfigs, zc)
+			}
 		}
 
-		var sshDialFunc func(network, address string) (net.Conn, error)
-		if conf.Com.SshEnabled {
-			sshDialFunc, err = ssh.DialFunc(conf.Com.Ssh)
+		if conf.Com.Enabled {
+			var sshDialFunc func(network, address string) (net.Conn, error)
+			if conf.Com.SshEnabled {
+				sshDialFunc, err = ssh.DialFunc(conf.Com.Ssh)
+				if err != nil {
+					return errors.Wrap(err, "failed to create SSH dial func")
+				}
+			}
+			comZone, err := ftp.New(conf.Com.Ftp, sshDialFunc)
 			if err != nil {
-				return errors.Wrap(err, "failed to create SSH dial func")
+				return errors.Wrap(err, "failed to create .com zone retriever")
 			}
-		}
-		comZone, err := ftp.New(conf.Com.Ftp, sshDialFunc)
-		if err != nil {
-			return errors.Wrap(err, "failed to create .com zone retriever")
-		}
-
-		httpClient, err := ssh.HttpClient(conf.Dk.Ssh)
-		dkZone, err := http.New(conf.Dk.Http, httpClient)
-		if err != nil {
-			return errors.Wrap(err, "failed to create .dk zone retriever")
+			zoneConfigs = append([]zoneConfig{
+				{
+					comZone,
+					[]zone.StreamWrapper{zone.GzipWrapper},
+					zone.ZoneFileHandler,
+					nil,
+				},
+			}, zoneConfigs...)
 		}
 
-		_, _ = comZone, dkZone
+		if conf.Dk.Enabled {
+			httpClient, err := ssh.HttpClient(conf.Dk.Ssh)
+			dkZone, err := http.New(conf.Dk.Http, httpClient)
+			if err != nil {
+				return errors.Wrap(err, "failed to create .dk zone retriever")
+			}
 
-		zoneConfigs = append([]zoneConfig{
-			//{
-			//	comZone,
-			//	[]zone.StreamWrapper{zone.GzipWrapper},
-			//	zone.ZoneFileHandler,
-			//	nil,
-			//},
-			{
-				dkZone,
-				nil,
-				zone.ListHandler,
-				charmap.ISO8859_1.NewDecoder(), // must decode Danish domains in zone file
-			},
-		}, zoneConfigs...)
+			zoneConfigs = append([]zoneConfig{
+				{
+					dkZone,
+					nil,
+					zone.ListHandler,
+					charmap.ISO8859_1.NewDecoder(), // must decode Danish domains in zone file
+				},
+			}, zoneConfigs...)
+		}
 
 		zfSem := semaphore.NewWeighted(10) // allow 10 concurrent zone files to be retrieved
 		wg.Add(len(zoneConfigs))
