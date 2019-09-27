@@ -50,25 +50,25 @@ func (s *Server) Run() error {
 
 	var opts []grpc.ServerOption
 	if s.Conf.Api.Tls.Enabled {
+		certConf := certmagic.NewDefault()
 		provider, err := cloudflare.NewDNSProviderConfig(s.Conf.Api.Tls.Auth.ToCertmagicConfig())
 		if err != nil {
 			return err
 		}
-		certmagic.Default.DNSProvider = provider
+		certConf.DNSProvider = provider
 
 		domains := []string{s.Conf.Api.Host}
-		if err := certmagic.Manage(domains); err != nil {
+		if err := certConf.Manage(domains); err != nil {
 			return err
 		}
 
-		creds, err := credentials.NewServerTLSFromFile(
-			s.Conf.Api.Tls.CertificateFile,
-			s.Conf.Api.Tls.KeyFile,
-		)
+		cert, err := certConf.CacheManagedCertificate(s.Conf.Api.Host)
 		if err != nil {
 			return err
 		}
-		opts = append(opts, grpc.Creds(creds))
+
+		transportCreds := credentials.NewServerTLSFromCert(&cert.Certificate)
+		opts = append(opts, grpc.Creds(transportCreds))
 	}
 	serv := grpc.NewServer(opts...)
 	prt.RegisterCtApiServer(serv, s)

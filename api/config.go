@@ -17,10 +17,8 @@ type Api struct {
 }
 
 type Tls struct {
-	Enabled         bool           `yaml:"enabled"`
-	CertificateFile string         `yaml:"certificate-file"`
-	KeyFile         string         `yaml:"key-file"`
-	Auth            CloudflareAuth `yaml:"auth"`
+	Enabled bool           `yaml:"enabled"`
+	Auth    CloudflareAuth `yaml:"cloudflare-auth"`
 }
 
 type CloudflareAuth struct {
