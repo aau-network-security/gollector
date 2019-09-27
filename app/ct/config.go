@@ -8,9 +8,10 @@ import (
 )
 
 type config struct {
-	Time        string   `yaml:"time"`
-	WorkerCount int      `yaml:"worker_count"`
-	Meta        app.Meta `yaml:"meta"`
+	Time        string      `yaml:"time"`
+	WorkerCount int         `yaml:"worker_count"`
+	ApiAddr     app.Address `yaml:"api-address"`
+	Meta        app.Meta    `yaml:"meta"`
 }
 
 func readConfig(path string) (config, error) {

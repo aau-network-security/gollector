@@ -115,7 +115,7 @@ func main() {
 		log.Fatal().Msgf("invalid entrada configuration: %s", err)
 	}
 
-	cc, err := grpc.Dial("localhost:20000", grpc.WithInsecure())
+	cc, err := conf.ApiAddr.Dial()
 	if err != nil {
 		log.Fatal().Msgf("failed to dial: %s", err)
 	}

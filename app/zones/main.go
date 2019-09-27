@@ -127,18 +127,17 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
-	if err := conf.czds.IsValid(); err != nil {
+	if err := conf.Czds.IsValid(); err != nil {
 		log.Fatal().Msgf("czds configuration is invalid: %s", err)
 	}
-	if err := conf.dk.IsValid(); err != nil {
+	if err := conf.Dk.IsValid(); err != nil {
 		log.Fatal().Msgf("dk configuration is invalid: %s", err)
 	}
-	if err := conf.com.IsValid(); err != nil {
+	if err := conf.Com.IsValid(); err != nil {
 		log.Fatal().Msgf("com configuration is invalid: %s", err)
 	}
 
-	// todo: use host/port from config
-	cc, err := grpc.Dial("localhost:20000", grpc.WithInsecure())
+	cc, err := conf.ApiAddr.Dial()
 	if err != nil {
 		log.Fatal().Msgf("failed to dial: %s", err)
 	}
@@ -146,8 +145,8 @@ func main() {
 	mClient := api.NewMeasurementApiClient(cc)
 
 	meta := api.Meta{
-		Description: conf.meta.Description,
-		Host:        conf.meta.Host,
+		Description: conf.Meta.Description,
+		Host:        conf.Meta.Host,
 	}
 	startResp, err := mClient.StartMeasurement(ctx, &meta)
 	if err != nil {
@@ -172,7 +171,7 @@ func main() {
 		log.Fatal().Msgf("failed to acquire starting time: %s", err)
 	}
 
-	authenticator := czds2.NewAuthenticator(conf.czds.Creds)
+	authenticator := czds2.NewAuthenticator(conf.Czds.Creds)
 
 	c := 0
 	fn := func(t time.Time) error {
@@ -216,7 +215,7 @@ func main() {
 		wg := sync.WaitGroup{}
 		var zoneConfigs []zoneConfig
 
-		for _, tld := range conf.czds.Tlds {
+		for _, tld := range conf.Czds.Tlds {
 			z := czds2.New(authenticator, tld)
 			zc := zoneConfig{
 				z,
@@ -229,19 +228,19 @@ func main() {
 		}
 
 		var sshDialFunc func(network, address string) (net.Conn, error)
-		if conf.com.SshEnabled {
-			sshDialFunc, err = ssh.DialFunc(conf.com.Ssh)
+		if conf.Com.SshEnabled {
+			sshDialFunc, err = ssh.DialFunc(conf.Com.Ssh)
 			if err != nil {
 				return errors.Wrap(err, "failed to create SSH dial func")
 			}
 		}
-		comZone, err := ftp.New(conf.com.Ftp, sshDialFunc)
+		comZone, err := ftp.New(conf.Com.Ftp, sshDialFunc)
 		if err != nil {
 			return errors.Wrap(err, "failed to create .com zone retriever")
 		}
 
-		httpClient, err := ssh.HttpClient(conf.dk.Ssh)
-		dkZone, err := http.New(conf.dk.Http, httpClient)
+		httpClient, err := ssh.HttpClient(conf.Dk.Ssh)
+		dkZone, err := http.New(conf.Dk.Http, httpClient)
 		if err != nil {
 			return errors.Wrap(err, "failed to create .dk zone retriever")
 		}

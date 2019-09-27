@@ -8,9 +8,10 @@ import (
 )
 
 type config struct {
-	Host string   `yaml:"host"`
-	Port string   `yaml:"port"`
-	Meta app.Meta `yaml:"meta"`
+	Host    string      `yaml:"host"`
+	Port    string      `yaml:"port"`
+	ApiAddr app.Address `yaml:"api-address"`
+	Meta    app.Meta    `yaml:"meta"`
 }
 
 func (c *config) isValid() error {

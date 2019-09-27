@@ -1,6 +1,12 @@
 package app
 
-import "strings"
+import (
+	"crypto/tls"
+	"fmt"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"strings"
+)
 
 type ConfigErr struct {
 	errs []string
@@ -27,4 +33,25 @@ func NewConfigErr() ConfigErr {
 type Meta struct {
 	Description string `yaml:"description"`
 	Host        string `yaml:"host"`
+}
+
+type Address struct {
+	Secure bool   `yaml:"secure"`
+	Host   string `yaml:"host"`
+	Port   int    `yaml:"port"`
+}
+
+func (a *Address) Dial() (*grpc.ClientConn, error) {
+	addr := fmt.Sprintf("%s:%d", a.Host, a.Port)
+	var opts []grpc.DialOption
+	if !a.Secure {
+		opts = append(opts, grpc.WithInsecure())
+	} else {
+		tlsConf := &tls.Config{
+			InsecureSkipVerify: false,
+		}
+		transportCreds := credentials.NewTLS(tlsConf)
+		opts = append(opts, grpc.WithTransportCredentials(transportCreds))
+	}
+	return grpc.Dial(addr, opts...)
 }

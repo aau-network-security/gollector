@@ -76,10 +76,11 @@ func (c *czds) IsValid() error {
 }
 
 type config struct {
-	com  com      `yaml:"com"`
-	czds czds     `yaml:"czds"`
-	dk   dk       `yaml:"dk"`
-	meta app.Meta `yaml:"meta"`
+	Com     com         `yaml:"com"`
+	Czds    czds        `yaml:"czds"`
+	Dk      dk          `yaml:"dk"`
+	ApiAddr app.Address `yaml:"api-address"`
+	Meta    app.Meta    `yaml:"meta"`
 }
 
 func readConfig(path string) (config, error) {
@@ -92,9 +93,9 @@ func readConfig(path string) (config, error) {
 		return conf, errors.Wrap(err, "unmarshal config file")
 	}
 
-	conf.com.Ftp.Password = os.Getenv(ComFtpPass)
-	conf.czds.Creds.Password = os.Getenv(CzdsPass)
-	conf.dk.Ssh.Password = os.Getenv(DkSshPass)
+	conf.Com.Ftp.Password = os.Getenv(ComFtpPass)
+	conf.Czds.Creds.Password = os.Getenv(CzdsPass)
+	conf.Dk.Ssh.Password = os.Getenv(DkSshPass)
 
 	for _, env := range []string{ComFtpPass, CzdsPass, DkSshPass} {
 		os.Setenv(env, "")

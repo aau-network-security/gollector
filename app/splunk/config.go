@@ -8,8 +8,9 @@ import (
 )
 
 type config struct {
-	Directory string   `yaml:"directory"`
-	Meta      app.Meta `yaml:"meta"`
+	Directory string      `yaml:"directory"`
+	ApiAddr   app.Address `yaml:"api-address"`
+	Meta      app.Meta    `yaml:"meta"`
 }
 
 func readConfig(path string) (config, error) {

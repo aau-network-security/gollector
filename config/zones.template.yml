@@ -1,6 +1,3 @@
-meta:
-  host: <host that runs measurement, for meta info storage purposes>
-  description: <description of measurement>
 com:
   ftp:
     tld: com
@@ -25,3 +22,10 @@ dk:
     host: <host for SSH proxy>
     user: <username>
     authtype: password
+api-address:
+  secure: <true | false>
+  host: <host>
+  port: <port>
+meta:
+  host: <host that runs measurement, for meta info storage purposes>
+  description: <description of measurement>
