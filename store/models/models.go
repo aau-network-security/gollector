@@ -142,7 +142,7 @@ type RecordType struct {
 
 // Meta information for invidual measurements
 type Measurement struct {
-	ID          uint `gorm:"primary_key"`
+	ID          uint `gorm:"primary_key" sql:",pk"`
 	Mid         string
 	Description string
 	Host        string
@@ -153,7 +153,7 @@ type Measurement struct {
 
 // An individual measurement can repeat a single stage multiple times
 type Stage struct {
-	ID            uint `gorm:"primary_key"`
+	ID            uint `gorm:"primary_key" sql:",pk"`
 	MeasurementID uint
 	Stage         uint
 	StartTime     time.Time

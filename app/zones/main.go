@@ -132,7 +132,6 @@ func newBufferedStream(ctx context.Context, cc *grpc.ClientConn, batchSize int, 
 				log.Error().Msgf("error while processing zone file entry: %s", res.Error)
 			}
 		}
-		log.Debug().Msgf("bs.done <- true [%p]", bs)
 		bs.done <- true
 	}()
 
