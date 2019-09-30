@@ -67,13 +67,15 @@ func (d *dk) IsValid() error {
 	return nil
 }
 
-type czds struct {
-	Enabled bool              `yaml:"enabled"`
-	Tlds    []string          `yaml:"tlds"`
-	Creds   czds2.Credentials `yaml:"credentials"`
+type Czds struct {
+	Enabled  bool              `yaml:"enabled"`
+	All      bool              `yaml:"all"`
+	Included []string          `yaml:"included"`
+	Excluded []string          `yaml:"excluded"`
+	Creds    czds2.Credentials `yaml:"credentials"`
 }
 
-func (c *czds) IsValid() error {
+func (c *Czds) IsValid() error {
 	if !c.Enabled {
 		return nil
 	}
@@ -89,7 +91,7 @@ func (c *czds) IsValid() error {
 
 type config struct {
 	Com     com         `yaml:"com"`
-	Czds    czds        `yaml:"czds"`
+	Czds    Czds        `yaml:"czds"`
 	Dk      dk          `yaml:"dk"`
 	ApiAddr app.Address `yaml:"api-address"`
 	Meta    app.Meta    `yaml:"meta"`

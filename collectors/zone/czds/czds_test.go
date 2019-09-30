@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestCzds(t *testing.T) {
+func TestProcess(t *testing.T) {
 	tst.SkipCI(t)
 
 	user := os.Getenv("CZDS_USER")

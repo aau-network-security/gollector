@@ -32,3 +32,10 @@ func New(authenticator *Authenticator, tld string) zone2.Zone {
 	}
 	return &zone
 }
+
+func NewFromClient(client Client, tld string) zone2.Zone {
+	return &czdsZone{
+		tld:    tld,
+		client: client,
+	}
+}
