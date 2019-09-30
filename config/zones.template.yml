@@ -13,8 +13,13 @@ com:
     key: <path to key>
 czds:
   enabled: <true | false>
-  tlds:
-    - xyz
+  all: <true | false> # set true to use czds api to find all tlds that can be accessed
+  included: # list of tlds to include
+    - a
+    - b
+  excluded: # list of tlds to exclude
+    - c
+    - d
   credentials:
     username: <username>
 dk:

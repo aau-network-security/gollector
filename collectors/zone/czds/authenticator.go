@@ -3,11 +3,15 @@ package czds
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/pkg/errors"
 	"net/http"
 	"sync"
 	"time"
+)
+
+const (
+	authUrl = "https://account-api.icann.org/api/authenticate"
 )
 
 var (
@@ -114,7 +118,7 @@ func (a *Authenticator) Token() (string, error) {
 	a.m.Lock()
 	defer a.m.Unlock()
 	if err := a.ensureAuthenticated(); err != nil {
-		return "", errors.New("error while authenticating: " + err.Error())
+		return "", errors.Wrap(err, "error while authenticating")
 	}
 	return string(a.accessToken), nil
 }

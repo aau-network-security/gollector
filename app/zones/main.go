@@ -138,6 +138,98 @@ func newBufferedStream(ctx context.Context, cc *grpc.ClientConn, batchSize int, 
 	return bs, nil
 }
 
+// returns the list of tlds that should be retrieved from czds
+func getCzdsTlds(client czds2.Client, conf Czds) ([]string, error) {
+	tlds := make(map[string]bool)
+	if conf.All {
+		// add all accessible zones
+		all, err := client.AllZones()
+		if err != nil {
+			return nil, err
+		}
+		for _, zone := range all {
+			tlds[zone] = true
+		}
+	}
+
+	for _, included := range conf.Included {
+		tlds[included] = true
+	}
+
+	for _, excluded := range conf.Excluded {
+		delete(tlds, excluded)
+	}
+
+	var res []string
+	for k := range tlds {
+		res = append(res, k)
+	}
+
+	return res, nil
+}
+
+// returns a set of zone configurations based on the config file
+func getZoneConfigs(conf config, client czds2.Client) ([]zoneConfig, error) {
+	var res []zoneConfig
+
+	if conf.Com.Enabled {
+		var sshDialFunc func(network, address string) (net.Conn, error)
+		if conf.Com.SshEnabled {
+			var err error
+			sshDialFunc, err = ssh.DialFunc(conf.Com.Ssh)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to create SSH dial func")
+			}
+		}
+		comZone, err := ftp.New(conf.Com.Ftp, sshDialFunc)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create .com zone retriever")
+		}
+		res = append(res, zoneConfig{
+			comZone,
+			[]zone.StreamWrapper{zone.GzipWrapper},
+			zone.ZoneFileHandler,
+			nil,
+		})
+	}
+
+	if conf.Dk.Enabled {
+		httpClient, err := ssh.HttpClient(conf.Dk.Ssh)
+		dkZone, err := http.New(conf.Dk.Http, httpClient)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to create .dk zone retriever")
+		}
+
+		res = append(res, zoneConfig{
+			dkZone,
+			nil,
+			zone.ListHandler,
+			charmap.ISO8859_1.NewDecoder(), // must decode Danish domains in zone file
+		})
+	}
+
+	if conf.Czds.Enabled {
+		tlds, err := getCzdsTlds(client, conf.Czds)
+		if err != nil {
+			log.Fatal().Msgf("failed to obtain czds URLs to process: %s", err)
+		}
+
+		for _, tld := range tlds {
+			z := czds2.NewFromClient(client, tld)
+			zc := zoneConfig{
+				z,
+				[]zone.StreamWrapper{zone.GzipWrapper},
+				zone.ZoneFileHandler,
+				nil,
+			}
+
+			res = append(res, zc)
+		}
+	}
+
+	return res, nil
+}
+
 func main() {
 	ctx := context.Background()
 
@@ -192,7 +284,8 @@ func main() {
 		log.Fatal().Msgf("failed to acquire starting time: %s", err)
 	}
 
-	authenticator := czds2.NewAuthenticator(conf.Czds.Creds)
+	auth := czds2.NewAuthenticator(conf.Czds.Creds)
+	client := czds2.NewClient(auth)
 
 	c := 0
 	fn := func(t time.Time) error {
@@ -216,65 +309,18 @@ func main() {
 			log.Fatal().Msgf("failed to obtain stream to api: %s", err)
 		}
 
+		zoneConfigs, err := getZoneConfigs(conf, client)
+		if err != nil {
+			log.Fatal().Msgf("failed to obtain zone configs: %s", err)
+		}
+
+		log.Info().Msgf("retrieving %d zone files", len(zoneConfigs))
+
 		wg := sync.WaitGroup{}
-		var zoneConfigs []zoneConfig
-
-		if conf.Czds.Enabled {
-			for _, tld := range conf.Czds.Tlds {
-				z := czds2.New(authenticator, tld)
-				zc := zoneConfig{
-					z,
-					[]zone.StreamWrapper{zone.GzipWrapper},
-					zone.ZoneFileHandler,
-					nil,
-				}
-
-				zoneConfigs = append(zoneConfigs, zc)
-			}
-		}
-
-		if conf.Com.Enabled {
-			var sshDialFunc func(network, address string) (net.Conn, error)
-			if conf.Com.SshEnabled {
-				sshDialFunc, err = ssh.DialFunc(conf.Com.Ssh)
-				if err != nil {
-					return errors.Wrap(err, "failed to create SSH dial func")
-				}
-			}
-			comZone, err := ftp.New(conf.Com.Ftp, sshDialFunc)
-			if err != nil {
-				return errors.Wrap(err, "failed to create .com zone retriever")
-			}
-			zoneConfigs = append([]zoneConfig{
-				{
-					comZone,
-					[]zone.StreamWrapper{zone.GzipWrapper},
-					zone.ZoneFileHandler,
-					nil,
-				},
-			}, zoneConfigs...)
-		}
-
-		if conf.Dk.Enabled {
-			httpClient, err := ssh.HttpClient(conf.Dk.Ssh)
-			dkZone, err := http.New(conf.Dk.Http, httpClient)
-			if err != nil {
-				return errors.Wrap(err, "failed to create .dk zone retriever")
-			}
-
-			zoneConfigs = append([]zoneConfig{
-				{
-					dkZone,
-					nil,
-					zone.ListHandler,
-					charmap.ISO8859_1.NewDecoder(), // must decode Danish domains in zone file
-				},
-			}, zoneConfigs...)
-		}
-
 		zfSem := semaphore.NewWeighted(10) // allow 10 concurrent zone files to be retrieved
 		wg.Add(len(zoneConfigs))
 		progress := 0
+
 		for _, zc := range zoneConfigs {
 			go func(zc zoneConfig) {
 				defer wg.Done()

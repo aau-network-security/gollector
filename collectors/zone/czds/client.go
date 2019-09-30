@@ -1,16 +1,24 @@
 package czds
 
 import (
+	"encoding/json"
 	"fmt"
+	"github.com/pkg/errors"
 	"io"
+	"io/ioutil"
 	"net"
 	"net/http"
+	"regexp"
 	"time"
 )
 
 const (
-	authUrl = "https://account-api.icann.org/api/authenticate"
-	apiUrl  = "https://czds-api.icann.org/czds/downloads/%s.zone"
+	singleZoneUrl = "https://czds-api.icann.org/czds/downloads/%s.zone"
+	allZonesUrl   = "https://czds-api.icann.org/czds/downloads/links"
+)
+
+var (
+	MalformedZoneUrl = errors.New("malfored url structure")
 )
 
 type HttpErr struct {
@@ -23,6 +31,7 @@ func (err HttpErr) Error() string {
 
 type Client interface {
 	GetZone(tld string) (io.ReadCloser, error)
+	AllZones() ([]string, error)
 }
 
 type client struct {
@@ -55,7 +64,7 @@ func NewClient(authenticator *Authenticator) Client {
 }
 
 func (c *client) GetZone(tld string) (io.ReadCloser, error) {
-	url := fmt.Sprintf(apiUrl, tld)
+	url := fmt.Sprintf(singleZoneUrl, tld)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -78,5 +87,56 @@ func (c *client) GetZone(tld string) (io.ReadCloser, error) {
 	default:
 		resp.Body.Close()
 		return nil, HttpErr{resp.StatusCode}
+	}
+}
+
+// returns a list of all zones that can be retrieved from the authenticated client, using the czds api
+func (c *client) AllZones() ([]string, error) {
+	req, err := http.NewRequest("GET", allZonesUrl, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	token, err := c.authenticator.Token()
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case 200:
+		raw, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		var urlList []string
+		if err := json.Unmarshal(raw, &urlList); err != nil {
+			return nil, err
+		}
+
+		r, err := regexp.Compile("https://czds-api.icann.org/czds/downloads/(.*).zone")
+		if err != nil {
+			return nil, err
+		}
+
+		var res []string
+		for _, url := range urlList {
+			matches := r.FindStringSubmatch(url)
+			if len(matches) != 2 {
+				return nil, err
+			}
+			res = append(res, matches[1])
+		}
+
+		return res, nil
+	default:
+		return nil, HttpErr{code: resp.StatusCode}
 	}
 }
