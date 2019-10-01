@@ -7,7 +7,8 @@ The purpose of `gollector` is to enable the analysis of different vantage points
 The core of the tool is a `cache` process that provides a gRPC api to the other components to insert entries in an underlying (PostgreSQL) database.
 A set of collectors processes can run in parallel.
 View the README files for more details about the components:
-- [Cache](app/cache/README.md)     
+- [Cache](app/cache/README.md)
+- [Certificate Transparency](app/ct/README.md)     
 - [Zone files](app/zones/README.md)
 - [Passive DNS (Splunk) logs](app/splunk/README.md)
 - [ENTRADA logs](app/entrada/README.md)
@@ -34,3 +35,6 @@ $ docker-compose up -d cache
 ...
 $ docker-compose up -d zones
 ```
+
+Make sure the correct environment variables are set before running with docker-compose (or via a `.env` file in the root of the project).  
+Take a look at [docker-compose.yml](docker-compose.yml) for the environment variables to set.   
