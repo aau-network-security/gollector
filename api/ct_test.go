@@ -6,9 +6,6 @@ import (
 	api "github.com/aau-network-security/go-domains/api/proto"
 	"github.com/aau-network-security/go-domains/app"
 	"github.com/aau-network-security/go-domains/store"
-	tst "github.com/aau-network-security/go-domains/testing"
-	"github.com/jinzhu/gorm"
-	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/test/bufconn"
@@ -16,38 +13,7 @@ import (
 	"io/ioutil"
 	"net"
 	"testing"
-	"time"
 )
-
-// todo: remove duplicate code
-func openStore(conf store.Config) (*store.Store, *gorm.DB, string, error) {
-	g, err := conf.Open()
-	if err != nil {
-		return nil, nil, "", errors.Wrap(err, "failed to open gorm database")
-	}
-
-	if err := tst.ResetDb(g); err != nil {
-		return nil, nil, "", errors.Wrap(err, "failed to reset database")
-	}
-
-	opts := store.Opts{
-		BatchSize:       10,
-		AllowedInterval: 10 * time.Millisecond,
-	}
-
-	s, err := store.NewStore(conf, opts)
-	if err != nil {
-		return nil, nil, "", errors.Wrap(err, "failed to open store")
-	}
-	s.Ready.Wait()
-
-	mid, err := s.StartMeasurement("test", "test.local")
-	if err != nil {
-		return nil, nil, "", errors.Wrap(err, "failed to start measurement")
-	}
-
-	return s, g, mid, nil
-}
 
 func getBufDialer(lis *bufconn.Listener) func(context.Context, string) (net.Conn, error) {
 	return func(ctx context.Context, url string) (net.Conn, error) {
@@ -82,7 +48,7 @@ func TestServer_StoreLogEntries(t *testing.T) {
 				Port:     10001,
 			}
 
-			s, _, muid, err := openStore(conf)
+			s, _, muid, err := store.OpenStore(conf)
 			if err != nil {
 				t.Fatalf("failed to open store: %s", err)
 			}
@@ -122,7 +88,7 @@ func TestServer_StoreLogEntries(t *testing.T) {
 			client := api.NewCtApiClient(cc)
 
 			md := metadata.New(map[string]string{
-				"mid": muid,
+				"muid": muid,
 			})
 			ctx = metadata.NewOutgoingContext(ctx, md)
 
@@ -139,6 +105,9 @@ func TestServer_StoreLogEntries(t *testing.T) {
 					res, err := str.Recv()
 					if err == io.EOF {
 						break
+					}
+					if err != nil {
+						t.Fatalf("unexpected error: %s", err)
 					}
 					if !res.Ok {
 						failures++

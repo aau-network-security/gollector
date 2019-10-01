@@ -122,7 +122,7 @@ func TestGetOrCreateFqdnAnon_NoUnanon(t *testing.T) {
 		Port:     10001,
 	}
 
-	s, g, _, err := openStore(conf)
+	s, g, _, err := OpenStore(conf)
 	if err != nil {
 		t.Fatalf("failed to open store: %s", err)
 	}
@@ -195,7 +195,7 @@ func TestGetOrCreateFqdn_NoUnanon(t *testing.T) {
 		Port:     10001,
 	}
 
-	s, g, _, err := openStore(conf)
+	s, g, _, err := OpenStore(conf)
 	if err != nil {
 		t.Fatalf("failed to open store: %s", err)
 	}
@@ -258,7 +258,7 @@ func TestGetOrCreateFqdn_WithUnanon(t *testing.T) {
 	}
 
 	// create an anonymized domain
-	s, g, _, err := openStore(conf)
+	s, g, _, err := OpenStore(conf)
 	if err != nil {
 		t.Fatalf("failed to open store: %s", err)
 	}
@@ -337,7 +337,7 @@ func TestGetOrCreateFqdnAnon_WithUnanon(t *testing.T) {
 	}
 
 	// create an unanon domain
-	s, g, _, err := openStore(conf)
+	s, g, _, err := OpenStore(conf)
 	if err != nil {
 		t.Fatalf("failed to open store: %s", err)
 	}
