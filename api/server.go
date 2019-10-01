@@ -3,8 +3,8 @@ package api
 import (
 	"context"
 	"errors"
-	"fmt"
 	prt "github.com/aau-network-security/go-domains/api/proto"
+	"github.com/aau-network-security/go-domains/app"
 	"github.com/aau-network-security/go-domains/store"
 	"github.com/go-acme/lego/providers/dns/cloudflare"
 	"github.com/mholt/certmagic"
@@ -25,7 +25,7 @@ func muidFromContext(ctx context.Context) (string, error) {
 	if !ok {
 		return "", MissingMidErr
 	}
-	muids := md.Get("mid")
+	muids := md.Get("muid")
 	if len(muids) == 0 || muids[0] == "" {
 		return "", MissingMidErr
 	}
@@ -39,15 +39,10 @@ func timeFromUnix(ts int64) time.Time {
 type Server struct {
 	Conf  Config
 	Store *store.Store
+	Log   app.ErrLogger
 }
 
-func (s *Server) Run() error {
-	addr := fmt.Sprintf(":%d", s.Conf.Api.Port)
-	lis, err := net.Listen("tcp", addr)
-	if err != nil {
-		return err
-	}
-
+func (s *Server) Run(lis net.Listener) error {
 	var opts []grpc.ServerOption
 	if s.Conf.Api.Tls.Enabled {
 		certConf := certmagic.NewDefault()
@@ -78,6 +73,6 @@ func (s *Server) Run() error {
 	prt.RegisterSplunkApiServer(serv, s)
 	prt.RegisterEntradaApiServer(serv, s)
 
-	log.Debug().Msgf("running gRPC server on %s", addr)
+	log.Info().Msgf("running gRPC server on %s", lis.Addr().String())
 	return serv.Serve(lis)
 }

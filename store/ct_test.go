@@ -17,7 +17,7 @@ func TestStore_StoreLogEntry(t *testing.T) {
 		Port:     10001,
 	}
 
-	s, g, muid, err := openStore(conf)
+	s, g, muid, err := OpenStore(conf)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}

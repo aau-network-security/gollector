@@ -7,25 +7,25 @@ import (
 // ----- BEGIN DOMAIN -----
 
 type Tld struct {
-	ID  uint `gorm:"primary_key"`
+	ID  uint `gorm:"primary_key" pg:",pk"`
 	Tld string
 }
 
 type PublicSuffix struct {
-	ID           uint `gorm:"primary_key"`
+	ID           uint `gorm:"primary_key" pg:",pk"`
 	TldID        uint
 	PublicSuffix string
 }
 
 type Apex struct {
-	ID             uint `gorm:"primary_key"`
+	ID             uint `gorm:"primary_key" pg:",pk"`
 	Apex           string
 	TldID          uint
 	PublicSuffixID uint
 }
 
 type Fqdn struct {
-	ID             uint `gorm:"primary_key"`
+	ID             uint `gorm:"primary_key" pg:",pk"`
 	Fqdn           string
 	TldID          uint
 	PublicSuffixID uint
@@ -76,7 +76,7 @@ func (t FqdnAnon) TableName() string {
 
 // ----- BEGIN ZONEFILE -----
 type ZonefileEntry struct {
-	ID        uint `gorm:"primary_key"`
+	ID        uint `gorm:"primary_key" pg:",pk"`
 	FirstSeen time.Time
 	LastSeen  time.Time
 	ApexID    uint
@@ -88,27 +88,28 @@ type ZonefileEntry struct {
 
 // ----- BEGIN CT -----
 type CertificateToFqdn struct {
-	ID            uint `gorm:"primary_key"`
+	ID            uint `gorm:"primary_key" pg:",pk"`
 	FqdnID        uint
 	CertificateID uint
 }
 
 type Certificate struct {
-	ID                uint `gorm:"primary_key"`
+	ID                uint `gorm:"primary_key" pg:",pk"`
 	Sha256Fingerprint string
 }
 
 type LogEntry struct {
-	ID            uint `gorm:"primary_key"`
+	ID            uint `gorm:"primary_key" pg:",pk"`
 	Index         uint
 	Timestamp     time.Time
+	IsPrecert     bool
 	CertificateID uint
 	LogID         uint
 	StageID       uint
 }
 
 type Log struct {
-	ID          uint `gorm:"primary_key"`
+	ID          uint `gorm:"primary_key" pg:",pk"`
 	Url         string
 	Description string
 }
@@ -117,7 +118,7 @@ type Log struct {
 
 // ----- BEGIN PASSIVE DNS -----
 type PassiveEntry struct {
-	ID           uint `gorm:"primary_key"`
+	ID           uint `gorm:"primary_key" pg:",pk"`
 	FqdnID       uint
 	RecordTypeID uint
 	FirstSeen    time.Time
@@ -125,14 +126,14 @@ type PassiveEntry struct {
 }
 
 type EntradaEntry struct {
-	ID        uint `gorm:"primary_key"`
+	ID        uint `gorm:"primary_key" pg:",pk"`
 	FqdnID    uint
 	FirstSeen time.Time
 	StageID   uint
 }
 
 type RecordType struct {
-	ID   uint `gorm:"primary_key"`
+	ID   uint `gorm:"primary_key" pg:",pk"`
 	Type string
 }
 
@@ -142,8 +143,8 @@ type RecordType struct {
 
 // Meta information for invidual measurements
 type Measurement struct {
-	ID          uint `gorm:"primary_key" sql:",pk"`
-	Mid         string
+	ID          uint `gorm:"primary_key" pg:",pk"`
+	Muid        string
 	Description string
 	Host        string
 	StartTime   time.Time
@@ -153,7 +154,7 @@ type Measurement struct {
 
 // An individual measurement can repeat a single stage multiple times
 type Stage struct {
-	ID            uint `gorm:"primary_key" sql:",pk"`
+	ID            uint `gorm:"primary_key" pg:",pk"`
 	MeasurementID uint
 	Stage         uint
 	StartTime     time.Time

@@ -2,10 +2,13 @@ package store
 
 import (
 	"github.com/aau-network-security/go-domains/store/models"
+	tst "github.com/aau-network-security/go-domains/testing"
 	"testing"
+	"time"
 )
 
 func TestMeasurement(t *testing.T) {
+	// initialize database
 	conf := Config{
 		Host:     "localhost",
 		User:     "postgres",
@@ -14,10 +17,25 @@ func TestMeasurement(t *testing.T) {
 		DBName:   "domains",
 	}
 
-	s, g, _, err := openStore(conf)
+	g, err := conf.Open()
 	if err != nil {
-		t.Fatalf("error while opening store: %s", err)
+		t.Fatalf("failed to open gorm database: %s", err)
 	}
+
+	if err := tst.ResetDb(g); err != nil {
+		t.Fatalf("failed to reset database: %s", err)
+	}
+
+	opts := Opts{
+		BatchSize:       10,
+		AllowedInterval: 10 * time.Millisecond,
+	}
+
+	s, err := NewStore(conf, opts)
+	if err != nil {
+		t.Fatalf("failed to open store: %s", err)
+	}
+	s.Ready.Wait()
 
 	// start measurement(1)
 	muid1, err := s.StartMeasurement("first", "test.local")

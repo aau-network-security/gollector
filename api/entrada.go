@@ -2,6 +2,7 @@ package api
 
 import (
 	api "github.com/aau-network-security/go-domains/api/proto"
+	"github.com/aau-network-security/go-domains/app"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -14,6 +15,9 @@ func (s *Server) StoreEntradaEntry(str api.EntradaApi_StoreEntradaEntryServer) e
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
+
+	log.Debug().Str("muid", muid).Msgf("connection opened for entrada entries")
+	defer log.Debug().Str("muid", muid).Msgf("connection closed for entrada entries")
 
 	wg := sync.WaitGroup{}
 
@@ -35,6 +39,12 @@ func (s *Server) StoreEntradaEntry(str api.EntradaApi_StoreEntradaEntryServer) e
 			}
 
 			if _, err := s.Store.StoreEntradaEntry(muid, ee.Fqdn, ts); err != nil {
+				s.Log.Log(err, app.LogOptions{
+					Msg: "failed to store entrada entry",
+					Tags: map[string]string{
+						"fqdn": ee.Fqdn,
+					},
+				})
 				res = &api.Result{
 					Ok:    false,
 					Error: err.Error(),
@@ -45,7 +55,12 @@ func (s *Server) StoreEntradaEntry(str api.EntradaApi_StoreEntradaEntryServer) e
 			go func() {
 				defer wg.Done()
 				if err := str.Send(res); err != nil {
-					log.Debug().Msgf("failed to send response to client: %s", err)
+					s.Log.Log(err, app.LogOptions{
+						Msg: "failed to send response to client",
+						Tags: map[string]string{
+							"muid": muid,
+						},
+					})
 				}
 			}()
 		}

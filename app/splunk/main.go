@@ -3,7 +3,8 @@ package main
 import (
 	"context"
 	"flag"
-	api "github.com/aau-network-security/go-domains/api/proto"
+	"github.com/aau-network-security/go-domains/api"
+	prt "github.com/aau-network-security/go-domains/api/proto"
 	"github.com/aau-network-security/go-domains/collectors/splunk"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -15,15 +16,15 @@ import (
 )
 
 type bufferedStream struct {
-	stream api.SplunkApi_StorePassiveEntryClient
+	stream prt.SplunkApi_StorePassiveEntryClient
 	size   int
-	buffer []*api.SplunkEntry
+	buffer []*prt.SplunkEntry
 	sem    *semaphore.Weighted
 	l      sync.Mutex
 	done   chan bool
 }
 
-func (bs *bufferedStream) Recv() (*api.Result, error) {
+func (bs *bufferedStream) Recv() (*prt.Result, error) {
 	res, err := bs.stream.Recv()
 	if err != io.EOF {
 		bs.sem.Release(1)
@@ -31,7 +32,7 @@ func (bs *bufferedStream) Recv() (*api.Result, error) {
 	return res, err
 }
 
-func (bs *bufferedStream) Send(ctx context.Context, se *api.SplunkEntry) error {
+func (bs *bufferedStream) Send(ctx context.Context, se *prt.SplunkEntry) error {
 	bs.l.Lock()
 	defer bs.l.Unlock()
 	bs.buffer = append(bs.buffer, se)
@@ -44,8 +45,8 @@ func (bs *bufferedStream) Send(ctx context.Context, se *api.SplunkEntry) error {
 }
 
 func (bs *bufferedStream) flush(ctx context.Context) error {
-	batch := api.SplunkEntryBatch{
-		SplunkEntries: []*api.SplunkEntry{},
+	batch := prt.SplunkEntryBatch{
+		SplunkEntries: []*prt.SplunkEntry{},
 	}
 	if err := bs.sem.Acquire(ctx, int64(len(bs.buffer))); err != nil {
 		return err
@@ -59,7 +60,7 @@ func (bs *bufferedStream) flush(ctx context.Context) error {
 		return err
 	}
 
-	bs.buffer = []*api.SplunkEntry{}
+	bs.buffer = []*prt.SplunkEntry{}
 
 	return nil
 }
@@ -82,7 +83,7 @@ func (bs *bufferedStream) CloseSend(ctx context.Context) error {
 }
 
 func newBufferedStream(ctx context.Context, cc *grpc.ClientConn, batchSize int, windowSize int64) (*bufferedStream, error) {
-	str, err := api.NewSplunkApiClient(cc).StorePassiveEntry(ctx)
+	str, err := prt.NewSplunkApiClient(cc).StorePassiveEntry(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ func newBufferedStream(ctx context.Context, cc *grpc.ClientConn, batchSize int, 
 	bs := bufferedStream{
 		stream: str,
 		size:   batchSize,
-		buffer: []*api.SplunkEntry{},
+		buffer: []*prt.SplunkEntry{},
 		sem:    sem,
 		l:      sync.Mutex{},
 		done:   make(chan bool),
@@ -115,9 +116,9 @@ func main() {
 		log.Fatal().Msgf("failed to dial: %s", err)
 	}
 
-	mClient := api.NewMeasurementApiClient(cc)
+	mClient := prt.NewMeasurementApiClient(cc)
 
-	meta := api.Meta{
+	meta := prt.Meta{
 		Description: conf.Meta.Description,
 		Host:        conf.Meta.Host,
 	}
@@ -135,37 +136,34 @@ func main() {
 
 	// obtain stream to daemon
 	md := metadata.New(map[string]string{
-		"mid": muid,
+		"muid": muid,
 	})
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
-	bs, err := newBufferedStream(ctx, cc, 1000, 10000)
+	str, err := newStream(ctx, cc)
 	if err != nil {
-		log.Fatal().Msgf("failed to obtain stream to api: %s", err)
+		log.Fatal().Msgf("failed to create splunk entry stream: %s", err)
 	}
 
-	// asynchronously read messages from stream and output
-	go func() {
-		for {
-			res, err := bs.Recv()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				log.Error().Msgf("failed to receive message: %s", err)
-			}
-			if !res.Ok {
-				log.Error().Msgf("error while processing splunk entry: %s", res.Error)
-			}
-		}
-		bs.done <- true
-	}()
+	tmpl := prt.SplunkEntryBatch{
+		SplunkEntries: []*prt.SplunkEntry{},
+	}
+
+	opts := api.BufferedStreamOpts{
+		BatchSize:  1000,
+		WindowSize: 10000,
+	}
+
+	bs, err := api.NewBufferedStream(str, &tmpl, opts)
+	if err != nil {
+		log.Fatal().Msgf("failed to create buffered stream to api: %s", err)
+	}
 
 	entryFn := func(entry splunk.Entry) error {
 		for _, qr := range entry.QueryResults() {
 			ts := entry.Result.Timestamp.UnixNano() / 1e06
 
-			se := api.SplunkEntry{
+			se := prt.SplunkEntry{
 				Query:     qr.Query,
 				QueryType: qr.QueryType,
 				Timestamp: ts,

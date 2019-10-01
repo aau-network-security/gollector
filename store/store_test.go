@@ -8,42 +8,11 @@ import (
 	tst "github.com/aau-network-security/go-domains/testing"
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/google/certificate-transparency-go/x509/pkix"
-	"github.com/jinzhu/gorm"
-	"github.com/pkg/errors"
 	"math/big"
 	"reflect"
 	"testing"
 	"time"
 )
-
-func openStore(conf Config) (*Store, *gorm.DB, string, error) {
-	g, err := conf.Open()
-	if err != nil {
-		return nil, nil, "", errors.Wrap(err, "failed to open gorm database")
-	}
-
-	if err := tst.ResetDb(g); err != nil {
-		return nil, nil, "", errors.Wrap(err, "failed to reset database")
-	}
-
-	opts := Opts{
-		BatchSize:       10,
-		AllowedInterval: 10 * time.Millisecond,
-	}
-
-	s, err := NewStore(conf, opts)
-	if err != nil {
-		return nil, nil, "", errors.Wrap(err, "failed to open store")
-	}
-	s.Ready.Wait()
-
-	muid, err := s.StartMeasurement("test", "test.local")
-	if err != nil {
-		return nil, nil, "", errors.Wrap(err, "failed to start measurement")
-	}
-
-	return s, g, muid, nil
-}
 
 func selfSignedCert(notBefore, notAfter time.Time, sans []string) ([]byte, error) {
 	template := x509.Certificate{
@@ -77,7 +46,7 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 		Port:     10001,
 	}
 
-	s, g, muid, err := openStore(conf)
+	s, g, muid, err := OpenStore(conf)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
@@ -192,7 +161,7 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 		Port:     10001,
 	}
 
-	s, g, muid, err := openStore(conf)
+	s, g, muid, err := OpenStore(conf)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}

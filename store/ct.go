@@ -64,10 +64,11 @@ func (s *Store) getOrCreateCertificate(c *x509.Certificate) (*models.Certificate
 }
 
 type LogEntry struct {
-	Cert  *x509.Certificate
-	Index uint
-	Ts    time.Time
-	Log   ct.Log
+	Cert      *x509.Certificate
+	IsPrecert bool
+	Index     uint
+	Ts        time.Time
+	Log       ct.Log
 }
 
 func (s *Store) StoreLogEntry(muid string, entry LogEntry) error {
@@ -97,6 +98,7 @@ func (s *Store) StoreLogEntry(muid string, entry LogEntry) error {
 		CertificateID: cert.ID,
 		Timestamp:     entry.Ts,
 		StageID:       sid,
+		IsPrecert:     entry.IsPrecert,
 	}
 
 	s.inserts.logEntries = append(s.inserts.logEntries, &le)

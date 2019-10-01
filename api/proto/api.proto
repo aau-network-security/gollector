@@ -35,6 +35,7 @@ message LogEntry {
     int64 Index = 2;
     int64 Timestamp = 3; // unix time in ms
     Log Log = 4;
+    bool IsPrecert = 5;
 }
 
 message Log { // as provided by https://www.certificate-transparency.org/known-logs

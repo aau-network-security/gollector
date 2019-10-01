@@ -59,7 +59,7 @@ func (s *Store) StartMeasurement(description, host string) (string, error) {
 	tm := time.Now()
 	muid := newMuId()
 	measure := &models.Measurement{
-		Mid:         muid,
+		Muid:        muid,
 		Description: description,
 		Host:        host,
 		StartTime:   tm,

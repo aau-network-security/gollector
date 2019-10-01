@@ -4,6 +4,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog"
 	"os"
+	"time"
 )
 
 type LogOptions struct {
@@ -22,6 +23,20 @@ type SentryHub struct {
 type Sentry struct {
 	Enabled bool   `yaml:"enabled"`
 	Dsn     string `yaml:"dsn"`
+}
+
+func (s *Sentry) IsValid() error {
+	if !s.Enabled {
+		return nil
+	}
+	ce := NewConfigErr()
+	if s.Dsn == "" {
+		ce.Add("dsn cannot be empty")
+	}
+	if ce.IsError() {
+		return &ce
+	}
+	return nil
 }
 
 func NewSentryHub(conf Sentry) (*SentryHub, error) {
@@ -64,6 +79,7 @@ func (l *sentryLogger) Log(err error, opts LogOptions) {
 		scope.SetExtra("msg", opts.Msg)
 	}
 	l.h.CaptureException(err)
+	l.h.Flush(100 * time.Millisecond)
 }
 
 type zeroLogger struct {
