@@ -2,7 +2,7 @@ package api
 
 import (
 	api "github.com/aau-network-security/go-domains/api/proto"
-	"github.com/rs/zerolog/log"
+	"github.com/aau-network-security/go-domains/app"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io"
@@ -34,6 +34,12 @@ func (s *Server) StorePassiveEntry(str api.SplunkApi_StorePassiveEntryServer) er
 				Error: "",
 			}
 			if _, err := s.Store.StorePassiveEntry(muid, se.Query, se.QueryType, ts); err != nil {
+				s.Log.Log(err, app.LogOptions{
+					Msg: "failed to store passive entry",
+					Tags: map[string]string{
+						"query": se.Query,
+					},
+				})
 				res = &api.Result{
 					Ok:    false,
 					Error: err.Error(),
@@ -44,7 +50,12 @@ func (s *Server) StorePassiveEntry(str api.SplunkApi_StorePassiveEntryServer) er
 			go func() {
 				defer wg.Done()
 				if err := str.Send(res); err != nil {
-					log.Debug().Msgf("failed to send response to client: %s", err)
+					s.Log.Log(err, app.LogOptions{
+						Msg: "failed to send response to client",
+						Tags: map[string]string{
+							"muid": muid,
+						},
+					})
 				}
 			}()
 		}

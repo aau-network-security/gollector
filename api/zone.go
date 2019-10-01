@@ -3,8 +3,8 @@ package api
 import (
 	"context"
 	prt "github.com/aau-network-security/go-domains/api/proto"
+	"github.com/aau-network-security/go-domains/app"
 	"github.com/aau-network-security/go-domains/collectors/zone"
-	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io"
@@ -37,6 +37,9 @@ func (s *Server) StoreZoneEntry(str prt.ZoneFileApi_StoreZoneEntryServer) error 
 				Error: "",
 			}
 			if _, err := s.Store.StoreZoneEntry(muid, ts, ze.Apex); err != nil {
+				s.Log.Log(err, app.LogOptions{
+					Msg: "failed to store zone entry",
+				})
 				res = &prt.Result{
 					Ok:    false,
 					Error: err.Error(),
@@ -47,7 +50,12 @@ func (s *Server) StoreZoneEntry(str prt.ZoneFileApi_StoreZoneEntryServer) error 
 			go func() {
 				defer wg.Done()
 				if err := str.Send(res); err != nil {
-					log.Debug().Msgf("failed to send response to client: %s", err)
+					s.Log.Log(err, app.LogOptions{
+						Msg: "failed to send response to client",
+						Tags: map[string]string{
+							"muid": muid,
+						},
+					})
 				}
 			}()
 		}

@@ -102,6 +102,7 @@ type LogEntry struct {
 	ID            uint `gorm:"primary_key"`
 	Index         uint
 	Timestamp     time.Time
+	IsPrecert     bool
 	CertificateID uint
 	LogID         uint
 	StageID       uint

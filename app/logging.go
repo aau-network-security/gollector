@@ -24,6 +24,20 @@ type Sentry struct {
 	Dsn     string `yaml:"dsn"`
 }
 
+func (s *Sentry) IsValid() error {
+	if !s.Enabled {
+		return nil
+	}
+	ce := NewConfigErr()
+	if s.Dsn == "" {
+		ce.Add("dsn cannot be empty")
+	}
+	if ce.IsError() {
+		return &ce
+	}
+	return nil
+}
+
 func NewSentryHub(conf Sentry) (*SentryHub, error) {
 	opts := sentry.ClientOptions{
 		Dsn: conf.Dsn,

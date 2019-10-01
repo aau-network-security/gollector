@@ -24,16 +24,18 @@ var (
 	UnsupportedCertTypeErr = errors.New("provided certificate is not supported")
 )
 
-func certFromLogEntry(entry *ct2.LogEntry) (*x509.Certificate, error) {
+func certFromLogEntry(entry *ct2.LogEntry) (*x509.Certificate, bool, error) {
 	var cert *x509.Certificate
+	isPrecert := false
 	if entry.Precert != nil {
 		cert = entry.Precert.TBSCertificate
+		isPrecert = true
 	} else if entry.X509Cert != nil {
 		cert = entry.X509Cert
 	} else {
-		return nil, UnsupportedCertTypeErr
+		return nil, false, UnsupportedCertTypeErr
 	}
-	return cert, nil
+	return cert, isPrecert, nil
 }
 
 type bufferedStream struct {
@@ -87,6 +89,8 @@ func (bs *bufferedStream) flush(ctx context.Context) error {
 }
 
 func (bs *bufferedStream) CloseSend(ctx context.Context) error {
+	bs.l.Lock()
+	defer bs.l.Unlock()
 	if err := bs.flush(ctx); err != nil {
 		return err
 	}
@@ -118,6 +122,24 @@ func newBufferedStream(ctx context.Context, cc *grpc.ClientConn, batchSize int, 
 		l:      sync.Mutex{},
 		done:   make(chan bool),
 	}
+
+	// asynchronously read messages from stream and output
+	go func() {
+		for {
+			res, err := bs.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				log.Error().Msgf("failed to receive message: %s", err)
+			}
+			if !res.Ok {
+				log.Error().Msgf("error while processing log entry: %s", res.Error)
+			}
+		}
+		bs.done <- true
+	}()
+
 	return &bs, nil
 }
 
@@ -171,23 +193,6 @@ func main() {
 		log.Fatal().Msgf("failed to obtain stream to api: %s", err)
 	}
 
-	// asynchronously read messages from stream and output
-	go func() {
-		for {
-			res, err := bs.Recv()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				log.Error().Msgf("failed to receive message: %s", err)
-			}
-			if !res.Ok {
-				log.Error().Msgf("error while processing log entry: %s", res.Error)
-			}
-		}
-		bs.done <- true
-	}()
-
 	logList, err := ct.AllLogs()
 	if err != nil {
 		log.Fatal().Msgf("error while retrieving list of existing logs: %s", err)
@@ -239,7 +244,7 @@ func main() {
 			entryFn := func(entry *ct2.LogEntry) error {
 				bar.Increment()
 
-				cert, err := certFromLogEntry(entry)
+				cert, isPrecert, err := certFromLogEntry(entry)
 				if err != nil {
 					return err
 				}
@@ -263,6 +268,7 @@ func main() {
 					Index:       entry.Index,
 					Timestamp:   int64(entry.Leaf.TimestampedEntry.Timestamp),
 					Log:         &log,
+					IsPrecert:   isPrecert,
 				}
 
 				if err := bs.Send(ctx, &le); err != nil {
