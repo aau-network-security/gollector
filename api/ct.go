@@ -6,6 +6,7 @@ import (
 	"github.com/aau-network-security/go-domains/collectors/ct"
 	"github.com/aau-network-security/go-domains/store"
 	"github.com/google/certificate-transparency-go/x509"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io"
@@ -24,6 +25,9 @@ func (s *Server) StoreLogEntries(str api.CtApi_StoreLogEntriesServer) error {
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
+
+	log.Debug().Str("muid", muid).Msgf("connection opened for log entries")
+	defer log.Debug().Str("muid", muid).Msgf("connection closed for log entries")
 
 	wg := sync.WaitGroup{}
 
@@ -47,8 +51,7 @@ func (s *Server) StoreLogEntries(str api.CtApi_StoreLogEntriesServer) error {
 				s.Log.Log(err, app.LogOptions{
 					Msg: "failed to parse certificate",
 					Tags: map[string]string{
-						"log":   le.Log.Url,
-						"index": string(le.Index),
+						"log": le.Log.Url,
 					},
 				})
 				res = &api.Result{
@@ -74,8 +77,7 @@ func (s *Server) StoreLogEntries(str api.CtApi_StoreLogEntriesServer) error {
 					s.Log.Log(err, app.LogOptions{
 						Msg: "failed to store log entry",
 						Tags: map[string]string{
-							"log":   le.Log.Url,
-							"index": string(le.Index),
+							"log": le.Log.Url,
 						},
 					})
 					res = &api.Result{

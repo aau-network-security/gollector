@@ -4,6 +4,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog"
 	"os"
+	"time"
 )
 
 type LogOptions struct {
@@ -78,6 +79,7 @@ func (l *sentryLogger) Log(err error, opts LogOptions) {
 		scope.SetExtra("msg", opts.Msg)
 	}
 	l.h.CaptureException(err)
+	l.h.Flush(100 * time.Millisecond)
 }
 
 type zeroLogger struct {

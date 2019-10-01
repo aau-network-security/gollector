@@ -4,7 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	api "github.com/aau-network-security/go-domains/api/proto"
+	"github.com/aau-network-security/go-domains/api"
+	prt "github.com/aau-network-security/go-domains/api/proto"
 	"github.com/aau-network-security/go-domains/collectors/ct"
 	ct2 "github.com/google/certificate-transparency-go"
 	"github.com/google/certificate-transparency-go/x509"
@@ -12,10 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/vbauerster/mpb"
 	"github.com/vbauerster/mpb/decor"
-	"golang.org/x/sync/semaphore"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
-	"io"
 	"sync"
 	"time"
 )
@@ -36,111 +34,6 @@ func certFromLogEntry(entry *ct2.LogEntry) (*x509.Certificate, bool, error) {
 		return nil, false, UnsupportedCertTypeErr
 	}
 	return cert, isPrecert, nil
-}
-
-type bufferedStream struct {
-	stream api.CtApi_StoreLogEntriesClient
-	size   int
-	buffer []*api.LogEntry
-	sem    *semaphore.Weighted
-	l      sync.Mutex
-	done   chan bool
-}
-
-func (bs *bufferedStream) Recv() (*api.Result, error) {
-	res, err := bs.stream.Recv()
-	if err != io.EOF {
-		bs.sem.Release(1)
-	}
-	return res, err
-}
-
-func (bs *bufferedStream) Send(ctx context.Context, le *api.LogEntry) error {
-	bs.l.Lock()
-	defer bs.l.Unlock()
-	bs.buffer = append(bs.buffer, le)
-	if len(bs.buffer) >= bs.size {
-		if err := bs.flush(ctx); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (bs *bufferedStream) flush(ctx context.Context) error {
-	batch := api.LogEntryBatch{
-		LogEntries: []*api.LogEntry{},
-	}
-	if err := bs.sem.Acquire(ctx, int64(len(bs.buffer))); err != nil {
-		return err
-	}
-
-	for _, se := range bs.buffer {
-		batch.LogEntries = append(batch.LogEntries, se)
-	}
-
-	if err := bs.stream.Send(&batch); err != nil {
-		return err
-	}
-
-	bs.buffer = []*api.LogEntry{}
-
-	return nil
-}
-
-func (bs *bufferedStream) CloseSend(ctx context.Context) error {
-	bs.l.Lock()
-	defer bs.l.Unlock()
-	if err := bs.flush(ctx); err != nil {
-		return err
-	}
-
-	if err := bs.stream.CloseSend(); err != nil {
-		return err
-	}
-	select {
-	case <-bs.done:
-		break
-	case <-ctx.Done():
-		break
-	}
-	return nil
-}
-
-func newBufferedStream(ctx context.Context, cc *grpc.ClientConn, batchSize int, windowSize int64) (*bufferedStream, error) {
-	str, err := api.NewCtApiClient(cc).StoreLogEntries(ctx)
-	if err != nil {
-		return nil, err
-	}
-	sem := semaphore.NewWeighted(windowSize)
-
-	bs := bufferedStream{
-		stream: str,
-		size:   batchSize,
-		buffer: []*api.LogEntry{},
-		sem:    sem,
-		l:      sync.Mutex{},
-		done:   make(chan bool),
-	}
-
-	// asynchronously read messages from stream and output
-	go func() {
-		for {
-			res, err := bs.Recv()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				log.Error().Msgf("failed to receive message: %s", err)
-			}
-			if !res.Ok {
-				log.Error().Msgf("error while processing log entry: %s", res.Error)
-			}
-		}
-		bs.done <- true
-	}()
-
-	return &bs, nil
 }
 
 func main() {
@@ -164,9 +57,9 @@ func main() {
 		log.Fatal().Msgf("failed to dial: %s", err)
 	}
 
-	mClient := api.NewMeasurementApiClient(cc)
+	mClient := prt.NewMeasurementApiClient(cc)
 
-	meta := api.Meta{
+	meta := prt.Meta{
 		Description: conf.Meta.Description,
 		Host:        conf.Meta.Host,
 	}
@@ -184,13 +77,27 @@ func main() {
 
 	// obtain stream to daemon
 	md := metadata.New(map[string]string{
-		"mid": muid,
+		"muid": muid,
 	})
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
-	bs, err := newBufferedStream(ctx, cc, 1000, 10000)
+	str, err := newStream(ctx, cc)
 	if err != nil {
-		log.Fatal().Msgf("failed to obtain stream to api: %s", err)
+		log.Fatal().Msgf("failed to create log entry stream: %s", err)
+	}
+
+	tmpl := prt.LogEntryBatch{
+		LogEntries: []*prt.LogEntry{},
+	}
+
+	opts := api.BufferedStreamOpts{
+		BatchSize:  1000,
+		WindowSize: 10000,
+	}
+
+	bs, err := api.NewBufferedStream(str, &tmpl, opts)
+	if err != nil {
+		log.Fatal().Msgf("failed to create buffered stream to api: %s", err)
 	}
 
 	logList, err := ct.AllLogs()
@@ -254,7 +161,7 @@ func main() {
 					operatedBy = append(operatedBy, int64(ob))
 				}
 
-				log := api.Log{
+				log := prt.Log{
 					Description:       l.Description,
 					Key:               l.Key,
 					Url:               l.Url,
@@ -263,7 +170,7 @@ func main() {
 					DnsApiEndpoint:    l.DnsApiEndpoint,
 				}
 
-				le := api.LogEntry{
+				le := prt.LogEntry{
 					Certificate: cert.Raw,
 					Index:       entry.Index,
 					Timestamp:   int64(entry.Leaf.TimestampedEntry.Timestamp),

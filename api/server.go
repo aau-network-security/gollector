@@ -25,7 +25,7 @@ func muidFromContext(ctx context.Context) (string, error) {
 	if !ok {
 		return "", MissingMidErr
 	}
-	muids := md.Get("mid")
+	muids := md.Get("muid")
 	if len(muids) == 0 || muids[0] == "" {
 		return "", MissingMidErr
 	}

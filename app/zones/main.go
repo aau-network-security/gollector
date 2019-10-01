@@ -4,7 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	api "github.com/aau-network-security/go-domains/api/proto"
+	"github.com/aau-network-security/go-domains/api"
+	prt "github.com/aau-network-security/go-domains/api/proto"
 	"github.com/aau-network-security/go-domains/app"
 	"github.com/aau-network-security/go-domains/collectors/zone"
 	czds2 "github.com/aau-network-security/go-domains/collectors/zone/czds"
@@ -16,9 +17,7 @@ import (
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
-	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
-	"io"
 	"net"
 	"sync"
 	"time"
@@ -29,113 +28,6 @@ type zoneConfig struct {
 	streamWrappers []zone.StreamWrapper
 	streamHandler  zone.StreamHandler
 	decoder        *encoding.Decoder
-}
-
-type bufferedStream struct {
-	stream api.ZoneFileApi_StoreZoneEntryClient
-	size   int
-	buffer []*api.ZoneEntry
-	sem    *semaphore.Weighted
-	l      sync.Mutex
-	done   chan bool
-}
-
-func (bs *bufferedStream) Recv() (*api.Result, error) {
-	res, err := bs.stream.Recv()
-	if err != io.EOF {
-		bs.sem.Release(1)
-	}
-	return res, err
-}
-
-func (bs *bufferedStream) Send(ctx context.Context, ze *api.ZoneEntry) error {
-	bs.l.Lock()
-	defer bs.l.Unlock()
-	bs.buffer = append(bs.buffer, ze)
-	if len(bs.buffer) >= bs.size {
-		if err := bs.flush(ctx); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (bs *bufferedStream) flush(ctx context.Context) error {
-	batch := api.ZoneEntryBatch{
-		ZoneEntries: []*api.ZoneEntry{},
-	}
-
-	if err := bs.sem.Acquire(ctx, int64(len(bs.buffer))); err != nil {
-		return err
-	}
-
-	for _, ze := range bs.buffer {
-		batch.ZoneEntries = append(batch.ZoneEntries, ze)
-	}
-
-	if err := bs.stream.Send(&batch); err != nil {
-		return err
-	}
-
-	bs.buffer = []*api.ZoneEntry{}
-
-	return nil
-}
-
-func (bs *bufferedStream) CloseSend(ctx context.Context) error {
-	bs.l.Lock()
-	defer bs.l.Unlock()
-	if err := bs.flush(ctx); err != nil {
-		return err
-	}
-
-	if err := bs.stream.CloseSend(); err != nil {
-		return err
-	}
-	select {
-	case <-bs.done:
-		break
-	case <-ctx.Done():
-		break
-	}
-	return nil
-}
-
-func newBufferedStream(ctx context.Context, cc *grpc.ClientConn, batchSize int, windowSize int64) (*bufferedStream, error) {
-	str, err := api.NewZoneFileApiClient(cc).StoreZoneEntry(ctx)
-	if err != nil {
-		return nil, err
-	}
-	sem := semaphore.NewWeighted(windowSize)
-
-	bs := &bufferedStream{
-		stream: str,
-		size:   batchSize,
-		buffer: []*api.ZoneEntry{},
-		sem:    sem,
-		l:      sync.Mutex{},
-		done:   make(chan bool),
-	}
-
-	// asynchronously read messages from stream and output
-	go func() {
-		for {
-			res, err := bs.Recv()
-			if err == io.EOF {
-				break
-			}
-			if err != nil {
-				log.Error().Msgf("failed to receive message: %s", err)
-				break
-			}
-			if !res.Ok {
-				log.Error().Msgf("error while processing zone file entry: %s", res.Error)
-			}
-		}
-		bs.done <- true
-	}()
-
-	return bs, nil
 }
 
 // returns the list of tlds that should be retrieved from czds
@@ -256,9 +148,9 @@ func main() {
 		log.Fatal().Msgf("failed to dial: %s", err)
 	}
 
-	mClient := api.NewMeasurementApiClient(cc)
+	mClient := prt.NewMeasurementApiClient(cc)
 
-	meta := api.Meta{
+	meta := prt.Meta{
 		Description: conf.Meta.Description,
 		Host:        conf.Meta.Host,
 	}
@@ -275,8 +167,8 @@ func main() {
 	}()
 
 	interval := 24 * time.Hour
-	zfClient := api.NewZoneFileApiClient(cc)
-	in := api.Interval{
+	zfClient := prt.NewZoneFileApiClient(cc)
+	in := prt.Interval{
 		Interval: int64(interval.Nanoseconds() / 1e06),
 	}
 	stResp, err := zfClient.GetStartTime(ctx, &in)
@@ -300,13 +192,27 @@ func main() {
 
 		// obtain stream to daemon
 		md := metadata.New(map[string]string{
-			"mid": muid,
+			"muid": muid,
 		})
 		ctx = metadata.NewOutgoingContext(ctx, md)
 
-		bs, err := newBufferedStream(ctx, cc, 1000, 10000)
+		str, err := newStream(ctx, cc)
 		if err != nil {
-			log.Fatal().Msgf("failed to obtain stream to api: %s", err)
+			log.Fatal().Msgf("failed to create log entry stream: %s", err)
+		}
+
+		tmpl := prt.ZoneEntryBatch{
+			ZoneEntries: []*prt.ZoneEntry{},
+		}
+
+		opts := api.BufferedStreamOpts{
+			BatchSize:  1000,
+			WindowSize: 10000,
+		}
+
+		bs, err := api.NewBufferedStream(str, &tmpl, opts)
+		if err != nil {
+			log.Fatal().Msgf("failed to create buffered stream to api: %s", err)
 		}
 
 		zoneConfigs, err := getZoneConfigs(conf, client)
@@ -342,7 +248,7 @@ func main() {
 
 					ts := t.UnixNano() / 1e06
 
-					ze := api.ZoneEntry{
+					ze := prt.ZoneEntry{
 						Timestamp: ts,
 						Apex:      string(domain),
 					}

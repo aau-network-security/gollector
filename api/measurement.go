@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	api "github.com/aau-network-security/go-domains/api/proto"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -12,6 +13,8 @@ func (s *Server) StartMeasurement(ctx context.Context, meta *api.Meta) (*api.Sta
 	if err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+
+	log.Debug().Str("muid", muid).Msgf("started measurement")
 
 	resp := &api.StartMeasurementResponse{
 		MeasurementId: &api.MeasurementId{
@@ -25,6 +28,9 @@ func (s *Server) StopMeasurement(ctx context.Context, muid *api.MeasurementId) (
 	if err := s.Store.StopMeasurement(muid.Id); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+
+	log.Debug().Str("muid", muid.Id).Msgf("stopped measurement")
+
 	return &api.Empty{}, nil
 }
 
@@ -32,6 +38,8 @@ func (s *Server) StartStage(ctx context.Context, muid *api.MeasurementId) (*api.
 	if err := s.Store.StartStage(muid.Id); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+
+	log.Debug().Str("muid", muid.Id).Msgf("started stage")
 	return &api.Empty{}, nil
 }
 
@@ -39,5 +47,8 @@ func (s *Server) StopStage(ctx context.Context, muid *api.MeasurementId) (*api.E
 	if err := s.Store.StopStage(muid.Id); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
+
+	log.Debug().Str("muid", muid.Id).Msgf("stopped stage")
+
 	return &api.Empty{}, nil
 }

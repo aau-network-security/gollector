@@ -5,6 +5,7 @@ import (
 	prt "github.com/aau-network-security/go-domains/api/proto"
 	"github.com/aau-network-security/go-domains/app"
 	"github.com/aau-network-security/go-domains/collectors/zone"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io"
@@ -17,6 +18,9 @@ func (s *Server) StoreZoneEntry(str prt.ZoneFileApi_StoreZoneEntryServer) error 
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
+
+	log.Debug().Str("muid", muid).Msgf("connection opened for zone entries")
+	defer log.Debug().Str("muid", muid).Msgf("connection closed for zone entries")
 
 	wg := sync.WaitGroup{}
 

@@ -55,7 +55,6 @@ func getBufDialer(lis *bufconn.Listener) func(context.Context, string) (net.Conn
 	}
 }
 
-// todo: make sure this test passes
 func TestServer_StoreLogEntries(t *testing.T) {
 	tests := []struct {
 		name      string

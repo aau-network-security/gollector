@@ -3,6 +3,7 @@ package api
 import (
 	api "github.com/aau-network-security/go-domains/api/proto"
 	"github.com/aau-network-security/go-domains/app"
+	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io"
@@ -14,6 +15,9 @@ func (s *Server) StoreEntradaEntry(str api.EntradaApi_StoreEntradaEntryServer) e
 	if err != nil {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
+
+	log.Debug().Str("muid", muid).Msgf("connection opened for entrada entries")
+	defer log.Debug().Str("muid", muid).Msgf("connection closed for entrada entries")
 
 	wg := sync.WaitGroup{}
 
