@@ -1,7 +1,7 @@
 version: '2.4'
 services:
   cache:
-    container_name: go-domains-cache
+    container_name: gollector-cache
     build:
       context: .
       dockerfile: app/cache/Dockerfile
@@ -11,7 +11,7 @@ services:
     ports:
       - "${GRPC_PORT}:${GRPC_PORT}"
   entrada:
-    container_name: go-domains-entrada
+    container_name: gollector-entrada
     build:
       context: .
       dockerfile: app/entrada/Dockerfile
@@ -19,7 +19,7 @@ services:
     volumes:
       - ./config:/config:ro # configuration files
   zones:
-    container_name: go-domains-zones
+    container_name: gollector-zones
     build:
       context: .
       dockerfile: app/zones/Dockerfile
@@ -32,7 +32,7 @@ services:
       - ./config:/config:ro # configuration files
       - ${SSH_DIR}:/ssh:ro  # ssh keys
   ct:
-    container_name: go-domains-ct
+    container_name: gollector-ct
     build:
       context: .
       dockerfile: app/ct/Dockerfile
@@ -40,7 +40,7 @@ services:
     volumes:
       - ./config:/config:ro # configuration files
   splunk:
-    container_name: go-domains-splunk
+    container_name: gollector-splunk
     build:
       context: .
       dockerfile: app/splunk/Dockerfile
@@ -49,7 +49,7 @@ services:
       - ./config:/config:ro # configuration files
       - ${SPLUNK_DIR}:/splunk # directory containing Splunk JSON logs
   db:
-    container_name: go-domains-db
+    container_name: gollector-db
     image: postgres
     restart: always
     environment:

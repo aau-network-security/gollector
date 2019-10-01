@@ -3,9 +3,9 @@ package main
 import (
 	"context"
 	"flag"
-	"github.com/aau-network-security/go-domains/api"
-	prt "github.com/aau-network-security/go-domains/api/proto"
-	"github.com/aau-network-security/go-domains/collectors/splunk"
+	"github.com/aau-network-security/gollector/api"
+	prt "github.com/aau-network-security/gollector/api/proto"
+	"github.com/aau-network-security/gollector/collectors/splunk"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/semaphore"

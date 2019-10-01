@@ -1,8 +1,8 @@
 package zone
 
 import (
-	"github.com/aau-network-security/go-domains/store"
-	testing2 "github.com/aau-network-security/go-domains/testing"
+	"github.com/aau-network-security/gollector/store"
+	testing2 "github.com/aau-network-security/gollector/testing"
 	"testing"
 	"time"
 )

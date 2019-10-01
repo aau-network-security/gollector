@@ -3,8 +3,8 @@ package store
 import (
 	"crypto/sha256"
 	"fmt"
-	"github.com/aau-network-security/go-domains/collectors/ct"
-	"github.com/aau-network-security/go-domains/store/models"
+	"github.com/aau-network-security/gollector/collectors/ct"
+	"github.com/aau-network-security/gollector/store/models"
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/pkg/errors"
 	"time"

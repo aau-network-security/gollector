@@ -2,7 +2,7 @@ package store
 
 import (
 	"fmt"
-	"github.com/aau-network-security/go-domains/store/models"
+	"github.com/aau-network-security/gollector/store/models"
 	"github.com/go-pg/pg"
 	"github.com/jinzhu/gorm"
 	_ "github.com/lib/pq"

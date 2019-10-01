@@ -3,9 +3,9 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/aau-network-security/go-domains/api"
-	"github.com/aau-network-security/go-domains/app"
-	"github.com/aau-network-security/go-domains/store"
+	"github.com/aau-network-security/gollector/api"
+	"github.com/aau-network-security/gollector/app"
+	"github.com/aau-network-security/gollector/store"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"net"

@@ -3,7 +3,7 @@ package entrada
 import (
 	"context"
 	"fmt"
-	testing2 "github.com/aau-network-security/go-domains/testing"
+	testing2 "github.com/aau-network-security/gollector/testing"
 	"testing"
 	"time"
 )

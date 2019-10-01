@@ -2,7 +2,7 @@ package czds
 
 import (
 	"compress/gzip"
-	tst "github.com/aau-network-security/go-domains/testing"
+	tst "github.com/aau-network-security/gollector/testing"
 	"github.com/rs/zerolog/log"
 	"os"
 	"testing"

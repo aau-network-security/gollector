@@ -2,9 +2,9 @@ package http
 
 import (
 	"errors"
-	zone2 "github.com/aau-network-security/go-domains/collectors/zone"
-	ssh2 "github.com/aau-network-security/go-domains/collectors/zone/ssh"
-	tst "github.com/aau-network-security/go-domains/testing"
+	zone2 "github.com/aau-network-security/gollector/collectors/zone"
+	ssh2 "github.com/aau-network-security/gollector/collectors/zone/ssh"
+	tst "github.com/aau-network-security/gollector/testing"
 	"github.com/rs/zerolog/log"
 	"os"
 	"testing"

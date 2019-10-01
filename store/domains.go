@@ -3,7 +3,7 @@ package store
 import (
 	"crypto/sha256"
 	"fmt"
-	"github.com/aau-network-security/go-domains/store/models"
+	"github.com/aau-network-security/gollector/store/models"
 	"github.com/pkg/errors"
 	"github.com/weppos/publicsuffix-go/net/publicsuffix"
 	"strings"

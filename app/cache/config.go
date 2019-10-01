@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/aau-network-security/go-domains/api"
-	"github.com/aau-network-security/go-domains/app"
+	"github.com/aau-network-security/gollector/api"
+	"github.com/aau-network-security/gollector/app"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"

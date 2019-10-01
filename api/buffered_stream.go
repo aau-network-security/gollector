@@ -2,7 +2,7 @@ package api
 
 import (
 	"context"
-	api "github.com/aau-network-security/go-domains/api/proto"
+	api "github.com/aau-network-security/gollector/api/proto"
 	"github.com/mohae/deepcopy"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"

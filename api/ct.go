@@ -1,10 +1,10 @@
 package api
 
 import (
-	api "github.com/aau-network-security/go-domains/api/proto"
-	"github.com/aau-network-security/go-domains/app"
-	"github.com/aau-network-security/go-domains/collectors/ct"
-	"github.com/aau-network-security/go-domains/store"
+	api "github.com/aau-network-security/gollector/api/proto"
+	"github.com/aau-network-security/gollector/app"
+	"github.com/aau-network-security/gollector/collectors/ct"
+	"github.com/aau-network-security/gollector/store"
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"

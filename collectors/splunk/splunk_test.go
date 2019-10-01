@@ -1,7 +1,7 @@
 package splunk
 
 import (
-	"github.com/aau-network-security/go-domains/config"
+	"github.com/aau-network-security/gollector/config"
 	"testing"
 )
 

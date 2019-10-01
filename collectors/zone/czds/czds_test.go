@@ -2,8 +2,8 @@ package czds
 
 import (
 	"errors"
-	zone2 "github.com/aau-network-security/go-domains/collectors/zone"
-	tst "github.com/aau-network-security/go-domains/testing"
+	zone2 "github.com/aau-network-security/gollector/collectors/zone"
+	tst "github.com/aau-network-security/gollector/testing"
 	"github.com/rs/zerolog/log"
 	"os"
 	"testing"
