@@ -50,15 +50,20 @@ func main() {
 	a := store.NewAnonymizer(la)
 	s = s.WithAnonymizer(a)
 
-	hub, err := app.NewSentryHub(conf.Sentry)
-	if err != nil {
-		log.Fatal().Msgf("failed to create sentry hub: %s", err)
-	}
-
 	tags := map[string]string{
 		"app": "cache",
 	}
-	logger := hub.GetLogger(tags)
+
+	var logger app.ErrLogger
+	if conf.Sentry.Enabled {
+		hub, err := app.NewSentryHub(conf.Sentry)
+		if err != nil {
+			log.Fatal().Msgf("failed to create sentry hub: %s", err)
+		}
+		logger = hub.GetLogger(tags)
+	} else {
+		logger = app.NewZeroLogger(tags)
+	}
 
 	serv := api.Server{
 		Conf:  conf.Api,
