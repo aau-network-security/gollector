@@ -34,3 +34,6 @@ $ docker-compose up -d cache
 ...
 $ docker-compose up -d zones
 ```
+
+Make sure the correct environment variables are set before running with docker-compose (or via a `.env` file in the root of the project).  
+Take a look at [docker-compose.yml](docker-compose.yml) for the environment variables to set.   
