@@ -2,7 +2,7 @@ package store
 
 import (
 	"errors"
-	"github.com/aau-network-security/go-domains/store/models"
+	"github.com/aau-network-security/gollector/store/models"
 	"github.com/go-pg/pg"
 	"github.com/google/uuid"
 	"strings"

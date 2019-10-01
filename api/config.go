@@ -1,7 +1,7 @@
 package api
 
 import (
-	"github.com/aau-network-security/go-domains/store"
+	"github.com/aau-network-security/gollector/store"
 	"github.com/go-acme/lego/providers/dns/cloudflare"
 )
 

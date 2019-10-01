@@ -1,7 +1,7 @@
 package ftp
 
 import (
-	zone2 "github.com/aau-network-security/go-domains/collectors/zone"
+	zone2 "github.com/aau-network-security/gollector/collectors/zone"
 	"github.com/jlaffaye/ftp"
 	"io"
 	"net"

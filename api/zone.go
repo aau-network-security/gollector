@@ -2,9 +2,9 @@ package api
 
 import (
 	"context"
-	prt "github.com/aau-network-security/go-domains/api/proto"
-	"github.com/aau-network-security/go-domains/app"
-	"github.com/aau-network-security/go-domains/collectors/zone"
+	prt "github.com/aau-network-security/gollector/api/proto"
+	"github.com/aau-network-security/gollector/app"
+	"github.com/aau-network-security/gollector/collectors/zone"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

@@ -1,7 +1,7 @@
 package store
 
 import (
-	"github.com/aau-network-security/go-domains/store/models"
+	"github.com/aau-network-security/gollector/store/models"
 	"testing"
 )
 

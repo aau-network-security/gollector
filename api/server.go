@@ -3,9 +3,9 @@ package api
 import (
 	"context"
 	"errors"
-	prt "github.com/aau-network-security/go-domains/api/proto"
-	"github.com/aau-network-security/go-domains/app"
-	"github.com/aau-network-security/go-domains/store"
+	prt "github.com/aau-network-security/gollector/api/proto"
+	"github.com/aau-network-security/gollector/app"
+	"github.com/aau-network-security/gollector/store"
 	"github.com/go-acme/lego/providers/dns/cloudflare"
 	"github.com/mholt/certmagic"
 	"github.com/rs/zerolog/log"

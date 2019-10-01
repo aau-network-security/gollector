@@ -1,7 +1,7 @@
 package store
 
 import (
-	"github.com/aau-network-security/go-domains/testing"
+	"github.com/aau-network-security/gollector/testing"
 	"github.com/jinzhu/gorm"
 	"github.com/pkg/errors"
 	"time"

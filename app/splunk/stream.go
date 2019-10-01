@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"github.com/aau-network-security/go-domains/api"
-	prt "github.com/aau-network-security/go-domains/api/proto"
+	"github.com/aau-network-security/gollector/api"
+	prt "github.com/aau-network-security/gollector/api/proto"
 	"google.golang.org/grpc"
 )
 

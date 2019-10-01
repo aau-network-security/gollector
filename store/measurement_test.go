@@ -1,8 +1,8 @@
 package store
 
 import (
-	"github.com/aau-network-security/go-domains/store/models"
-	tst "github.com/aau-network-security/go-domains/testing"
+	"github.com/aau-network-security/gollector/store/models"
+	tst "github.com/aau-network-security/gollector/testing"
 	"testing"
 	"time"
 )

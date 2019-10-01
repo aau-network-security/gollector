@@ -3,9 +3,9 @@ package api
 import (
 	"context"
 	"encoding/hex"
-	api "github.com/aau-network-security/go-domains/api/proto"
-	"github.com/aau-network-security/go-domains/app"
-	"github.com/aau-network-security/go-domains/store"
+	api "github.com/aau-network-security/gollector/api/proto"
+	"github.com/aau-network-security/gollector/app"
+	"github.com/aau-network-security/gollector/store"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/test/bufconn"

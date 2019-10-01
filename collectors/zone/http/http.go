@@ -2,7 +2,7 @@ package http
 
 import (
 	"fmt"
-	zone2 "github.com/aau-network-security/go-domains/collectors/zone"
+	zone2 "github.com/aau-network-security/gollector/collectors/zone"
 	"io"
 	"net/http"
 )

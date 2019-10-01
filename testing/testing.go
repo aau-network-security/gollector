@@ -2,7 +2,7 @@ package testing
 
 import (
 	"fmt"
-	"github.com/aau-network-security/go-domains/store/models"
+	"github.com/aau-network-security/gollector/store/models"
 	"github.com/jinzhu/gorm"
 	"os"
 	"testing"
