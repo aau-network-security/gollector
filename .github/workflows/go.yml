@@ -12,6 +12,9 @@ jobs:
       with:
         go-version: 1.13
       id: go
+      env:
+        GO111MODULE: "on"
+        GOPRIVATE: "github.com/aau-network-security/gollector"
 
     - name: Check out code into the Go module directory
       uses: actions/checkout@v1
