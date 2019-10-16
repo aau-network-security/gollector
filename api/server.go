@@ -54,7 +54,7 @@ func (s *Server) Run(lis net.Listener) error {
 		certConf.Agreed = true
 
 		domains := []string{s.Conf.Api.Host}
-		if err := certConf.Manage(domains); err != nil {
+		if err := certConf.ManageSync(domains); err != nil {
 			return err
 		}
 
