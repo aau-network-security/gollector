@@ -595,7 +595,11 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		s.updates = NewModelSet()
 		s.inserts = NewModelSet()
 
-		return tx.Commit()
+		if err := tx.Commit(); err != nil {
+			return errs.Wrap(err, "committing transaction")
+		}
+
+		return nil
 	}
 
 	s.postHooks = append(s.postHooks, postHook)

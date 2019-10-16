@@ -5,6 +5,7 @@ import (
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/go-pg/pg"
 	"github.com/google/uuid"
+	errs "github.com/pkg/errors"
 	"strings"
 	"time"
 )
@@ -183,16 +184,16 @@ func (s *Store) stopStage(tx *pg.Tx, muid string) error {
 func (s *Store) StopStage(muid string) error {
 	tx, err := s.db.Begin()
 	if err != nil {
-		return err
+		return errs.Wrap(err, "beginning transaction")
 	}
 	defer tx.Rollback()
 
 	if err := s.stopStage(tx, muid); err != nil {
-		return err
+		return errs.Wrap(err, "stopping stage")
 	}
 
 	if err := tx.Commit(); err != nil {
-		return err
+		return errs.Wrap(err, "committing transaction")
 	}
 
 	return s.RunPostHooks()

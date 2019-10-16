@@ -29,7 +29,7 @@ func main() {
 	}
 
 	opts := store.Opts{
-		AllowedInterval: 1 * time.Second, // field is unused, so we don't care about its value
+		AllowedInterval: 36 * time.Hour,
 		BatchSize:       50000,
 	}
 
