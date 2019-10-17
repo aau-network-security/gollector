@@ -127,7 +127,7 @@ func (s *Store) startStage(tx *pg.Tx, muid string, mid uint, tm time.Time) (*mod
 	switch ok {
 	case true:
 		// bump stage id
-		stageId = curStage.ID + 1
+		stageId = curStage.Stage + 1
 	case false:
 		// first stage of measurement
 		stageId = 1
