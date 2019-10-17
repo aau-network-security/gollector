@@ -41,6 +41,7 @@ type Config struct {
 	Host     string `yaml:"host"`
 	Port     int    `yaml:"port"`
 	DBName   string `yaml:"dbname"`
+	Debug    bool   `yaml:"debug"`
 
 	d *gorm.DB
 }
@@ -484,6 +485,18 @@ type Opts struct {
 	AllowedInterval time.Duration
 }
 
+type debugHook struct{}
+
+func (hook *debugHook) BeforeQuery(qe *pg.QueryEvent) {}
+
+func (hook *debugHook) AfterQuery(qe *pg.QueryEvent) {
+	fq, err := qe.FormattedQuery()
+	if err != nil {
+		return
+	}
+	log.Debug().Msgf("%s", fq)
+}
+
 func NewStore(conf Config, opts Opts) (*Store, error) {
 	pgOpts := pg.Options{
 		User:     conf.User,
@@ -493,6 +506,9 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 	}
 
 	db := pg.Connect(&pgOpts)
+	if conf.Debug {
+		db.AddQueryHook(&debugHook{})
+	}
 
 	s := Store{
 		conf:            conf,
@@ -510,7 +526,28 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		Ready:           NewReady(),
 	}
 
-	postHook := func(s *Store) error {
+	postHook := storeCachedValuePosthook()
+	s.postHooks = append(s.postHooks, postHook)
+
+	if err := s.migrate(); err != nil {
+		return nil, errs.Wrap(err, "migrate models")
+	}
+
+	go func() {
+		if err := s.init(); err != nil {
+			log.Error().Msgf("error while initializing database: %s", err)
+		}
+
+		s.cache.describe()
+
+		s.Ready.Finish()
+	}()
+
+	return &s, nil
+}
+
+func storeCachedValuePosthook() postHook {
+	return func(s *Store) error {
 		tx, err := s.db.Begin()
 		if err != nil {
 			return err
@@ -601,22 +638,4 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 
 		return nil
 	}
-
-	s.postHooks = append(s.postHooks, postHook)
-
-	if err := s.migrate(); err != nil {
-		return nil, errs.Wrap(err, "migrate models")
-	}
-
-	go func() {
-		if err := s.init(); err != nil {
-			log.Error().Msgf("error while initializing database: %s", err)
-		}
-
-		s.cache.describe()
-
-		s.Ready.Finish()
-	}()
-
-	return &s, nil
 }
