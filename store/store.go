@@ -487,15 +487,15 @@ type Opts struct {
 
 type debugHook struct{}
 
-func (hook *debugHook) BeforeQuery(qe *pg.QueryEvent) {}
-
-func (hook *debugHook) AfterQuery(qe *pg.QueryEvent) {
+func (hook *debugHook) BeforeQuery(qe *pg.QueryEvent) {
 	fq, err := qe.FormattedQuery()
 	if err != nil {
 		return
 	}
 	log.Debug().Msgf("%s", fq)
 }
+
+func (hook *debugHook) AfterQuery(qe *pg.QueryEvent) {}
 
 func NewStore(conf Config, opts Opts) (*Store, error) {
 	pgOpts := pg.Options{
