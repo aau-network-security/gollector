@@ -13,6 +13,7 @@ require (
 	github.com/google/certificate-transparency-go v1.0.22-0.20190613123100-f1b2d813b630
 	github.com/google/trillian v1.3.2 // indirect
 	github.com/google/uuid v1.1.1
+	github.com/hashicorp/golang-lru v0.5.4
 	github.com/jinzhu/gorm v1.9.11
 	github.com/jlaffaye/ftp v0.0.0-20190828173736-6aaa91c7796e
 	github.com/lib/pq v1.2.0

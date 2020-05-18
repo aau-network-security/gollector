@@ -11,9 +11,10 @@ import (
 )
 
 func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
-	l, ok := s.cache.logByUrl[log.Url]
+	//Check if it is in the cache
+	lI, ok := s.cache.logByUrl.Get(log.Url)
 	if !ok {
-		l = &models.Log{
+		l := &models.Log{
 			ID:          s.ids.logs,
 			Url:         log.Url,
 			Description: log.Description,
@@ -22,18 +23,20 @@ func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
 			return nil, errors.Wrap(err, "insert log")
 		}
 
-		s.cache.logByUrl[log.Url] = l
+		s.cache.logByUrl.Add(log.Url, l)
 		s.ids.logs++
+		return l, nil
 	}
+	l := lI.(*models.Log)
 	return l, nil
 }
 
 func (s *Store) getOrCreateCertificate(c *x509.Certificate) (*models.Certificate, error) {
 	fp := fmt.Sprintf("%x", sha256.Sum256(c.Raw))
 
-	cert, ok := s.cache.certByFingerprint[fp]
+	certI, ok := s.cache.certByFingerprint.Get(fp)
 	if !ok {
-		cert = &models.Certificate{
+		cert := &models.Certificate{
 			ID:                s.ids.certs,
 			Sha256Fingerprint: fp,
 		}
@@ -57,9 +60,11 @@ func (s *Store) getOrCreateCertificate(c *x509.Certificate) (*models.Certificate
 		}
 
 		s.inserts.certs = append(s.inserts.certs, cert)
-		s.cache.certByFingerprint[fp] = cert
+		s.cache.certByFingerprint.Add(fp, cert)
 		s.ids.certs++
+		return cert, nil
 	}
+	cert := certI.(*models.Certificate)
 	return cert, nil
 }
 

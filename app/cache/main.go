@@ -16,7 +16,7 @@ import (
 func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
-	confFile := flag.String("config", "config/config.yml", "location of configuration file")
+	confFile := flag.String("config", "/home/gian/Desktop/github-repos/gollector/config/cache.yml", "location of configuration file")
 	flag.Parse()
 
 	conf, err := readConfig(*confFile)

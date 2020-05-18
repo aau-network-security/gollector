@@ -10,27 +10,27 @@ services:
       - ./config:/config:ro # configuration files
     ports:
       - "${GRPC_PORT}:${GRPC_PORT}"
-  entrada:
-    container_name: gollector-entrada
-    build:
-      context: .
-      dockerfile: app/entrada/Dockerfile
-    command: [ "--config", "/config/entrada.yml" ]
-    volumes:
-      - ./config:/config:ro # configuration files
-  zones:
-    container_name: gollector-zones
-    build:
-      context: .
-      dockerfile: app/zones/Dockerfile
-    command: [ "--config", "/config/zones.yml" ]
-    environment:
-      - COM_FTP_PASS=${COM_FTP_PASS}
-      - CZDS_PASS=${CZDS_PASS}
-      - DK_SSH_PASS=${DK_SSH_PASS}
-    volumes:
-      - ./config:/config:ro # configuration files
-      - ${SSH_DIR}:/ssh:ro  # ssh keys
+#   entrada:
+#     container_name: gollector-entrada
+#     build:
+#       context: .
+#       dockerfile: app/entrada/Dockerfile
+#     command: [ "--config", "/config/entrada.yml" ]
+#     volumes:
+#       - ./config:/config:ro # configuration files
+#   zones:
+#     container_name: gollector-zones
+#     build:
+#       context: .
+#       dockerfile: app/zones/Dockerfile
+#     command: [ "--config", "/config/zones.yml" ]
+#     environment:
+#       - COM_FTP_PASS=${COM_FTP_PASS}
+#       - CZDS_PASS=${CZDS_PASS}
+#       - DK_SSH_PASS=${DK_SSH_PASS}
+#     volumes:
+#       - ./config:/config:ro # configuration files
+#       - ${SSH_DIR}:/ssh:ro  # ssh keys
   ct:
     container_name: gollector-ct
     build:
@@ -39,15 +39,15 @@ services:
     command: [ "--config", "/config/ct.yml", "-logtostderr" ]
     volumes:
       - ./config:/config:ro # configuration files
-  splunk:
-    container_name: gollector-splunk
-    build:
-      context: .
-      dockerfile: app/splunk/Dockerfile
-    command: [ "--config", "/config/splunk.yml", "-logtostderr" ]
-    volumes:
-      - ./config:/config:ro # configuration files
-      - ${SPLUNK_DIR}:/splunk # directory containing Splunk JSON logs
+#   splunk:
+#     container_name: gollector-splunk
+#     build:
+#       context: .
+#       dockerfile: app/splunk/Dockerfile
+#     command: [ "--config", "/config/splunk.yml", "-logtostderr" ]
+#     volumes:
+#       - ./config:/config:ro # configuration files
+#       - ${SPLUNK_DIR}:/splunk # directory containing Splunk JSON logs
   db:
     container_name: gollector-db
     image: postgres

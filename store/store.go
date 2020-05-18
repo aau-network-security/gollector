@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"github.com/hashicorp/golang-lru"
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/go-pg/pg"
 	"github.com/jinzhu/gorm"
@@ -142,57 +143,66 @@ type Ids struct {
 }
 
 type cache struct {
-	tldByName              map[string]*models.Tld
-	tldAnonByName          map[string]*models.TldAnon
-	publicSuffixByName     map[string]*models.PublicSuffix
-	publicSuffixAnonByName map[string]*models.PublicSuffixAnon
-	apexByName             map[string]*models.Apex
-	apexByNameAnon         map[string]*models.ApexAnon
-	apexById               map[uint]*models.Apex
-	fqdnByName             map[string]*models.Fqdn
-	fqdnByNameAnon         map[string]*models.FqdnAnon
-	zoneEntriesByApexName  map[string]*models.ZonefileEntry
-	certByFingerprint      map[string]*models.Certificate
-	logByUrl               map[string]*models.Log
-	recordTypeByName       map[string]*models.RecordType
+	tldByName              *lru.Cache		//map[string]*models.Tld
+	tldAnonByName          *lru.Cache		//map[string]*models.TldAnon
+	publicSuffixByName     *lru.Cache		//map[string]*models.PublicSuffix
+	publicSuffixAnonByName *lru.Cache		//map[string]*models.PublicSuffixAnon
+	apexByName             *lru.Cache		//map[string]*models.Apex
+	apexByNameAnon         *lru.Cache		//map[string]*models.ApexAnon
+	apexById               *lru.Cache		//map[uint]*models.Apex
+	fqdnByName             *lru.Cache		//map[string]*models.Fqdn
+	fqdnByNameAnon         *lru.Cache		//map[string]*models.FqdnAnon
+	zoneEntriesByApexName  *lru.Cache		//map[string]*models.ZonefileEntry
+	certByFingerprint      *lru.Cache		//map[string]*models.Certificate
+	logByUrl               *lru.Cache		//map[string]*models.Log
+	recordTypeByName       *lru.Cache		//map[string]*models.RecordType
 	passiveEntryByFqdn     splunkEntryMap
-	entradaEntryByFqdn     map[string]*models.EntradaEntry
+	entradaEntryByFqdn     *lru.Cache		//map[string]*models.EntradaEntry
 }
 
 // prints the current status to standard output
 func (c *cache) describe() {
-	log.Debug().Msgf("tlds:            %d", len(c.tldByName))
-	log.Debug().Msgf("tlds (anon):     %d", len(c.tldAnonByName))
-	log.Debug().Msgf("suffixes:        %d", len(c.publicSuffixByName))
-	log.Debug().Msgf("suffixes (anon): %d", len(c.publicSuffixAnonByName))
-	log.Debug().Msgf("apexes:          %d", len(c.apexByName))
-	log.Debug().Msgf("apexes (anon):   %d", len(c.apexByNameAnon))
-	log.Debug().Msgf("fqdns:           %d", len(c.fqdnByName))
-	log.Debug().Msgf("fqdns (anon):    %d", len(c.fqdnByNameAnon))
-	log.Debug().Msgf("zone entries:    %d", len(c.zoneEntriesByApexName))
-	log.Debug().Msgf("certificates:    %d", len(c.certByFingerprint))
-	log.Debug().Msgf("logs:            %d", len(c.logByUrl))
-	log.Debug().Msgf("record types:    %d", len(c.recordTypeByName))
+	log.Debug().Msgf("tlds:            %d", c.tldByName.Len())
+	log.Debug().Msgf("tlds (anon):     %d", c.tldAnonByName.Len())
+	log.Debug().Msgf("suffixes:        %d", c.publicSuffixByName.Len())
+	log.Debug().Msgf("suffixes (anon): %d", c.publicSuffixAnonByName.Len())
+	log.Debug().Msgf("apexes:          %d", c.apexByName.Len())
+	log.Debug().Msgf("apexes (anon):   %d", c.apexByNameAnon.Len())
+	log.Debug().Msgf("fqdns:           %d", c.fqdnByName.Len())
+	log.Debug().Msgf("fqdns (anon):    %d", c.fqdnByNameAnon.Len())
+	log.Debug().Msgf("zone entries:    %d", c.zoneEntriesByApexName.Len())
+	log.Debug().Msgf("certificates:    %d", c.certByFingerprint.Len())
+	log.Debug().Msgf("logs:            %d", c.logByUrl.Len())
+	log.Debug().Msgf("record types:    %d", c.recordTypeByName.Len())
 	log.Debug().Msgf("passive entries: %d", c.passiveEntryByFqdn.len())
-	log.Debug().Msgf("entrada entries: %d", len(c.entradaEntryByFqdn))
+	//log.Debug().Msgf("entrada entries: %d", c.entradaEntryByFqdn.Len())
 }
 
-func newCache() cache {
+func newLRUCache(batchSize int) *lru.Cache {
+	c, err := lru.New(batchSize)
+	if err != nil {
+		fmt.Println("inside error")
+		return &lru.Cache{}
+	}
+	return c
+}
+
+func newCache(batchSize int) cache {
 	return cache{
-		tldByName:              make(map[string]*models.Tld),
-		tldAnonByName:          make(map[string]*models.TldAnon),
-		publicSuffixByName:     make(map[string]*models.PublicSuffix),
-		publicSuffixAnonByName: make(map[string]*models.PublicSuffixAnon),
-		apexByName:             make(map[string]*models.Apex),
-		apexByNameAnon:         make(map[string]*models.ApexAnon),
-		apexById:               make(map[uint]*models.Apex),
-		fqdnByName:             make(map[string]*models.Fqdn),
-		fqdnByNameAnon:         make(map[string]*models.FqdnAnon),
-		zoneEntriesByApexName:  make(map[string]*models.ZonefileEntry),
-		logByUrl:               make(map[string]*models.Log),
-		certByFingerprint:      make(map[string]*models.Certificate),
+		tldByName:              newLRUCache(batchSize),		//make(map[string]*models.Tld)
+		tldAnonByName:          newLRUCache(batchSize),		//make(map[string]*models.TldAnon),
+		publicSuffixByName:     newLRUCache(batchSize),		//make(map[string]*models.PublicSuffix),
+		publicSuffixAnonByName: newLRUCache(batchSize),		//make(map[string]*models.PublicSuffixAnon),
+		apexByName:             newLRUCache(batchSize),		//make(map[string]*models.Apex),
+		apexByNameAnon:         newLRUCache(batchSize),		//make(map[string]*models.ApexAnon),
+		apexById:               newLRUCache(batchSize),		//make(map[uint]*models.Apex),
+		fqdnByName:             newLRUCache(batchSize),		//make(map[string]*models.Fqdn),
+		fqdnByNameAnon:         newLRUCache(batchSize),		//make(map[string]*models.FqdnAnon),
+		zoneEntriesByApexName:  newLRUCache(batchSize),		//make(map[string]*models.ZonefileEntry),
+		logByUrl:               newLRUCache(batchSize),		//make(map[string]*models.Log),
+		certByFingerprint:      newLRUCache(batchSize),		//make(map[string]*models.Certificate),
 		passiveEntryByFqdn:     newSplunkEntryMap(),
-		recordTypeByName:       make(map[string]*models.RecordType),
+		recordTypeByName:       newLRUCache(batchSize),		//make(map[string]*models.RecordType),
 	}
 }
 
@@ -311,7 +321,7 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, tld := range tlds {
-		s.cache.tldByName[tld.Tld] = tld
+		s.cache.tldByName.Add(tld.Tld, tld)
 	}
 
 	var tldsAnon []*models.TldAnon
@@ -319,7 +329,7 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, tld := range tldsAnon {
-		s.cache.tldAnonByName[tld.Tld.Tld] = tld
+		s.cache.tldAnonByName.Add(tld.Tld.Tld, tld)
 	}
 
 	var suffixes []*models.PublicSuffix
@@ -327,7 +337,7 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, suffix := range suffixes {
-		s.cache.publicSuffixByName[suffix.PublicSuffix] = suffix
+		s.cache.publicSuffixByName.Add(suffix.PublicSuffix, suffix)
 	}
 
 	var suffixesAnon []*models.PublicSuffixAnon
@@ -335,7 +345,7 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, suffix := range suffixesAnon {
-		s.cache.publicSuffixAnonByName[suffix.PublicSuffix.PublicSuffix] = suffix
+		s.cache.publicSuffixAnonByName.Add(suffix.PublicSuffix.PublicSuffix, suffix)
 	}
 
 	var apexes []*models.Apex
@@ -343,8 +353,8 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, apex := range apexes {
-		s.cache.apexByName[apex.Apex] = apex
-		s.cache.apexById[apex.ID] = apex
+		s.cache.apexByName.Add(apex.Apex, apex)
+		s.cache.apexById.Add(apex.ID, apex)
 	}
 
 	var apexesAnon []*models.ApexAnon
@@ -352,17 +362,17 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, apex := range apexesAnon {
-		s.cache.apexByNameAnon[apex.Apex.Apex] = apex
+		s.cache.apexByNameAnon.Add(apex.Apex.Apex, apex)
 	}
 
 	var fqdns []*models.Fqdn
 	if err := s.db.Model(&fqdns).Order("id ASC").Select(); err != nil {
 		return err
 	}
-	fqdnsById := make(map[uint]*models.Fqdn)
+	fqdnsById := newLRUCache(s.batchSize)
 	for _, fqdn := range fqdns {
-		s.cache.fqdnByName[fqdn.Fqdn] = fqdn
-		fqdnsById[fqdn.ID] = fqdn
+		s.cache.fqdnByName.Add(fqdn.Fqdn, fqdn)
+		fqdnsById.Add(fqdn.ID, fqdn)
 	}
 
 	var fqdnsAnon []*models.FqdnAnon
@@ -370,7 +380,7 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, fqdn := range fqdnsAnon {
-		s.cache.fqdnByNameAnon[fqdn.Fqdn.Fqdn] = fqdn
+		s.cache.fqdnByNameAnon.Add(fqdn.Fqdn.Fqdn, fqdn)
 	}
 
 	var entries []*models.ZonefileEntry
@@ -378,8 +388,9 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, entry := range entries {
-		apex := s.cache.apexById[entry.ApexID]
-		s.cache.zoneEntriesByApexName[apex.Apex] = entry
+		apexI, _ := s.cache.apexById.Get(entry.ApexID)
+		apex := apexI.(models.Apex)
+		s.cache.zoneEntriesByApexName.Add(apex.Apex, entry)
 	}
 
 	var logs []*models.Log
@@ -387,7 +398,7 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, l := range logs {
-		s.cache.logByUrl[l.Url] = l
+		s.cache.logByUrl.Add(l.Url, l)
 	}
 
 	var certs []*models.Certificate
@@ -395,17 +406,17 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, c := range certs {
-		s.cache.certByFingerprint[c.Sha256Fingerprint] = c
+		s.cache.certByFingerprint.Add(c.Sha256Fingerprint, c)
 	}
 
 	var rtypes []*models.RecordType
 	if err := s.db.Model(&rtypes).Order("id ASC").Select(); err != nil {
 		return err
 	}
-	rtypeById := make(map[uint]*models.RecordType)
+	rtypeById := newLRUCache(s.batchSize)
 	for _, rtype := range rtypes {
-		s.cache.recordTypeByName[rtype.Type] = rtype
-		rtypeById[rtype.ID] = rtype
+		s.cache.recordTypeByName.Add(rtype.Type, rtype)
+		rtypeById.Add(rtype.ID, rtype)
 	}
 
 	var passiveEntries []*models.PassiveEntry
@@ -413,8 +424,10 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, entry := range passiveEntries {
-		fqdn := fqdnsById[entry.FqdnID]
-		rtype := rtypeById[entry.RecordTypeID]
+		fqdnI, _ := fqdnsById.Get(entry.FqdnID)
+		rtypeI, _ := rtypeById.Get(entry.RecordTypeID)
+		fqdn := fqdnI.(models.Fqdn)
+		rtype := rtypeI.(models.RecordType)
 		s.cache.passiveEntryByFqdn.add(fqdn.Fqdn, rtype.Type, entry)
 	}
 
@@ -513,7 +526,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 	s := Store{
 		conf:            conf,
 		db:              db,
-		cache:           newCache(),
+		cache:           newCache(opts.BatchSize),
 		allowedInterval: opts.AllowedInterval,
 		batchSize:       opts.BatchSize,
 		m:               &sync.Mutex{},

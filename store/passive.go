@@ -44,9 +44,9 @@ func newSplunkEntryMap() splunkEntryMap {
 }
 
 func (s *Store) getorCreateRecordType(rtype string) (*models.RecordType, error) {
-	rt, ok := s.cache.recordTypeByName[rtype]
+	rtI, ok := s.cache.recordTypeByName.Get(rtype)
 	if !ok {
-		rt = &models.RecordType{
+		rt := &models.RecordType{
 			ID:   s.ids.recordTypes,
 			Type: rtype,
 		}
@@ -54,9 +54,11 @@ func (s *Store) getorCreateRecordType(rtype string) (*models.RecordType, error) 
 			return nil, errors.Wrap(err, "insert record type")
 		}
 
-		s.cache.recordTypeByName[rtype] = rt
+		s.cache.recordTypeByName.Add(rtype, rt)
 		s.ids.recordTypes++
+		return rt, nil
 	}
+	rt := rtI.(*models.RecordType)
 	return rt, nil
 }
 
