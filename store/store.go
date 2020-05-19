@@ -180,10 +180,10 @@ func (c *cache) describe() {
 	//log.Debug().Msgf("entrada entries: %d", c.entradaEntryByFqdn.Len())
 }
 
-func newLRUCache(batchSize int) *lru.Cache {
-	c, err := lru.New(batchSize)
+func newLRUCache(cacheSize int) *lru.Cache {
+	c, err := lru.New(cacheSize)
 	if err != nil {
-		fmt.Println("inside error")
+		log.Error().Msg("Error Creating LRU Cache")
 		return &lru.Cache{}
 	}
 	return c

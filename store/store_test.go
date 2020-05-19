@@ -241,6 +241,8 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 	// check initialization of new store
 	opts := Opts{
 		BatchSize:       10,
+		TLDChaceSize: 	 3,
+		CacheSize:       5,
 		AllowedInterval: 10 * time.Millisecond,
 	}
 
@@ -313,6 +315,8 @@ func TestInit(t *testing.T) {
 
 	opts := Opts{
 		BatchSize:       10,
+		TLDChaceSize: 	 3,
+		CacheSize:       5,
 		AllowedInterval: 10 * time.Millisecond,
 	}
 

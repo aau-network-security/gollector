@@ -404,3 +404,91 @@ func TestGetOrCreateFqdnAnon_WithUnanon(t *testing.T) {
 		t.Fatalf("expected reference to fqdn to be %d, but is %d", 1, fqdnAnon.FqdnID)
 	}
 }
+
+// check for correct working of LRU Cache
+func TestLRUCache(t *testing.T) {
+	tests := []struct{
+		domain 		string
+		tld			string
+		isInChace	bool
+	}{
+		{
+			"www.example.co.uk",
+			"uk",
+			false,
+		},
+		{
+			"www.example.com",
+			"com",
+			true,
+		},
+		{
+			"www.example.dk",
+			"dk",
+			true,
+		},
+		{
+			"www.example.it",
+			"it",
+			true,
+		},
+	}
+
+
+	conf := Config{
+		User:     "postgres",
+		Password: "postgres",
+		DBName:   "domains",
+		Host:     "localhost",
+		Port:     10001,
+	}
+
+	// create an unanon domain
+	s, _, _, err := OpenStore(conf)
+	if err != nil {
+		t.Fatalf("failed to open store: %s", err)
+	}
+
+	for _, test := range tests{
+		domain, err := NewDomain(test.domain)
+		if err != nil {
+			t.Fatalf("failed to created new domain: %s", err)
+		}
+
+		if _, err := s.getOrCreateFqdn(domain); err != nil {
+			t.Fatalf("failed to create fqdn: %s", err)
+		}
+	}
+
+	//Check if the TLD are in the cache
+	for _, test := range tests{
+		_, ok := s.cache.tldByName.Get(test.tld)
+		if ok != test.isInChace {
+			t.Fatal("Failed to use the LRU Cache")
+		}
+	}
+
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("failed to run store post hooks: %s", err)
+	}
+
+	for _, test := range tests{
+
+		d, err := NewDomain(test.domain)
+		if err != nil {
+			t.Fatalf("failed to created new domain: %s", err)
+		}
+		_, ok := s.cache.tldByName.Get(d.tld.normal)
+		if !ok {
+			var tld models.Tld
+			if err := s.db.Model(&tld).Where("tld = ?", d.tld.normal).First(); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		if ok != test.isInChace{
+			t.Fatal("failed, the TLD should have been in the cache or viceversa")
+		}
+	}
+
+}

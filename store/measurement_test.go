@@ -28,6 +28,8 @@ func TestMeasurement(t *testing.T) {
 
 	opts := Opts{
 		BatchSize:       10,
+		TLDChaceSize: 	 3,
+		CacheSize:       5,
 		AllowedInterval: 10 * time.Millisecond,
 	}
 

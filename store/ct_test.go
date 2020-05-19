@@ -87,6 +87,8 @@ func TestStore_StoreLogEntry(t *testing.T) {
 	// check initialization of new store
 	opts := Opts{
 		BatchSize:       10,
+		TLDChaceSize: 	 3,
+		CacheSize:       5,
 		AllowedInterval: 10 * time.Millisecond,
 	}
 
