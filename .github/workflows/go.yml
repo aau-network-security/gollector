@@ -5,6 +5,10 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    env:
+      DB_VOLUME: /home
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: 10001
     steps:
 
     - name: Set up Go 1.13
@@ -22,6 +26,12 @@ jobs:
     - name: Get dependencies
       run: |
         go get -v -t -d ./...
+
+    - name: Run Database
+      run: docker-compose up db
+
+    - name: Check running containers
+      run: docker ps
 
     - name: Test
       run: go test -v ./...
