@@ -8,7 +8,9 @@ jobs:
     env:
       DB_VOLUME: /home
       POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PASS: postgres
       POSTGRES_PORT: 10001
+      GRPC_PORT: 20000
     steps:
 
     - name: Set up Go 1.13
