@@ -13,8 +13,8 @@ jobs:
         env:
           POSTGRES_HOST: 127.0.0.1
           POSTGRES_PASSWORD: dummy-password
-          POSTGRES_USER: dummy-user
-          POSTGRES_DB: dummy-db
+          POSTGRES_USER: postgres
+          POSTGRES_DB: domains
           GRPC_PORT: 20000
           DB_VOLUME: /home
         # Set health checks to wait until postgres has started
@@ -24,7 +24,6 @@ jobs:
           --health-timeout 5s
           --health-retries 5
         volumes: 
-          - ./db:/docker-entrypoint-initdb.d
           - ${DB_VOLUME?err}:/var/lib/postgresql/data
         ports:
           # Maps tcp port 5432 on service container to the host
