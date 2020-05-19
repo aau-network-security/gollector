@@ -256,17 +256,17 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 	}{
 		{
 			"tldByName",
-			len(s.cache.tldByName),
+			s.cache.tldByName.Len(),
 			2,
 		},
 		{
 			"apexByName",
-			len(s.cache.apexByName),
+			s.cache.apexByName.Len(),
 			2,
 		},
 		{
 			"fqdnByName",
-			len(s.cache.fqdnByName),
+			s.cache.fqdnByName.Len(),
 			3,
 		},
 		{
@@ -276,7 +276,7 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 		},
 		{
 			"recordTypeByName",
-			len(s.cache.recordTypeByName),
+			s.cache.recordTypeByName.Len(),
 			2,
 		},
 	}

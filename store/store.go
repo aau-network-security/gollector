@@ -16,6 +16,8 @@ import (
 var (
 	DefaultOpts = Opts{
 		BatchSize:       20000,
+		CacheSize: 		 20000,
+		TLDChaceSize:    2000,
 		AllowedInterval: 36 * time.Hour,
 	}
 )
@@ -187,22 +189,22 @@ func newLRUCache(batchSize int) *lru.Cache {
 	return c
 }
 
-func newCache(batchSize int) cache {
+func newCache(opts Opts) cache {
 	return cache{
-		tldByName:              newLRUCache(batchSize),		//make(map[string]*models.Tld)
-		tldAnonByName:          newLRUCache(batchSize),		//make(map[string]*models.TldAnon),
-		publicSuffixByName:     newLRUCache(batchSize),		//make(map[string]*models.PublicSuffix),
-		publicSuffixAnonByName: newLRUCache(batchSize),		//make(map[string]*models.PublicSuffixAnon),
-		apexByName:             newLRUCache(batchSize),		//make(map[string]*models.Apex),
-		apexByNameAnon:         newLRUCache(batchSize),		//make(map[string]*models.ApexAnon),
-		apexById:               newLRUCache(batchSize),		//make(map[uint]*models.Apex),
-		fqdnByName:             newLRUCache(batchSize),		//make(map[string]*models.Fqdn),
-		fqdnByNameAnon:         newLRUCache(batchSize),		//make(map[string]*models.FqdnAnon),
-		zoneEntriesByApexName:  newLRUCache(batchSize),		//make(map[string]*models.ZonefileEntry),
-		logByUrl:               newLRUCache(batchSize),		//make(map[string]*models.Log),
-		certByFingerprint:      newLRUCache(batchSize),		//make(map[string]*models.Certificate),
+		tldByName:              newLRUCache(opts.TLDChaceSize),		//make(map[string]*models.Tld)
+		tldAnonByName:          newLRUCache(opts.TLDChaceSize),		//make(map[string]*models.TldAnon),
+		publicSuffixByName:     newLRUCache(opts.CacheSize),		//make(map[string]*models.PublicSuffix),
+		publicSuffixAnonByName: newLRUCache(opts.CacheSize),		//make(map[string]*models.PublicSuffixAnon),
+		apexByName:             newLRUCache(opts.CacheSize),		//make(map[string]*models.Apex),
+		apexByNameAnon:         newLRUCache(opts.CacheSize),		//make(map[string]*models.ApexAnon),
+		apexById:               newLRUCache(opts.CacheSize),		//make(map[uint]*models.Apex),
+		fqdnByName:             newLRUCache(opts.CacheSize),		//make(map[string]*models.Fqdn),
+		fqdnByNameAnon:         newLRUCache(opts.CacheSize),		//make(map[string]*models.FqdnAnon),
+		zoneEntriesByApexName:  newLRUCache(opts.CacheSize),		//make(map[string]*models.ZonefileEntry),
+		logByUrl:               newLRUCache(opts.CacheSize),		//make(map[string]*models.Log),
+		certByFingerprint:      newLRUCache(opts.CacheSize),		//make(map[string]*models.Certificate),
 		passiveEntryByFqdn:     newSplunkEntryMap(),
-		recordTypeByName:       newLRUCache(batchSize),		//make(map[string]*models.RecordType),
+		recordTypeByName:       newLRUCache(opts.CacheSize),		//make(map[string]*models.RecordType),
 	}
 }
 
@@ -369,10 +371,10 @@ func (s *Store) init() error {
 	if err := s.db.Model(&fqdns).Order("id ASC").Select(); err != nil {
 		return err
 	}
-	fqdnsById := newLRUCache(s.batchSize)
+	fqdnsById := make(map[uint]*models.Fqdn)
 	for _, fqdn := range fqdns {
 		s.cache.fqdnByName.Add(fqdn.Fqdn, fqdn)
-		fqdnsById.Add(fqdn.ID, fqdn)
+		fqdnsById[fqdn.ID] = fqdn
 	}
 
 	var fqdnsAnon []*models.FqdnAnon
@@ -413,10 +415,10 @@ func (s *Store) init() error {
 	if err := s.db.Model(&rtypes).Order("id ASC").Select(); err != nil {
 		return err
 	}
-	rtypeById := newLRUCache(s.batchSize)
+	rtypeById := make(map[uint]*models.RecordType)
 	for _, rtype := range rtypes {
 		s.cache.recordTypeByName.Add(rtype.Type, rtype)
-		rtypeById.Add(rtype.ID, rtype)
+		rtypeById[rtype.ID] = rtype
 	}
 
 	var passiveEntries []*models.PassiveEntry
@@ -424,10 +426,8 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, entry := range passiveEntries {
-		fqdnI, _ := fqdnsById.Get(entry.FqdnID)
-		rtypeI, _ := rtypeById.Get(entry.RecordTypeID)
-		fqdn := fqdnI.(models.Fqdn)
-		rtype := rtypeI.(models.RecordType)
+		fqdn := fqdnsById[entry.FqdnID]
+		rtype := rtypeById[entry.RecordTypeID]
 		s.cache.passiveEntryByFqdn.add(fqdn.Fqdn, rtype.Type, entry)
 	}
 
@@ -495,6 +495,8 @@ func (s *Store) init() error {
 
 type Opts struct {
 	BatchSize       int
+	CacheSize		int
+	TLDChaceSize	int
 	AllowedInterval time.Duration
 }
 
@@ -526,7 +528,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 	s := Store{
 		conf:            conf,
 		db:              db,
-		cache:           newCache(opts.BatchSize),
+		cache:           newCache(opts),
 		allowedInterval: opts.AllowedInterval,
 		batchSize:       opts.BatchSize,
 		m:               &sync.Mutex{},
