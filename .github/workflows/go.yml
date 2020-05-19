@@ -5,12 +5,30 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
-    env:
-      DB_VOLUME: /home
-      POSTGRES_HOST: 127.0.0.1
-      POSTGRES_PASS: postgres
-      POSTGRES_PORT: 10001
-      GRPC_PORT: 20000
+
+    services:
+      postgres:
+        # pulling docker hub
+        image: postgres:latest # same with the one which is written on docker-compose
+        env:
+          POSTGRES_HOST: 127.0.0.1
+          POSTGRES_PASSWORD: dummy-password
+          POSTGRES_USER: dummy-user
+          POSTGRES_DB: dummy-db
+          GRPC_PORT: 20000
+          DB_VOLUME: /home
+        # Set health checks to wait until postgres has started
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        volumes: 
+          - ./db:/docker-entrypoint-initdb.d
+          - ${DB_VOLUME?err}:/var/lib/postgresql/data
+        ports:
+          # Maps tcp port 5432 on service container to the host
+          - 10001:5432
     steps:
 
     - name: Set up Go 1.13
@@ -29,12 +47,6 @@ jobs:
       run: |
         go get -v -t -d ./...
 
-    - name: Run Database
-      run: docker-compose up db
-
-    - name: Check running containers
-      run: docker ps
-
     - name: Test
-      run: go test -v ./...
+      run: go test -v --race ./...
 
