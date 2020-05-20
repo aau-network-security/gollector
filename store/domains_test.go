@@ -410,7 +410,7 @@ func TestLRUCache(t *testing.T) {
 	tests := []struct{
 		domain 		string
 		tld			string
-		isInChace	bool
+		isInCache	bool
 	}{
 		{
 			"www.example.co.uk",
