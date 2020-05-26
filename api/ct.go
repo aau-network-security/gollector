@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	api "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/app"
 	"github.com/aau-network-security/gollector/collectors/ct"
@@ -104,4 +105,12 @@ func (s *Server) StoreLogEntries(str api.CtApi_StoreLogEntriesServer) error {
 	wg.Wait()
 
 	return nil
+}
+
+func (s *Server) GetLastDBEntry(ctx context.Context, url *api.KnownLogURL) (*api.Index, error) {
+	logEntryIndex, err := s.Store.GetLastIndexLog(url.LogURL)
+	if err != nil {
+		return nil, err
+	}
+	return &api.Index{Start: logEntryIndex}, nil
 }

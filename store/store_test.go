@@ -330,3 +330,22 @@ func TestInit(t *testing.T) {
 		t.Fatalf("expected next id to be %d, but got %d", 11, s.ids.apexes)
 	}
 }
+
+func TestResetDB(t *testing.T) {
+	conf := Config{
+		User:     "postgres",
+		Password: "postgres",
+		DBName:   "domains",
+		Host:     "localhost",
+		Port:     10001,
+	}
+
+	g, err := conf.Open()
+	if err != nil {
+		t.Fatalf("failed to open gorm database: %s", err)
+	}
+
+	if err := tst.ResetDb(g); err != nil {
+		t.Fatalf("failed to reset database: %s", err)
+	}
+}

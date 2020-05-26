@@ -15,7 +15,6 @@ import (
 	"github.com/vbauerster/mpb/v4/decor"
 	"google.golang.org/grpc/metadata"
 	"sync"
-	"time"
 )
 
 var (
@@ -47,10 +46,10 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
-	t, err := time.Parse("2006-01-02", conf.Time)
-	if err != nil {
-		log.Fatal().Msgf("failed to parse time from config: %s", err)
-	}
+	//t, err := time.Parse("2006-01-02", conf.Time)
+	//if err != nil {
+	//	log.Fatal().Msgf("failed to parse time from config: %s", err)
+	//}
 
 	cc, err := conf.ApiAddr.Dial()
 	if err != nil {
@@ -58,6 +57,7 @@ func main() {
 	}
 
 	mClient := prt.NewMeasurementApiClient(cc)
+	ctApiClient := newCTApiClient(cc)
 
 	meta := prt.Meta{
 		Description: conf.Meta.Description,
@@ -81,7 +81,7 @@ func main() {
 	})
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
-	str, err := newStream(ctx, cc)
+	str, err := newStream(ctx, ctApiClient)
 	if err != nil {
 		log.Fatal().Msgf("failed to create log entry stream: %s", err)
 	}
@@ -132,10 +132,18 @@ func main() {
 				wg.Done()
 			}()
 
-			start, end, err := ct.IndexByDate(ctx, &l, t)
+			//start, end, err := ct.IndexByDate(ctx, &l, t)
+			//if err != nil {
+			//	return
+			//}
+
+			start, end, err := ct.IndexByLastEntryDB(ctx, &l, ctApiClient)
 			if err != nil {
 				return
 			}
+			log.Info().
+				Str("log", l.Name()).
+				Msgf("start index %d", start)
 
 			bar := p.AddBar(end-start,
 				mpb.PrependDecorators(
@@ -188,7 +196,8 @@ func main() {
 				WorkerCount: conf.WorkerCount,
 				StartIndex:  start,
 				//EndIndex:    end,
-				EndIndex: start + 100,
+				//EndIndex: index.Start + 100,
+				EndIndex: 0,
 			}
 
 			count, err = ct.Scan(ctx, &l, entryFn, opts)

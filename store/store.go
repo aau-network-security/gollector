@@ -9,6 +9,7 @@ import (
 	_ "github.com/lib/pq"
 	errs "github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
+	"strings"
 	"sync"
 	"time"
 )
@@ -282,6 +283,23 @@ func (s *Store) conditionalPostHooks() error {
 	return nil
 }
 
+func (s *Store) GetLastIndexLog(knowLogURL string) (int64, error) {
+	var knowLog models.Log
+	if err := s.db.Model(&knowLog).Where("url = ?", knowLogURL).First(); err != nil {
+		if !strings.Contains(err.Error(), "no rows in result set") {
+			return 0, err
+		}
+		return 0, nil 	//know log in not present in DB (it's new)
+	}
+
+	var lastLogEntry models.LogEntry
+	if err := s.db.Model(&lastLogEntry).Where("log_id = ?", knowLog.ID).Last(); err != nil {
+		return 0, err
+	}
+
+	return int64(lastLogEntry.Index + 1), nil
+}
+
 // use Gorm's auto migrate functionality
 func (s *Store) migrate() error {
 	g, err := s.conf.Open()
@@ -454,11 +472,11 @@ func (s *Store) init() error {
 		s.ids.tldsAnon = tldsAnon[len(tldsAnon)-1].ID + 1
 	}
 	s.ids.suffixes = 1
-	if len(suffixes) > 1 {
+	if len(suffixes) > 0 { //todo expalin why it was 1
 		s.ids.suffixes = suffixes[len(suffixes)-1].ID + 1
 	}
 	s.ids.suffixesAnon = 1
-	if len(suffixesAnon) > 1 {
+	if len(suffixesAnon) > 0 { //todo expalin why it was 1
 		s.ids.suffixesAnon = suffixesAnon[len(suffixesAnon)-1].ID + 1
 	}
 	s.ids.apexes = 1
