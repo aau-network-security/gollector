@@ -463,7 +463,7 @@ func TestLRUCache(t *testing.T) {
 	//Check if the TLD are in the cache
 	for _, test := range tests{
 		_, ok := s.cache.tldByName.Get(test.tld)
-		if ok != test.isInChace {
+		if ok != test.isInCache {
 			t.Fatal("Failed to use the LRU Cache")
 		}
 	}
@@ -486,7 +486,7 @@ func TestLRUCache(t *testing.T) {
 			}
 		}
 
-		if ok != test.isInChace{
+		if ok != test.isInCache{
 			t.Fatal("failed, the TLD should have been in the cache or viceversa")
 		}
 	}

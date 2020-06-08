@@ -4,6 +4,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/aau-network-security/gollector/api"
 	prt "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/collectors/ct"
@@ -14,7 +17,6 @@ import (
 	"github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
 	"google.golang.org/grpc/metadata"
-	"sync"
 )
 
 var (
@@ -117,6 +119,8 @@ func main() {
 	m := sync.Mutex{}
 	progress := 0
 
+	startTime := time.Now()
+
 	for _, l := range logs {
 		go func(l ct.Log) {
 			var count int64
@@ -194,10 +198,10 @@ func main() {
 
 			opts := ct.Options{
 				WorkerCount: conf.WorkerCount,
-				StartIndex:  start,
+				StartIndex:  0,
 				//EndIndex:    end,
 				//EndIndex: index.Start + 100,
-				EndIndex: 0,
+				EndIndex: 10000,
 			}
 
 			count, err = ct.Scan(ctx, &l, entryFn, opts)
@@ -207,7 +211,7 @@ func main() {
 		}(l)
 	}
 	p.Wait()
-
+	fmt.Println(time.Since(startTime))
 	if err := bs.CloseSend(ctx); err != nil {
 		log.Fatal().Msgf("error while closing connection to server: %s", err)
 	}

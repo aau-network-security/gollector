@@ -3,17 +3,32 @@ package store
 import (
 	"crypto/sha256"
 	"fmt"
+	"time"
+
 	"github.com/aau-network-security/gollector/collectors/ct"
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/pkg/errors"
-	"time"
 )
 
-func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
+func (s *Store) getLogFromCacheOrDB(log ct.Log) (*models.Log, error) {
 	//Check if it is in the cache
 	lI, ok := s.cache.logByUrl.Get(log.Url)
 	if !ok {
+		var log models.Log
+		if err := s.db.Model(&log).Where("url = ?", log.Url).First(); err != nil {
+			return nil, err
+		}
+		return &log, nil //It is in DB
+	}
+	res := lI.(*models.Log)
+	return res, nil //It is in Cache
+}
+
+func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
+
+	l, err := s.getLogFromCacheOrDB(log)
+	if err != nil { // It is not in cache or DB
 		l := &models.Log{
 			ID:          s.ids.logs,
 			Url:         log.Url,
@@ -27,15 +42,31 @@ func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
 		s.ids.logs++
 		return l, nil
 	}
-	l := lI.(*models.Log)
 	return l, nil
+}
+
+func (s *Store) getCertFromCacheOrDB(fp string) (*models.Certificate, error) {
+	//Check if it is in the cache
+	certI, ok := s.cache.certByFingerprint.Get(fp)
+	if !ok {
+		var cert models.Certificate
+		if err := s.db.Model(&cert).Where("sha256_fingerprint = ?", fp).First(); err != nil {
+			s.Counter.certNew++
+			return nil, err
+		}
+		s.Counter.certDBHit++
+		return &cert, nil //It is in DB
+	}
+	s.Counter.certCacheHit++
+	res := certI.(*models.Certificate)
+	return res, nil //It is in Cache
 }
 
 func (s *Store) getOrCreateCertificate(c *x509.Certificate) (*models.Certificate, error) {
 	fp := fmt.Sprintf("%x", sha256.Sum256(c.Raw))
 
-	certI, ok := s.cache.certByFingerprint.Get(fp)
-	if !ok {
+	cert, err := s.getCertFromCacheOrDB(fp)
+	if err != nil { // It is not in cache or DB
 		cert := &models.Certificate{
 			ID:                s.ids.certs,
 			Sha256Fingerprint: fp,
@@ -64,7 +95,6 @@ func (s *Store) getOrCreateCertificate(c *x509.Certificate) (*models.Certificate
 		s.ids.certs++
 		return cert, nil
 	}
-	cert := certI.(*models.Certificate)
 	return cert, nil
 }
 

@@ -2,6 +2,9 @@ package api
 
 import (
 	"context"
+	"io"
+	"sync"
+
 	api "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/app"
 	"github.com/aau-network-security/gollector/collectors/ct"
@@ -10,8 +13,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"io"
-	"sync"
 )
 
 func certFromLogEntry(le *api.LogEntry) (*x509.Certificate, error) {
@@ -101,6 +102,8 @@ func (s *Server) StoreLogEntries(str api.CtApi_StoreLogEntriesServer) error {
 				}
 			}()
 		}
+		log.Info().Msgf("%v", s.Store.Counter)
+		s.Store.ResetCounter()
 	}
 	wg.Wait()
 

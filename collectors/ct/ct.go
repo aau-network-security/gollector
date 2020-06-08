@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"time"
+
 	prt "github.com/aau-network-security/gollector/api/proto"
 	ct "github.com/google/certificate-transparency-go"
 	"github.com/google/certificate-transparency-go/client"
@@ -12,8 +15,6 @@ import (
 	"github.com/google/certificate-transparency-go/scanner"
 	errors2 "github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
-	"net/http"
-	"time"
 )
 
 var (
@@ -117,7 +118,7 @@ func IndexByLastEntryDB(ctx context.Context, l *Log, cc prt.CtApiClient) (int64,
 	}
 
 	index, err := cc.GetLastDBEntry(ctx, &prt.KnownLogURL{
-		LogURL:		l.Url,
+		LogURL: l.Url,
 	})
 	if err != nil {
 		return 0, 0, errors2.Wrap(err, "get Last LogEntry DB")
@@ -233,7 +234,7 @@ func Scan(ctx context.Context, l *Log, entryFn EntryFunc, opts Options) (int64, 
 			ParallelFetch: opts.WorkerCount,
 			StartIndex:    opts.StartIndex,
 			EndIndex:      opts.EndIndex,
-			Continuous:    true,
+			Continuous:    false,
 		},
 		Matcher:     &scanner.MatchAll{},
 		PrecertOnly: false,

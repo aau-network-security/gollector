@@ -3,10 +3,11 @@ package store
 import (
 	"crypto/sha256"
 	"fmt"
+	"strings"
+
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/pkg/errors"
 	"github.com/weppos/publicsuffix-go/net/publicsuffix"
-	"strings"
 )
 
 var (
@@ -114,38 +115,36 @@ func (s *Store) ensureAnonymized(domain *domain) error {
 }
 
 //Return the Tld found, otherwise error
-func (s *Store) getTldFromCacheOrDB(domain *domain) (*models.Tld, error){
+func (s *Store) getTldFromCacheOrDB(domain *domain) (*models.Tld, error) {
 	//Check if it is in the cache
 	resI, ok := s.cache.tldByName.Get(domain.tld.normal)
 	if !ok {
 		//Check if it uis in the DB
 		var tld models.Tld
 		if err := s.db.Model(&tld).Where("tld = ?", domain.tld.normal).First(); err != nil {
-			//todo might cause an error (better to not comment the code below) (in case change similar functions too)
-			//if strings.Contains(err.Error(), anyRowFound) {
-			//	return nil, err
-			//}
+			s.Counter.tldNew++
 			return nil, err
 		}
-		return &tld, nil	//It is in DB
+		s.Counter.tldDBHit++
+		return &tld, nil //It is in DB
 	}
 	res := resI.(*models.Tld)
-	return res, nil		//It is in Cache
+	s.Counter.tldCacheHit++
+	return res, nil //It is in Cache
 }
 
-func (s *Store) getTldAnonFromCacheOrDB(domain *domain) (*models.TldAnon, error){
+func (s *Store) getTldAnonFromCacheOrDB(domain *domain) (*models.TldAnon, error) {
 	anonI, ok := s.cache.tldAnonByName.Get(domain.tld.anon)
 	if !ok {
 		var tldAnon models.TldAnon
 		if err := s.db.Model(&tldAnon).Where("tld = ?", domain.tld.normal).First(); err != nil {
 			return nil, err
 		}
-		return &tldAnon, nil	//It is in DB
+		return &tldAnon, nil //It is in DB
 	}
 	anon := anonI.(*models.TldAnon)
-	return anon, nil		//It is in Cache
+	return anon, nil //It is in Cache
 }
-
 
 func (s *Store) getOrCreateTld(domain *domain) (*models.Tld, error) {
 	if err := s.ensureAnonymized(domain); err != nil {
@@ -153,7 +152,7 @@ func (s *Store) getOrCreateTld(domain *domain) (*models.Tld, error) {
 	}
 
 	res, err := s.getTldFromCacheOrDB(domain)
-	if err != nil {	// It is not in cache or DB
+	if err != nil { // It is not in cache or DB
 
 		tx, err := s.db.Begin()
 		if err != nil {
@@ -184,7 +183,7 @@ func (s *Store) getOrCreateTld(domain *domain) (*models.Tld, error) {
 		s.cache.tldByName.Add(domain.tld.normal, res)
 		s.ids.tlds++
 	}
-	return res, nil		//it was in cache or DB
+	return res, nil //it was in cache or DB
 }
 
 func (s *Store) getOrCreateTldAnon(domain *domain) (*models.TldAnon, error) {
@@ -215,30 +214,33 @@ func (s *Store) getOrCreateTldAnon(domain *domain) (*models.TldAnon, error) {
 	return res, nil
 }
 
-func (s *Store) getPublicSuffixFromCacheOrDB(domain *domain) (*models.PublicSuffix, error){
+func (s *Store) getPublicSuffixFromCacheOrDB(domain *domain) (*models.PublicSuffix, error) {
 	psI, ok := s.cache.publicSuffixByName.Get(domain.publicSuffix.normal)
 	if !ok {
 		var ps models.PublicSuffix
 		if err := s.db.Model(&ps).Where("public_suffix = ?", domain.publicSuffix.normal).First(); err != nil {
+			s.Counter.psNew++
 			return nil, err
 		}
-		return &ps, nil	//It is in DB
+		s.Counter.psDBHit++
+		return &ps, nil //It is in DB
 	}
 	ps := psI.(*models.PublicSuffix)
-	return ps, nil		//It is in Cache
+	s.Counter.psCacheHit++
+	return ps, nil //It is in Cache
 }
 
-func (s *Store) getPublicSuffixAnonFromCacheOrDB(domain *domain) (*models.PublicSuffixAnon, error){
+func (s *Store) getPublicSuffixAnonFromCacheOrDB(domain *domain) (*models.PublicSuffixAnon, error) {
 	psI, ok := s.cache.publicSuffixAnonByName.Get(domain.publicSuffix.anon)
 	if !ok {
 		var psAnon models.PublicSuffixAnon
 		if err := s.db.Model(&psAnon).Where("public_suffix = ?", domain.publicSuffix.anon).First(); err != nil {
 			return nil, err
 		}
-		return &psAnon, nil	//It is in DB
+		return &psAnon, nil //It is in DB
 	}
 	ps := psI.(*models.PublicSuffixAnon)
-	return ps, nil		//It is in Cache
+	return ps, nil //It is in Cache
 }
 
 func (s *Store) getOrCreatePublicSuffix(domain *domain) (*models.PublicSuffix, error) {
@@ -271,7 +273,7 @@ func (s *Store) getOrCreatePublicSuffix(domain *domain) (*models.PublicSuffix, e
 
 		// update anonymized model (if it exists)
 		anon, err := s.getPublicSuffixAnonFromCacheOrDB(domain)
-		if err == nil{ //It is in the cache or DB
+		if err == nil { //It is in the cache or DB
 			anon.PublicSuffixID = res.ID
 			if err := tx.Update(anon); err != nil {
 				return nil, err
@@ -323,30 +325,33 @@ func (s *Store) getOrCreatePublicSuffixAnon(domain *domain) (*models.PublicSuffi
 	return res, nil
 }
 
-func (s *Store) getApexFromCacheOrDB(domain *domain) (*models.Apex, error){
+func (s *Store) getApexFromCacheOrDB(domain *domain) (*models.Apex, error) {
 	aI, ok := s.cache.apexByName.Get(domain.apex.normal)
 	if !ok {
 		var a models.Apex
 		if err := s.db.Model(&a).Where("apex = ?", domain.apex.normal).First(); err != nil {
+			s.Counter.apexNew++
 			return nil, err
 		}
-		return &a, nil	//It is in DB
+		s.Counter.apexDBHit++
+		return &a, nil //It is in DB
 	}
 	apex := aI.(*models.Apex)
-	return apex, nil		//It is in Cache
+	s.Counter.apexCacheHit++
+	return apex, nil //It is in Cache
 }
 
-func (s *Store) getApexAnonFromCacheOrDB(domain *domain) (*models.ApexAnon, error){
+func (s *Store) getApexAnonFromCacheOrDB(domain *domain) (*models.ApexAnon, error) {
 	aI, ok := s.cache.apexByNameAnon.Get(domain.apex.anon)
 	if !ok {
 		var aAnon models.ApexAnon
 		if err := s.db.Model(&aAnon).Where("apex = ?", domain.apex.anon).First(); err != nil {
 			return nil, err
 		}
-		return &aAnon, nil	//It is in DB
+		return &aAnon, nil //It is in DB
 	}
 	a := aI.(*models.ApexAnon)
-	return a, nil		//It is in Cache
+	return a, nil //It is in Cache
 }
 
 func (s *Store) getOrCreateApex(domain *domain) (*models.Apex, error) {
@@ -417,32 +422,34 @@ func (s *Store) getOrCreateApexAnon(domain *domain) (*models.ApexAnon, error) {
 	return res, nil
 }
 
-func (s *Store) getFqdnFromCacheOrDB(domain *domain) (*models.Fqdn, error){
+func (s *Store) getFqdnFromCacheOrDB(domain *domain) (*models.Fqdn, error) {
 	fqdnI, ok := s.cache.fqdnByName.Get(domain.fqdn.normal)
 	if !ok {
 		var fqdn models.Fqdn
 		if err := s.db.Model(&fqdn).Where("fqdn = ?", domain.fqdn.normal).First(); err != nil {
+			s.Counter.fqdnNew++
 			return nil, err
 		}
-		return &fqdn, nil	//It is in DB
+		s.Counter.fqdnDBHit++
+		return &fqdn, nil //It is in DB
 	}
 	fqdn := fqdnI.(*models.Fqdn)
-	return fqdn, nil		//It is in Cache
+	s.Counter.fqdnCacheHit++
+	return fqdn, nil //It is in Cache
 }
 
-func (s *Store) getFqdnAnonFromCacheOrDB(domain *domain) (*models.FqdnAnon, error){
+func (s *Store) getFqdnAnonFromCacheOrDB(domain *domain) (*models.FqdnAnon, error) {
 	fqdnI, ok := s.cache.fqdnByNameAnon.Get(domain.fqdn.anon)
 	if !ok {
 		var fqdnAnon models.FqdnAnon
 		if err := s.db.Model(&fqdnAnon).Where("fqdn = ?", domain.fqdn.anon).First(); err != nil {
 			return nil, err
 		}
-		return &fqdnAnon, nil	//It is in DB
+		return &fqdnAnon, nil //It is in DB
 	}
 	fqdnAnon := fqdnI.(*models.FqdnAnon)
-	return fqdnAnon, nil		//It is in Cache
+	return fqdnAnon, nil //It is in Cache
 }
-
 
 func (s *Store) getOrCreateFqdn(domain *domain) (*models.Fqdn, error) {
 	if err := s.ensureAnonymized(domain); err != nil {

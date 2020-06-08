@@ -9,11 +9,19 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
+	"runtime"
 	"time"
 )
 
 func main() {
+	runtime.SetBlockProfileRate(1)
+
+	go func() {
+		http.ListenAndServe(":8881", nil)
+	}()
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	confFile := flag.String("config", "config/config.yml", "location of configuration file")

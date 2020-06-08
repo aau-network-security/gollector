@@ -11,9 +11,11 @@ require (
 	github.com/go-pg/pg v8.0.6+incompatible
 	github.com/golang/protobuf v1.3.2
 	github.com/google/certificate-transparency-go v1.0.22-0.20190613123100-f1b2d813b630
+	github.com/google/pprof v0.0.0-20200604032702-163a225fb653 // indirect
 	github.com/google/trillian v1.3.2 // indirect
 	github.com/google/uuid v1.1.1
 	github.com/hashicorp/golang-lru v0.5.4
+	github.com/ianlancetaylor/demangle v0.0.0-20200524003926-2c5affb30a03 // indirect
 	github.com/jinzhu/gorm v1.9.11
 	github.com/jlaffaye/ftp v0.0.0-20190828173736-6aaa91c7796e
 	github.com/lib/pq v1.2.0
@@ -26,6 +28,7 @@ require (
 	github.com/weppos/publicsuffix-go v0.10.0
 	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
+	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980 // indirect
 	golang.org/x/text v0.3.2
 	google.golang.org/grpc v1.24.0
 	gopkg.in/yaml.v2 v2.2.4

@@ -2,22 +2,23 @@ package store
 
 import (
 	"fmt"
-	"github.com/hashicorp/golang-lru"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/go-pg/pg"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/jinzhu/gorm"
 	_ "github.com/lib/pq"
 	errs "github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
-	"strings"
-	"sync"
-	"time"
 )
 
 var (
 	DefaultOpts = Opts{
 		BatchSize:       20000,
-		CacheSize: 		 20000,
+		CacheSize:       20000,
 		TLDChaceSize:    2000,
 		AllowedInterval: 36 * time.Hour,
 	}
@@ -146,21 +147,21 @@ type Ids struct {
 }
 
 type cache struct {
-	tldByName              *lru.Cache		//map[string]*models.Tld
-	tldAnonByName          *lru.Cache		//map[string]*models.TldAnon
-	publicSuffixByName     *lru.Cache		//map[string]*models.PublicSuffix
-	publicSuffixAnonByName *lru.Cache		//map[string]*models.PublicSuffixAnon
-	apexByName             *lru.Cache		//map[string]*models.Apex
-	apexByNameAnon         *lru.Cache		//map[string]*models.ApexAnon
-	apexById               *lru.Cache		//map[uint]*models.Apex
-	fqdnByName             *lru.Cache		//map[string]*models.Fqdn
-	fqdnByNameAnon         *lru.Cache		//map[string]*models.FqdnAnon
-	zoneEntriesByApexName  *lru.Cache		//map[string]*models.ZonefileEntry
-	certByFingerprint      *lru.Cache		//map[string]*models.Certificate
-	logByUrl               *lru.Cache		//map[string]*models.Log
-	recordTypeByName       *lru.Cache		//map[string]*models.RecordType
+	tldByName              *lru.Cache //map[string]*models.Tld
+	tldAnonByName          *lru.Cache //map[string]*models.TldAnon
+	publicSuffixByName     *lru.Cache //map[string]*models.PublicSuffix
+	publicSuffixAnonByName *lru.Cache //map[string]*models.PublicSuffixAnon
+	apexByName             *lru.Cache //map[string]*models.Apex
+	apexByNameAnon         *lru.Cache //map[string]*models.ApexAnon
+	apexById               *lru.Cache //map[uint]*models.Apex
+	fqdnByName             *lru.Cache //map[string]*models.Fqdn
+	fqdnByNameAnon         *lru.Cache //map[string]*models.FqdnAnon
+	zoneEntriesByApexName  *lru.Cache //map[string]*models.ZonefileEntry
+	certByFingerprint      *lru.Cache //map[string]*models.Certificate
+	logByUrl               *lru.Cache //map[string]*models.Log
+	recordTypeByName       *lru.Cache //map[string]*models.RecordType
 	passiveEntryByFqdn     splunkEntryMap
-	entradaEntryByFqdn     *lru.Cache		//map[string]*models.EntradaEntry
+	entradaEntryByFqdn     *lru.Cache //map[string]*models.EntradaEntry
 }
 
 // prints the current status to standard output
@@ -192,20 +193,20 @@ func newLRUCache(cacheSize int) *lru.Cache {
 
 func newCache(opts Opts) cache {
 	return cache{
-		tldByName:              newLRUCache(opts.TLDChaceSize),		//make(map[string]*models.Tld)
-		tldAnonByName:          newLRUCache(opts.TLDChaceSize),		//make(map[string]*models.TldAnon),
-		publicSuffixByName:     newLRUCache(opts.CacheSize),		//make(map[string]*models.PublicSuffix),
-		publicSuffixAnonByName: newLRUCache(opts.CacheSize),		//make(map[string]*models.PublicSuffixAnon),
-		apexByName:             newLRUCache(opts.CacheSize),		//make(map[string]*models.Apex),
-		apexByNameAnon:         newLRUCache(opts.CacheSize),		//make(map[string]*models.ApexAnon),
-		apexById:               newLRUCache(opts.CacheSize),		//make(map[uint]*models.Apex),
-		fqdnByName:             newLRUCache(opts.CacheSize),		//make(map[string]*models.Fqdn),
-		fqdnByNameAnon:         newLRUCache(opts.CacheSize),		//make(map[string]*models.FqdnAnon),
-		zoneEntriesByApexName:  newLRUCache(opts.CacheSize),		//make(map[string]*models.ZonefileEntry),
-		logByUrl:               newLRUCache(opts.CacheSize),		//make(map[string]*models.Log),
-		certByFingerprint:      newLRUCache(opts.CacheSize),		//make(map[string]*models.Certificate),
+		tldByName:              newLRUCache(opts.TLDChaceSize), //make(map[string]*models.Tld)
+		tldAnonByName:          newLRUCache(opts.TLDChaceSize), //make(map[string]*models.TldAnon),
+		publicSuffixByName:     newLRUCache(opts.CacheSize),    //make(map[string]*models.PublicSuffix),
+		publicSuffixAnonByName: newLRUCache(opts.CacheSize),    //make(map[string]*models.PublicSuffixAnon),
+		apexByName:             newLRUCache(opts.CacheSize),    //make(map[string]*models.Apex),
+		apexByNameAnon:         newLRUCache(opts.CacheSize),    //make(map[string]*models.ApexAnon),
+		apexById:               newLRUCache(opts.CacheSize),    //make(map[uint]*models.Apex),
+		fqdnByName:             newLRUCache(opts.CacheSize),    //make(map[string]*models.Fqdn),
+		fqdnByNameAnon:         newLRUCache(opts.CacheSize),    //make(map[string]*models.FqdnAnon),
+		zoneEntriesByApexName:  newLRUCache(opts.CacheSize),    //make(map[string]*models.ZonefileEntry),
+		logByUrl:               newLRUCache(opts.CacheSize),    //make(map[string]*models.Log),
+		certByFingerprint:      newLRUCache(opts.CacheSize),    //make(map[string]*models.Certificate),
 		passiveEntryByFqdn:     newSplunkEntryMap(),
-		recordTypeByName:       newLRUCache(opts.CacheSize),		//make(map[string]*models.RecordType),
+		recordTypeByName:       newLRUCache(opts.CacheSize), //make(map[string]*models.RecordType),
 	}
 }
 
@@ -248,6 +249,25 @@ type Store struct {
 	ms              measurementState
 	anonymizer      *Anonymizer
 	Ready           *Ready
+	Counter         counter
+}
+
+type counter struct {
+	tldCacheHit  int
+	tldDBHit     int
+	tldNew       int
+	psCacheHit   int
+	psDBHit      int
+	psNew        int
+	apexCacheHit int
+	apexDBHit    int
+	apexNew      int
+	fqdnCacheHit int
+	fqdnDBHit    int
+	fqdnNew      int
+	certCacheHit int
+	certDBHit    int
+	certNew      int
 }
 
 func (s *Store) WithAnonymizer(a *Anonymizer) *Store {
@@ -289,7 +309,7 @@ func (s *Store) GetLastIndexLog(knowLogURL string) (int64, error) {
 		if !strings.Contains(err.Error(), "no rows in result set") {
 			return 0, err
 		}
-		return 0, nil 	//know log in not present in DB (it's new)
+		return 0, nil //know log in not present in DB (it's new)
 	}
 
 	var lastLogEntry models.LogEntry
@@ -335,6 +355,7 @@ func (s *Store) migrate() error {
 	return nil
 }
 
+//todo implement a limit
 func (s *Store) init() error {
 	var tlds []*models.Tld
 	if err := s.db.Model(&tlds).Order("id ASC").Select(); err != nil {
@@ -472,11 +493,11 @@ func (s *Store) init() error {
 		s.ids.tldsAnon = tldsAnon[len(tldsAnon)-1].ID + 1
 	}
 	s.ids.suffixes = 1
-	if len(suffixes) > 0 { //todo expalin why it was 1
+	if len(suffixes) > 0 {
 		s.ids.suffixes = suffixes[len(suffixes)-1].ID + 1
 	}
 	s.ids.suffixesAnon = 1
-	if len(suffixesAnon) > 0 { //todo expalin why it was 1
+	if len(suffixesAnon) > 0 {
 		s.ids.suffixesAnon = suffixesAnon[len(suffixesAnon)-1].ID + 1
 	}
 	s.ids.apexes = 1
@@ -513,8 +534,8 @@ func (s *Store) init() error {
 
 type Opts struct {
 	BatchSize       int
-	CacheSize		int
-	TLDChaceSize	int
+	CacheSize       int
+	TLDChaceSize    int
 	AllowedInterval time.Duration
 }
 
@@ -529,6 +550,24 @@ func (hook *debugHook) BeforeQuery(qe *pg.QueryEvent) {
 }
 
 func (hook *debugHook) AfterQuery(qe *pg.QueryEvent) {}
+
+func (s *Store) ResetCounter() {
+	s.Counter.apexCacheHit = 0
+	s.Counter.apexDBHit = 0
+	s.Counter.apexNew = 0
+	s.Counter.fqdnCacheHit = 0
+	s.Counter.fqdnDBHit = 0
+	s.Counter.fqdnNew = 0
+	s.Counter.psCacheHit = 0
+	s.Counter.psDBHit = 0
+	s.Counter.psNew = 0
+	s.Counter.tldCacheHit = 0
+	s.Counter.tldDBHit = 0
+	s.Counter.tldNew = 0
+	s.Counter.certCacheHit = 0
+	s.Counter.certDBHit = 0
+	s.Counter.certNew = 0
+}
 
 func NewStore(conf Config, opts Opts) (*Store, error) {
 	pgOpts := pg.Options{
@@ -557,6 +596,23 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		anonymizer:      &DefaultAnonymizer,
 		ms:              NewMeasurementState(),
 		Ready:           NewReady(),
+		Counter: counter{
+			tldCacheHit:  0,
+			tldDBHit:     0,
+			tldNew:       0,
+			psCacheHit:   0,
+			psDBHit:      0,
+			psNew:        0,
+			apexCacheHit: 0,
+			apexDBHit:    0,
+			apexNew:      0,
+			fqdnCacheHit: 0,
+			fqdnDBHit:    0,
+			fqdnNew:      0,
+			certCacheHit: 0,
+			certDBHit:    0,
+			certNew:      0,
+		},
 	}
 
 	postHook := storeCachedValuePosthook()

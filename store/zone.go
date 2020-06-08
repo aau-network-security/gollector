@@ -1,8 +1,9 @@
 package store
 
 import (
-	"github.com/aau-network-security/gollector/store/models"
 	"time"
+
+	"github.com/aau-network-security/gollector/store/models"
 )
 
 func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.ZonefileEntry, error) {
@@ -27,6 +28,7 @@ func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.Z
 	}
 
 	existingZEI, ok := s.cache.zoneEntriesByApexName.Get(apex.Apex)
+	//todo implement request in the db here
 	if !ok {
 		// non-active domain, create a new zone entry
 		newZoneEntry := &models.ZonefileEntry{
