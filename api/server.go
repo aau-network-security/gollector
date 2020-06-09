@@ -3,6 +3,10 @@ package api
 import (
 	"context"
 	"errors"
+	"net"
+	"os"
+	"time"
+
 	prt "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/app"
 	"github.com/aau-network-security/gollector/store"
@@ -12,8 +16,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
-	"net"
-	"time"
 )
 
 var (
@@ -37,9 +39,10 @@ func timeFromUnix(ts int64) time.Time {
 }
 
 type Server struct {
-	Conf  Config
-	Store *store.Store
-	Log   app.ErrLogger
+	Conf          Config
+	Store         *store.Store
+	Log           app.ErrLogger
+	BenchmarkFile *os.File
 }
 
 func (s *Server) Run(lis net.Listener) error {

@@ -201,7 +201,7 @@ func main() {
 				StartIndex:  0,
 				//EndIndex:    end,
 				//EndIndex: index.Start + 100,
-				EndIndex: 100000,
+				EndIndex: 10000,
 			}
 
 			count, err = ct.Scan(ctx, &l, entryFn, opts)

@@ -3,17 +3,18 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/aau-network-security/gollector/api"
-	"github.com/aau-network-security/gollector/app"
-	"github.com/aau-network-security/gollector/store"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"runtime"
 	"time"
+
+	"github.com/aau-network-security/gollector/api"
+	"github.com/aau-network-security/gollector/app"
+	"github.com/aau-network-security/gollector/store"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 func main() {
@@ -39,7 +40,7 @@ func main() {
 	opts := store.Opts{
 		AllowedInterval: 36 * time.Hour,
 		BatchSize:       50000,
-		CacheSize: 		 20000,
+		CacheSize:       20000,
 		TLDChaceSize:    2000,
 	}
 
@@ -75,10 +76,23 @@ func main() {
 		logger = app.NewZeroLogger(tags)
 	}
 
+	// open output file
+	fo, err := os.Create("output/output.txt")
+	if err != nil {
+		panic(err)
+	}
+	// close fo on exit and check for its returned error
+	defer func() {
+		if err := fo.Close(); err != nil {
+			panic(err)
+		}
+	}()
+
 	serv := api.Server{
-		Conf:  conf.Api,
-		Store: s,
-		Log:   logger,
+		Conf:          conf.Api,
+		Store:         s,
+		Log:           logger,
+		BenchmarkFile: fo,
 	}
 
 	addr := fmt.Sprintf(":%d", conf.Api.Api.Port)
