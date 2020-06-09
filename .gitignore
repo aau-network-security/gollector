@@ -24,5 +24,6 @@ _data
 # vendor/
 
 ### Go Patch ###
+output/
 /vendor/
 /Godeps/
