@@ -3,14 +3,15 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net"
+	"os"
+	"time"
+
 	"github.com/aau-network-security/gollector/api"
 	"github.com/aau-network-security/gollector/app"
 	"github.com/aau-network-security/gollector/store"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"net"
-	"os"
-	"time"
 )
 
 func main() {
@@ -65,10 +66,23 @@ func main() {
 		logger = app.NewZeroLogger(tags)
 	}
 
+	// open output file
+	fo, err := os.Create("output/output.txt")
+	if err != nil {
+		panic(err)
+	}
+	// close fo on exit and check for its returned error
+	defer func() {
+		if err := fo.Close(); err != nil {
+			panic(err)
+		}
+	}()
+
 	serv := api.Server{
-		Conf:  conf.Api,
-		Store: s,
-		Log:   logger,
+		Conf:          conf.Api,
+		Store:         s,
+		Log:           logger,
+		BenchmarkFile: fo,
 	}
 
 	addr := fmt.Sprintf(":%d", conf.Api.Api.Port)

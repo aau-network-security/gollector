@@ -8,6 +8,7 @@ services:
     command: [ "--config", "/config/cache.yml" ]
     volumes:
       - ./config:/config:ro # configuration files
+      - ./output:/output:rw
     ports:
       - "${GRPC_PORT}:${GRPC_PORT}"
   entrada:

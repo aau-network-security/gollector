@@ -1,6 +1,11 @@
 package api
 
 import (
+	"io"
+	"strconv"
+	"sync"
+	"time"
+
 	api "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/app"
 	"github.com/aau-network-security/gollector/collectors/ct"
@@ -9,8 +14,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"io"
-	"sync"
 )
 
 func certFromLogEntry(le *api.LogEntry) (*x509.Certificate, error) {
@@ -73,6 +76,7 @@ func (s *Server) StoreLogEntries(str api.CtApi_StoreLogEntriesServer) error {
 					Ts:        timeFromUnix(le.Timestamp),
 					Log:       l,
 				}
+				startTime := time.Now()
 				if err := s.Store.StoreLogEntry(muid, entry); err != nil {
 					s.Log.Log(err, app.LogOptions{
 						Msg: "failed to store log entry",
@@ -84,6 +88,10 @@ func (s *Server) StoreLogEntries(str api.CtApi_StoreLogEntriesServer) error {
 						Ok:    false,
 						Error: err.Error(),
 					}
+				}
+				finishTime := time.Since(startTime)
+				if _, err := s.BenchmarkFile.Write([]byte(strconv.FormatInt(finishTime.Microseconds(), 10) + ",")); err != nil {
+					panic(err)
 				}
 			}
 
