@@ -17,7 +17,7 @@ func (s *Store) getLogFromCacheOrDB(log ct.Log) (*models.Log, error) {
 	//Check if it is in the cache
 	lI, ok := s.cache.logByUrl.Get(log.Url)
 	if !ok {
-		if s.cache.logByUrl.Len() < s.opts.LogCacheSize {
+		if s.cache.logByUrl.Len() < s.cacheOpts.LogSize {
 			return nil, cacheNotFull
 		}
 		var log models.Log
@@ -54,7 +54,7 @@ func (s *Store) getCertFromCacheOrDB(fp string) (*models.Certificate, error) {
 	//Check if it is in the cache
 	certI, ok := s.cache.certByFingerprint.Get(fp)
 	if !ok {
-		if s.cache.certByFingerprint.Len() < s.opts.CacheSize {
+		if s.cache.certByFingerprint.Len() < s.cacheOpts.CertSize {
 			return nil, cacheNotFull
 		}
 		var cert models.Certificate

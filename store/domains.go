@@ -119,7 +119,7 @@ func (s *Store) getTldFromCacheOrDB(domain *domain) (*models.Tld, error) {
 	//Check if it is in the cache
 	resI, ok := s.cache.tldByName.Get(domain.tld.normal)
 	if !ok {
-		if s.cache.tldByName.Len() < s.opts.CacheSize {
+		if s.cache.tldByName.Len() < s.cacheOpts.TLDSize {
 			return nil, cacheNotFull
 		}
 		//Check if it is in the DB
@@ -139,7 +139,7 @@ func (s *Store) getTldFromCacheOrDB(domain *domain) (*models.Tld, error) {
 func (s *Store) getTldAnonFromCacheOrDB(domain *domain) (*models.TldAnon, error) {
 	anonI, ok := s.cache.tldAnonByName.Get(domain.tld.anon)
 	if !ok {
-		if s.cache.tldAnonByName.Len() < s.opts.CacheSize {
+		if s.cache.tldAnonByName.Len() < s.cacheOpts.TLDSize {
 			return nil, cacheNotFull
 		}
 		var tldAnon models.TldAnon
@@ -223,7 +223,7 @@ func (s *Store) getOrCreateTldAnon(domain *domain) (*models.TldAnon, error) {
 func (s *Store) getPublicSuffixFromCacheOrDB(domain *domain) (*models.PublicSuffix, error) {
 	psI, ok := s.cache.publicSuffixByName.Get(domain.publicSuffix.normal)
 	if !ok {
-		if s.cache.publicSuffixByName.Len() < s.opts.CacheSize {
+		if s.cache.publicSuffixByName.Len() < s.cacheOpts.PSuffSize {
 			return nil, cacheNotFull
 		}
 		var ps models.PublicSuffix
@@ -242,7 +242,7 @@ func (s *Store) getPublicSuffixFromCacheOrDB(domain *domain) (*models.PublicSuff
 func (s *Store) getPublicSuffixAnonFromCacheOrDB(domain *domain) (*models.PublicSuffixAnon, error) {
 	psI, ok := s.cache.publicSuffixAnonByName.Get(domain.publicSuffix.anon)
 	if !ok {
-		if s.cache.publicSuffixAnonByName.Len() < s.opts.CacheSize {
+		if s.cache.publicSuffixAnonByName.Len() < s.cacheOpts.PSuffSize {
 			return nil, cacheNotFull
 		}
 		var psAnon models.PublicSuffixAnon
@@ -340,7 +340,7 @@ func (s *Store) getOrCreatePublicSuffixAnon(domain *domain) (*models.PublicSuffi
 func (s *Store) getApexFromCacheOrDB(domain *domain) (*models.Apex, error) {
 	aI, ok := s.cache.apexByName.Get(domain.apex.normal)
 	if !ok {
-		if s.cache.apexByName.Len() < s.opts.CacheSize {
+		if s.cache.apexByName.Len() < s.cacheOpts.ApexSize {
 			return nil, cacheNotFull
 		}
 		var a models.Apex
@@ -359,7 +359,7 @@ func (s *Store) getApexFromCacheOrDB(domain *domain) (*models.Apex, error) {
 func (s *Store) getApexAnonFromCacheOrDB(domain *domain) (*models.ApexAnon, error) {
 	aI, ok := s.cache.apexByNameAnon.Get(domain.apex.anon)
 	if !ok {
-		if s.cache.apexByNameAnon.Len() < s.opts.CacheSize {
+		if s.cache.apexByNameAnon.Len() < s.cacheOpts.ApexSize {
 			return nil, cacheNotFull
 		}
 		var aAnon models.ApexAnon
@@ -443,7 +443,7 @@ func (s *Store) getOrCreateApexAnon(domain *domain) (*models.ApexAnon, error) {
 func (s *Store) getFqdnFromCacheOrDB(domain *domain) (*models.Fqdn, error) {
 	fqdnI, ok := s.cache.fqdnByName.Get(domain.fqdn.normal)
 	if !ok {
-		if s.cache.fqdnByName.Len() < s.opts.CacheSize {
+		if s.cache.fqdnByName.Len() < s.cacheOpts.FQDNSize {
 			return nil, cacheNotFull
 		}
 		var fqdn models.Fqdn
@@ -462,7 +462,7 @@ func (s *Store) getFqdnFromCacheOrDB(domain *domain) (*models.Fqdn, error) {
 func (s *Store) getFqdnAnonFromCacheOrDB(domain *domain) (*models.FqdnAnon, error) {
 	fqdnI, ok := s.cache.fqdnByNameAnon.Get(domain.fqdn.anon)
 	if !ok {
-		if s.cache.fqdnByNameAnon.Len() < s.opts.CacheSize {
+		if s.cache.fqdnByNameAnon.Len() < s.cacheOpts.FQDNSize {
 			return nil, cacheNotFull
 		}
 		var fqdnAnon models.FqdnAnon

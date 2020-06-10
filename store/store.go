@@ -16,10 +16,17 @@ import (
 )
 
 var (
+	DefaultCacheOpts = CacheOpts{
+		LogSize:   1000,
+		TLDSize:   2000,
+		PSuffSize: 4000,
+		ApexSize:  10000,
+		FQDNSize:  20000,
+		CertSize:  50000,
+	}
 	DefaultOpts = Opts{
 		BatchSize:       20000,
-		CacheSize:       20000,
-		TLDCacheSize:    2000,
+		CacheOpts:       DefaultCacheOpts,
 		AllowedInterval: 36 * time.Hour,
 	}
 )
@@ -191,23 +198,22 @@ func newLRUCache(cacheSize int) *lru.Cache {
 	return c
 }
 
-//todo change the value of the cache size (log can be very small) create a new struct i guess (need to add some values in the store struct too)
-func newCache(opts Opts) cache {
+func newCache(opts CacheOpts) cache {
 	return cache{
-		tldByName:              newLRUCache(opts.TLDCacheSize), //make(map[string]*models.Tld)
-		tldAnonByName:          newLRUCache(opts.TLDCacheSize), //make(map[string]*models.TldAnon),
-		publicSuffixByName:     newLRUCache(opts.CacheSize),    //make(map[string]*models.PublicSuffix),
-		publicSuffixAnonByName: newLRUCache(opts.CacheSize),    //make(map[string]*models.PublicSuffixAnon),
-		apexByName:             newLRUCache(opts.CacheSize),    //make(map[string]*models.Apex),
-		apexByNameAnon:         newLRUCache(opts.CacheSize),    //make(map[string]*models.ApexAnon),
-		apexById:               newLRUCache(opts.CacheSize),    //make(map[uint]*models.Apex),
-		fqdnByName:             newLRUCache(opts.CacheSize),    //make(map[string]*models.Fqdn),
-		fqdnByNameAnon:         newLRUCache(opts.CacheSize),    //make(map[string]*models.FqdnAnon),
-		zoneEntriesByApexName:  newLRUCache(opts.CacheSize),    //make(map[string]*models.ZonefileEntry),
-		logByUrl:               newLRUCache(opts.LogCacheSize), //make(map[string]*models.Log),
-		certByFingerprint:      newLRUCache(opts.CacheSize),    //make(map[string]*models.Certificate),
+		tldByName:              newLRUCache(opts.TLDSize),   //make(map[string]*models.Tld)
+		tldAnonByName:          newLRUCache(opts.TLDSize),   //make(map[string]*models.TldAnon),
+		publicSuffixByName:     newLRUCache(opts.PSuffSize), //make(map[string]*models.PublicSuffix),
+		publicSuffixAnonByName: newLRUCache(opts.PSuffSize), //make(map[string]*models.PublicSuffixAnon),
+		apexByName:             newLRUCache(opts.ApexSize),  //make(map[string]*models.Apex),
+		apexByNameAnon:         newLRUCache(opts.ApexSize),  //make(map[string]*models.ApexAnon),
+		apexById:               newLRUCache(opts.ApexSize),  //make(map[uint]*models.Apex),
+		fqdnByName:             newLRUCache(opts.FQDNSize),  //make(map[string]*models.Fqdn),
+		fqdnByNameAnon:         newLRUCache(opts.FQDNSize),  //make(map[string]*models.FqdnAnon),
+		zoneEntriesByApexName:  newLRUCache(opts.ApexSize),  //make(map[string]*models.ZonefileEntry),
+		logByUrl:               newLRUCache(opts.LogSize),   //make(map[string]*models.Log),
+		certByFingerprint:      newLRUCache(opts.CertSize),  //make(map[string]*models.Certificate),
 		passiveEntryByFqdn:     newSplunkEntryMap(),
-		recordTypeByName:       newLRUCache(opts.CacheSize), //make(map[string]*models.RecordType),
+		recordTypeByName:       newLRUCache(opts.ApexSize), //make(map[string]*models.RecordType), //todo ask kaspar
 	}
 }
 
@@ -240,7 +246,7 @@ type Store struct {
 	conf            Config
 	db              *pg.DB
 	cache           cache
-	opts            Opts
+	cacheOpts       CacheOpts
 	m               *sync.Mutex
 	ids             Ids
 	allowedInterval time.Duration
@@ -534,11 +540,18 @@ func (s *Store) init() error {
 	return nil
 }
 
+type CacheOpts struct {
+	LogSize   int
+	TLDSize   int
+	PSuffSize int
+	ApexSize  int
+	FQDNSize  int
+	CertSize  int
+}
+
 type Opts struct {
 	BatchSize       int
-	CacheSize       int
-	TLDCacheSize    int
-	LogCacheSize    int
+	CacheOpts       CacheOpts
 	AllowedInterval time.Duration
 }
 
@@ -585,11 +598,12 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		db.AddQueryHook(&debugHook{})
 	}
 
+	//todo remove the counter
 	s := Store{
 		conf:            conf,
 		db:              db,
-		cache:           newCache(opts),
-		opts:            opts,
+		cache:           newCache(opts.CacheOpts),
+		cacheOpts:       opts.CacheOpts,
 		allowedInterval: opts.AllowedInterval,
 		batchSize:       opts.BatchSize,
 		m:               &sync.Mutex{},

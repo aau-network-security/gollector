@@ -40,9 +40,14 @@ func main() {
 	opts := store.Opts{
 		AllowedInterval: 36 * time.Hour,
 		BatchSize:       50000,
-		CacheSize:       200000,
-		TLDCacheSize:    2000,
-		LogCacheSize:    1000,
+		CacheOpts: store.CacheOpts{
+			LogSize:   1000,
+			TLDSize:   2000,
+			PSuffSize: 5000,
+			ApexSize:  20000,
+			FQDNSize:  20000,
+			CertSize:  20000,
+		},
 	}
 
 	start := time.Now()
