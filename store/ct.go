@@ -11,10 +11,15 @@ import (
 	"github.com/pkg/errors"
 )
 
+var cacheNotFull = errors.New("skip query to the DB cause cache not full")
+
 func (s *Store) getLogFromCacheOrDB(log ct.Log) (*models.Log, error) {
 	//Check if it is in the cache
 	lI, ok := s.cache.logByUrl.Get(log.Url)
 	if !ok {
+		if s.cache.logByUrl.Len() < s.opts.LogCacheSize {
+			return nil, cacheNotFull
+		}
 		var log models.Log
 		if err := s.db.Model(&log).Where("url = ?", log.Url).First(); err != nil {
 			return nil, err
@@ -49,6 +54,9 @@ func (s *Store) getCertFromCacheOrDB(fp string) (*models.Certificate, error) {
 	//Check if it is in the cache
 	certI, ok := s.cache.certByFingerprint.Get(fp)
 	if !ok {
+		if s.cache.certByFingerprint.Len() < s.opts.CacheSize {
+			return nil, cacheNotFull
+		}
 		var cert models.Certificate
 		if err := s.db.Model(&cert).Where("sha256_fingerprint = ?", fp).First(); err != nil {
 			s.Counter.certNew++

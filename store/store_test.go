@@ -4,14 +4,15 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"fmt"
-	"github.com/aau-network-security/gollector/store/models"
-	tst "github.com/aau-network-security/gollector/testing"
-	"github.com/google/certificate-transparency-go/x509"
-	"github.com/google/certificate-transparency-go/x509/pkix"
 	"math/big"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/aau-network-security/gollector/store/models"
+	tst "github.com/aau-network-security/gollector/testing"
+	"github.com/google/certificate-transparency-go/x509"
+	"github.com/google/certificate-transparency-go/x509/pkix"
 )
 
 func selfSignedCert(notBefore, notAfter time.Time, sans []string) ([]byte, error) {
@@ -241,7 +242,7 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 	// check initialization of new store
 	opts := Opts{
 		BatchSize:       10,
-		TLDChaceSize: 	 3,
+		TLDCacheSize:    3,
 		CacheSize:       5,
 		AllowedInterval: 10 * time.Millisecond,
 	}
@@ -315,7 +316,7 @@ func TestInit(t *testing.T) {
 
 	opts := Opts{
 		BatchSize:       10,
-		TLDChaceSize: 	 3,
+		TLDCacheSize:    3,
 		CacheSize:       5,
 		AllowedInterval: 10 * time.Millisecond,
 	}

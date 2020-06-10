@@ -1,11 +1,12 @@
 package store
 
 import (
+	"testing"
+	"time"
+
 	"github.com/aau-network-security/gollector/collectors/ct"
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/google/certificate-transparency-go/x509"
-	"testing"
-	"time"
 )
 
 func TestStore_StoreLogEntry(t *testing.T) {
@@ -87,7 +88,7 @@ func TestStore_StoreLogEntry(t *testing.T) {
 	// check initialization of new store
 	opts := Opts{
 		BatchSize:       10,
-		TLDChaceSize: 	 3,
+		TLDCacheSize:    3,
 		CacheSize:       5,
 		AllowedInterval: 10 * time.Millisecond,
 	}

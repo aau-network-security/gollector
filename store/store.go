@@ -19,7 +19,7 @@ var (
 	DefaultOpts = Opts{
 		BatchSize:       20000,
 		CacheSize:       20000,
-		TLDChaceSize:    2000,
+		TLDCacheSize:    2000,
 		AllowedInterval: 36 * time.Hour,
 	}
 )
@@ -191,10 +191,11 @@ func newLRUCache(cacheSize int) *lru.Cache {
 	return c
 }
 
+//todo change the value of the cache size (log can be very small) create a new struct i guess (need to add some values in the store struct too)
 func newCache(opts Opts) cache {
 	return cache{
-		tldByName:              newLRUCache(opts.TLDChaceSize), //make(map[string]*models.Tld)
-		tldAnonByName:          newLRUCache(opts.TLDChaceSize), //make(map[string]*models.TldAnon),
+		tldByName:              newLRUCache(opts.TLDCacheSize), //make(map[string]*models.Tld)
+		tldAnonByName:          newLRUCache(opts.TLDCacheSize), //make(map[string]*models.TldAnon),
 		publicSuffixByName:     newLRUCache(opts.CacheSize),    //make(map[string]*models.PublicSuffix),
 		publicSuffixAnonByName: newLRUCache(opts.CacheSize),    //make(map[string]*models.PublicSuffixAnon),
 		apexByName:             newLRUCache(opts.CacheSize),    //make(map[string]*models.Apex),
@@ -203,7 +204,7 @@ func newCache(opts Opts) cache {
 		fqdnByName:             newLRUCache(opts.CacheSize),    //make(map[string]*models.Fqdn),
 		fqdnByNameAnon:         newLRUCache(opts.CacheSize),    //make(map[string]*models.FqdnAnon),
 		zoneEntriesByApexName:  newLRUCache(opts.CacheSize),    //make(map[string]*models.ZonefileEntry),
-		logByUrl:               newLRUCache(opts.CacheSize),    //make(map[string]*models.Log),
+		logByUrl:               newLRUCache(opts.LogCacheSize), //make(map[string]*models.Log),
 		certByFingerprint:      newLRUCache(opts.CacheSize),    //make(map[string]*models.Certificate),
 		passiveEntryByFqdn:     newSplunkEntryMap(),
 		recordTypeByName:       newLRUCache(opts.CacheSize), //make(map[string]*models.RecordType),
@@ -239,6 +240,7 @@ type Store struct {
 	conf            Config
 	db              *pg.DB
 	cache           cache
+	opts            Opts
 	m               *sync.Mutex
 	ids             Ids
 	allowedInterval time.Duration
@@ -535,7 +537,8 @@ func (s *Store) init() error {
 type Opts struct {
 	BatchSize       int
 	CacheSize       int
-	TLDChaceSize    int
+	TLDCacheSize    int
+	LogCacheSize    int
 	AllowedInterval time.Duration
 }
 
@@ -586,6 +589,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		conf:            conf,
 		db:              db,
 		cache:           newCache(opts),
+		opts:            opts,
 		allowedInterval: opts.AllowedInterval,
 		batchSize:       opts.BatchSize,
 		m:               &sync.Mutex{},
