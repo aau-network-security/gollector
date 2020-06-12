@@ -344,6 +344,47 @@ func TestInit(t *testing.T) {
 	}
 }
 
+func TestHashMap(t *testing.T) {
+	conf := Config{
+		User:     "postgres",
+		Password: "postgres",
+		DBName:   "domains",
+		Host:     "localhost",
+		Port:     10001,
+	}
+
+	// check initialization of new store
+	opts := Opts{
+		BatchSize: 10,
+		CacheOpts: CacheOpts{
+			LogSize:   1000,
+			TLDSize:   1,
+			PSuffSize: 5000,
+			ApexSize:  20000,
+			FQDNSize:  20000,
+			CertSize:  20,
+		},
+		AllowedInterval: 10 * time.Millisecond,
+	}
+
+	s, err := NewStore(conf, opts)
+	if err != nil {
+		t.Fatalf("failed to create store: %s", err)
+	}
+	s.Ready.Wait()
+	s.NewBatchQueryDB()
+
+	s.hashMapDB.tldByName["aaaaa"] = nil
+	s.hashMapDB.tldByName["id"] = nil
+
+	if err := s.mapTLD(); err != nil {
+		fmt.Println(err)
+	}
+	c, ok := s.hashMapDB.tldByName["id"]
+	fmt.Println(c, ok)
+
+}
+
 func TestResetDB(t *testing.T) {
 	conf := Config{
 		User:     "postgres",

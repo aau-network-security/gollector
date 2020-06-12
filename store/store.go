@@ -72,16 +72,20 @@ func (c *Config) DSN() string {
 }
 
 type ModelSet struct {
-	zoneEntries    map[uint]*models.ZonefileEntry
-	fqdns          []*models.Fqdn
-	fqdnsAnon      []*models.FqdnAnon
-	apexes         map[uint]*models.Apex
-	apexesAnon     map[uint]*models.ApexAnon
-	certs          []*models.Certificate
-	logEntries     []*models.LogEntry
-	certToFqdns    []*models.CertificateToFqdn
-	passiveEntries []*models.PassiveEntry
-	entradaEntries []*models.EntradaEntry
+	zoneEntries      map[uint]*models.ZonefileEntry
+	fqdns            []*models.Fqdn
+	fqdnsAnon        []*models.FqdnAnon
+	apexes           map[uint]*models.Apex
+	apexesAnon       map[uint]*models.ApexAnon
+	certs            []*models.Certificate
+	logEntries       []*models.LogEntry
+	certToFqdns      []*models.CertificateToFqdn
+	passiveEntries   []*models.PassiveEntry
+	entradaEntries   []*models.EntradaEntry
+	tld              []*models.Tld
+	tldAnon          []*models.TldAnon
+	publicSuffix     []*models.PublicSuffix
+	publicSuffixAnon []*models.PublicSuffixAnon
 }
 
 func (ms *ModelSet) Len() int {
@@ -123,16 +127,20 @@ func (ms *ModelSet) apexAnonList() []*models.ApexAnon {
 
 func NewModelSet() ModelSet {
 	return ModelSet{
-		zoneEntries:    make(map[uint]*models.ZonefileEntry),
-		apexes:         make(map[uint]*models.Apex),
-		apexesAnon:     make(map[uint]*models.ApexAnon),
-		fqdns:          []*models.Fqdn{},
-		fqdnsAnon:      []*models.FqdnAnon{},
-		certToFqdns:    []*models.CertificateToFqdn{},
-		certs:          []*models.Certificate{},
-		logEntries:     []*models.LogEntry{},
-		passiveEntries: []*models.PassiveEntry{},
-		entradaEntries: []*models.EntradaEntry{},
+		zoneEntries:      make(map[uint]*models.ZonefileEntry),
+		apexes:           make(map[uint]*models.Apex),
+		apexesAnon:       make(map[uint]*models.ApexAnon),
+		fqdns:            []*models.Fqdn{},
+		fqdnsAnon:        []*models.FqdnAnon{},
+		certToFqdns:      []*models.CertificateToFqdn{},
+		certs:            []*models.Certificate{},
+		logEntries:       []*models.LogEntry{},
+		passiveEntries:   []*models.PassiveEntry{},
+		entradaEntries:   []*models.EntradaEntry{},
+		tld:              []*models.Tld{},
+		tldAnon:          []*models.TldAnon{},
+		publicSuffix:     []*models.PublicSuffix{},
+		publicSuffixAnon: []*models.PublicSuffixAnon{},
 	}
 }
 
@@ -258,6 +266,7 @@ type Store struct {
 	anonymizer      *Anonymizer
 	Ready           *Ready
 	Counter         counter
+	hashMapDB       HashMapDB
 }
 
 type counter struct {
@@ -614,6 +623,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		anonymizer:      &DefaultAnonymizer,
 		ms:              NewMeasurementState(),
 		Ready:           NewReady(),
+		hashMapDB:       HashMapDB{},
 		Counter: counter{
 			tldCacheHit:  0,
 			tldDBHit:     0,
@@ -682,6 +692,26 @@ func storeCachedValuePosthook() postHook {
 			a := s.inserts.apexAnonList()
 			if err := tx.Insert(&a); err != nil {
 				return errs.Wrap(err, "insert anon apexes")
+			}
+		}
+		if len(s.inserts.publicSuffix) > 0 {
+			if err := tx.Insert(&s.inserts.publicSuffix); err != nil {
+				return errs.Wrap(err, "insert public suffix")
+			}
+		}
+		if len(s.inserts.publicSuffixAnon) > 0 {
+			if err := tx.Insert(&s.inserts.publicSuffixAnon); err != nil {
+				return errs.Wrap(err, "insert anon public suffix")
+			}
+		}
+		if len(s.inserts.tld) > 0 {
+			if err := tx.Insert(&s.inserts.tld); err != nil {
+				return errs.Wrap(err, "insert tld")
+			}
+		}
+		if len(s.inserts.tldAnon) > 0 {
+			if err := tx.Insert(&s.inserts.tldAnon); err != nil {
+				return errs.Wrap(err, "insert tld")
 			}
 		}
 		if len(s.inserts.zoneEntries) > 0 {
