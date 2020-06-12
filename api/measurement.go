@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+
 	api "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/app"
 	"github.com/rs/zerolog/log"
@@ -42,6 +43,10 @@ func (s *Server) StopMeasurement(ctx context.Context, muid *api.MeasurementId) (
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	if err := s.Store.RunPostHooks(); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
 	log.Debug().Str("muid", muid.Id).Msgf("stopped measurement")
 
 	return &api.Empty{}, nil
@@ -73,6 +78,9 @@ func (s *Server) StopStage(ctx context.Context, muid *api.MeasurementId) (*api.E
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	if err := s.Store.RunPostHooks(); err != nil {
+		return nil, status.Error(codes.Internal, err.Error())
+	}
 	log.Debug().Str("muid", muid.Id).Msgf("stopped stage")
 
 	return &api.Empty{}, nil

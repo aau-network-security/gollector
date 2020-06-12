@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"strconv"
 	"sync"
@@ -44,8 +43,6 @@ func (s *Server) StoreLogEntries(str api.CtApi_StoreLogEntriesServer) error {
 		if err != nil {
 			return status.Error(codes.Internal, err.Error())
 		}
-
-		s.Store.NewBatchQueryDB()
 
 		for _, le := range batch.LogEntries {
 			res := &api.Result{
@@ -94,18 +91,6 @@ func (s *Server) StoreLogEntries(str api.CtApi_StoreLogEntriesServer) error {
 					}
 				}
 
-				//if err := s.Store.StoreLogEntry(muid, entry); err != nil {
-				//	s.Log.Log(err, app.LogOptions{
-				//		Msg: "failed to store log entry",
-				//		Tags: map[string]string{
-				//			"log": le.Log.Url,
-				//		},
-				//	})
-				//	res = &api.Result{
-				//		Ok:    false,
-				//		Error: err.Error(),
-				//	}
-				//}
 				// write a chunk
 				finishTime := time.Since(startTime)
 				if _, err := s.BenchmarkFile.Write([]byte(strconv.FormatInt(finishTime.Microseconds(), 10) + ",")); err != nil {
@@ -127,14 +112,14 @@ func (s *Server) StoreLogEntries(str api.CtApi_StoreLogEntriesServer) error {
 			}()
 		}
 		//todo change the response to the client
-		errs := s.Store.MapBatchWithCacheAndDB()
-		if len(errs) != 0 {
-			fmt.Println(errs)
-		}
-		err = s.Store.StoreBatchPostHook()
-		if err != nil {
-			fmt.Println(err)
-		}
+		//errs := s.Store.MapBatchWithCacheAndDB()
+		//if len(errs) != 0 {
+		//	fmt.Println(errs)
+		//}
+		//err = s.Store.StoreBatchPostHook()
+		//if err != nil {
+		//	fmt.Println(err)
+		//}
 
 		log.Info().Msgf("%v", s.Store.Counter)
 		s.Store.ResetCounter()

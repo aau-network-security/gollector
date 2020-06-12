@@ -34,8 +34,8 @@ type HashMapDB struct {
 	certByFingerprint      map[string]*certstruct
 }
 
-func (s *Store) NewBatchQueryDB() {
-	s.hashMapDB = HashMapDB{
+func NewBatchQueryDB() HashMapDB {
+	return HashMapDB{
 		tldByName:              make(map[string]*domainstruct),
 		tldAnonByName:          make(map[string]*domainstruct),
 		publicSuffixByName:     make(map[string]*domainstruct),
@@ -84,8 +84,7 @@ func (s *Store) MapEntry(muid string, entry LogEntry) error {
 			domain: domain,
 		}
 	}
-
-	return nil
+	return s.conditionalPostHooks()
 }
 
 func (s *Store) MapBatchWithCacheAndDB() []error {
@@ -196,7 +195,7 @@ func (s *Store) mapApex() error {
 	}
 
 	for _, a := range apexFoundInDB {
-		existing := s.hashMapDB.fqdnByName[a.Apex]
+		existing := s.hashMapDB.apexByName[a.Apex]
 		existing.obj = a
 		s.hashMapDB.apexByName[a.Apex] = existing
 	}
@@ -229,7 +228,7 @@ func (s *Store) mapPublicSuffix() error {
 	for _, ps := range psFoundInDB {
 		existing := s.hashMapDB.publicSuffixByName[ps.PublicSuffix]
 		existing.obj = ps
-		s.hashMapDB.apexByName[ps.PublicSuffix] = existing
+		s.hashMapDB.publicSuffixByName[ps.PublicSuffix] = existing
 	}
 	return nil
 }
@@ -258,9 +257,9 @@ func (s *Store) mapTLD() error {
 	}
 
 	for _, tld := range tldFoundInDB {
-		existing := s.hashMapDB.publicSuffixByName[tld.Tld]
+		existing := s.hashMapDB.tldByName[tld.Tld]
 		existing.obj = tld
-		s.hashMapDB.apexByName[tld.Tld] = existing
+		s.hashMapDB.tldByName[tld.Tld] = existing
 	}
 	return nil
 }

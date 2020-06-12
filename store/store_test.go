@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aau-network-security/gollector/collectors/ct"
+
 	"github.com/aau-network-security/gollector/store/models"
 	tst "github.com/aau-network-security/gollector/testing"
 	"github.com/google/certificate-transparency-go/x509"
@@ -372,17 +374,110 @@ func TestHashMap(t *testing.T) {
 		t.Fatalf("failed to create store: %s", err)
 	}
 	s.Ready.Wait()
-	s.NewBatchQueryDB()
 
-	s.hashMapDB.tldByName["aaaaa"] = nil
-	s.hashMapDB.tldByName["id"] = nil
+}
 
-	if err := s.mapTLD(); err != nil {
-		fmt.Println(err)
+func TestDebug(t *testing.T) {
+
+	conf := Config{
+		User:     "postgres",
+		Password: "postgres",
+		DBName:   "domains",
+		Host:     "localhost",
+		Port:     10001,
 	}
-	c, ok := s.hashMapDB.tldByName["id"]
-	fmt.Println(c, ok)
 
+	s, g, muid, err := OpenStore(conf)
+
+	if err != nil {
+		t.Fatalf("failed to create store: %s", err)
+	}
+
+	sanLists := [][]string{
+		{
+			"www.a.com",
+			"www.b.org",
+		},
+		{
+			"www.b.org",
+			"www.c.com",
+			"test.c.com",
+		},
+	}
+	for _, sanList := range sanLists {
+		now := time.Now()
+		raw, err := selfSignedCert(now, now, sanList)
+		if err != nil {
+			t.Fatalf("unexpected error while creating self-signed certificate: %s", err)
+		}
+
+		cert, err := x509.ParseCertificate(raw)
+		if err != nil {
+			t.Fatalf("unexpected error while parsing certificate: %s", err)
+		}
+
+		le := LogEntry{
+			Cert:  cert,
+			Index: 1,
+			Log: ct.Log{
+				Description: "test description",
+				Url:         "www://localhost:443/ct",
+			},
+			Ts: now,
+		}
+
+		if err := s.MapEntry(muid, le); err != nil {
+			t.Fatalf("unexpected error while storing log entry: %s", err)
+		}
+	}
+
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("unexpected error while running post hooks: %s", err)
+	}
+
+	sanLists = [][]string{
+		{
+			"www.a.com",
+			"www.b.org",
+		},
+		{
+			"www.b.org",
+			"www.c.com",
+			"test.c.com",
+		},
+	}
+	for _, sanList := range sanLists {
+		now := time.Now()
+		raw, err := selfSignedCert(now, now, sanList)
+		if err != nil {
+			t.Fatalf("unexpected error while creating self-signed certificate: %s", err)
+		}
+
+		cert, err := x509.ParseCertificate(raw)
+		if err != nil {
+			t.Fatalf("unexpected error while parsing certificate: %s", err)
+		}
+
+		le := LogEntry{
+			Cert:  cert,
+			Index: 1,
+			Log: ct.Log{
+				Description: "test description",
+				Url:         "www://localhost:443/ct",
+			},
+			Ts: now,
+		}
+
+		if err := s.MapEntry(muid, le); err != nil {
+			t.Fatalf("unexpected error while storing log entry: %s", err)
+		}
+	}
+
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("unexpected error while running post hooks: %s", err)
+	}
+
+	_ = g
 }
 
 func TestResetDB(t *testing.T) {

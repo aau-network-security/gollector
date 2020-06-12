@@ -623,7 +623,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		anonymizer:      &DefaultAnonymizer,
 		ms:              NewMeasurementState(),
 		Ready:           NewReady(),
-		hashMapDB:       HashMapDB{},
+		hashMapDB:       NewBatchQueryDB(),
 		Counter: counter{
 			tldCacheHit:  0,
 			tldDBHit:     0,
@@ -665,6 +665,17 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 
 func storeCachedValuePosthook() postHook {
 	return func(s *Store) error {
+		//todo change the response to the client
+		erorrs := s.MapBatchWithCacheAndDB()
+		if len(erorrs) != 0 {
+			//todo return err too
+			fmt.Println(erorrs)
+		}
+		err := s.StoreBatchPostHook()
+		if err != nil {
+			return err
+		}
+
 		tx, err := s.db.Begin()
 		if err != nil {
 			return err
@@ -772,6 +783,8 @@ func storeCachedValuePosthook() postHook {
 		if err := tx.Commit(); err != nil {
 			return errs.Wrap(err, "committing transaction")
 		}
+
+		s.hashMapDB = NewBatchQueryDB()
 
 		return nil
 	}
