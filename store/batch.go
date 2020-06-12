@@ -69,7 +69,8 @@ func (s *Store) MapEntry(muid string, entry LogEntry) error {
 	for _, d := range entry.Cert.DNSNames {
 		domain, err := NewDomain(d)
 		if err != nil {
-			return err
+			// TODO: handle error (return all erors in a list perhaps)
+			continue
 		}
 		s.hashMapDB.fqdnByName[domain.fqdn.normal] = &domainstruct{
 			domain: domain,
@@ -357,7 +358,12 @@ func (s *Store) StoreBatchPostHook() error {
 
 			// create an association between FQDNs in database and the newly created certificate
 			for _, d := range certstr.entry.Cert.DNSNames {
-				fqdnstr := s.hashMapDB.fqdnByName[d]
+				domain, err := NewDomain(d)
+				if err != nil {
+					// todo: handle error
+					continue
+				}
+				fqdnstr := s.hashMapDB.fqdnByName[domain.fqdn.normal]
 				fqdn := fqdnstr.obj.(*models.Fqdn)
 
 				ctof := models.CertificateToFqdn{

@@ -3,6 +3,7 @@ package store
 import (
 	"crypto/sha256"
 	"fmt"
+	"net"
 	"strings"
 
 	"github.com/aau-network-security/gollector/store/models"
@@ -12,6 +13,7 @@ import (
 
 var (
 	AnonymizerErr     = errors.New("cannot anonymize without anonymizer")
+	FqdnIsIpErr       = errors.New("fqdn is an IP address instead")
 	DefaultAnonymizer = Anonymizer{&DefaultLabelAnonymizer{}}
 )
 
@@ -70,6 +72,11 @@ type domain struct {
 
 func NewDomain(fqdn string) (*domain, error) {
 	fqdn = strings.TrimSuffix(fqdn, ".")
+	fqdn = strings.ToLower(fqdn)
+
+	if net.ParseIP(fqdn) != nil {
+		return nil, FqdnIsIpErr
+	}
 
 	d := &domain{
 		fqdn: newLabel(fqdn),
