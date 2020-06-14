@@ -221,7 +221,7 @@ func newCache(opts CacheOpts) cache {
 		logByUrl:               newLRUCache(opts.LogSize),   //make(map[string]*models.Log),
 		certByFingerprint:      newLRUCache(opts.CertSize),  //make(map[string]*models.Certificate),
 		passiveEntryByFqdn:     newSplunkEntryMap(),
-		recordTypeByName:       newLRUCache(opts.ApexSize), //make(map[string]*models.RecordType), //todo ask kaspar
+		recordTypeByName:       newLRUCache(opts.TLDSize), //make(map[string]*models.RecordType),
 	}
 }
 
@@ -266,7 +266,7 @@ type Store struct {
 	anonymizer      *Anonymizer
 	Ready           *Ready
 	Counter         counter
-	hashMapDB       HashMapDB
+	hashMapDB       hashMapDB
 }
 
 type counter struct {
@@ -665,12 +665,9 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 
 func storeCachedValuePosthook() postHook {
 	return func(s *Store) error {
-		//todo change the response to the client
-		erorrs := s.MapBatchWithCacheAndDB()
-		if len(erorrs) != 0 {
-			//todo return err too
-			fmt.Println(erorrs)
-		}
+
+		s.MapBatchWithCacheAndDB()
+
 		err := s.StoreBatchPostHook()
 		if err != nil {
 			return err
@@ -779,13 +776,13 @@ func storeCachedValuePosthook() postHook {
 
 		s.updates = NewModelSet()
 		s.inserts = NewModelSet()
+		s.hashMapDB = NewBatchQueryDB()
 
 		if err := tx.Commit(); err != nil {
 			return errs.Wrap(err, "committing transaction")
 		}
 
-		s.hashMapDB = NewBatchQueryDB()
-
+		log.Info().Msgf("successfully wrote to the database")
 		return nil
 	}
 }
