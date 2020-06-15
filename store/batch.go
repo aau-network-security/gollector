@@ -68,7 +68,7 @@ func (s *Store) MapEntry(muid string, entry LogEntry) error {
 	for _, d := range entry.Cert.DNSNames {
 		domain, err := NewDomain(d)
 		if err != nil {
-			log.Info().Msgf("error creating domain [%s]: %s", d, err)
+			//log.Debug().Msgf("error creating domain [%s]: %s", d, err)
 			continue
 		}
 		s.hashMapDB.fqdnByName[domain.fqdn.normal] = &domainstruct{
@@ -110,6 +110,7 @@ func (s *Store) mapCert() {
 		existing := s.hashMapDB.certByFingerprint[k]
 		existing.cert = cert
 		s.hashMapDB.certByFingerprint[k] = existing
+		s.Counter.tldCacheHit++
 	}
 
 	// Cache not full so the certificate can not be in the DB
@@ -129,6 +130,7 @@ func (s *Store) mapCert() {
 		existing.cert = c
 		s.hashMapDB.certByFingerprint[c.Sha256Fingerprint] = existing
 		s.cache.certByFingerprint.Add(c.Sha256Fingerprint, c)
+		s.Counter.tldDBHit++
 	}
 }
 
@@ -146,10 +148,15 @@ func (s *Store) mapFQDN() {
 		existing := s.hashMapDB.fqdnByName[k]
 		existing.obj = fqdn
 		s.hashMapDB.fqdnByName[k] = existing
+		s.Counter.fqdnCacheHit++
 	}
 
 	// Cache not full so the certificate can not be in the DB
 	if s.cache.fqdnByName.Len() < s.cacheOpts.FQDNSize {
+		return
+	}
+
+	if len(fqndNotFoundInCache) == 0 {
 		return
 	}
 
@@ -165,6 +172,7 @@ func (s *Store) mapFQDN() {
 		existing.obj = f
 		s.hashMapDB.fqdnByName[f.Fqdn] = existing
 		s.cache.fqdnByName.Add(f.Fqdn, f)
+		s.Counter.fqdnDBHit++
 	}
 }
 
@@ -179,9 +187,10 @@ func (s *Store) mapApex() {
 			continue
 		}
 		apex := apexI.(*models.Apex)
-		existing := s.hashMapDB.fqdnByName[k]
+		existing := s.hashMapDB.apexByName[k]
 		existing.obj = apex
 		s.hashMapDB.apexByName[k] = existing
+		s.Counter.apexCacheHit++
 	}
 
 	// Cache not full so the certificate can not be in the DB
@@ -201,6 +210,7 @@ func (s *Store) mapApex() {
 		existing.obj = a
 		s.hashMapDB.apexByName[a.Apex] = existing
 		s.cache.apexByName.Add(a.Apex, a)
+		s.Counter.apexDBHit++
 	}
 }
 
@@ -218,6 +228,7 @@ func (s *Store) mapPublicSuffix() {
 		existing := s.hashMapDB.publicSuffixByName[k]
 		existing.obj = ps
 		s.hashMapDB.publicSuffixByName[k] = existing
+		s.Counter.psCacheHit++
 	}
 
 	// Cache not full so the certificate can not be in the DB
@@ -236,6 +247,7 @@ func (s *Store) mapPublicSuffix() {
 		existing := s.hashMapDB.publicSuffixByName[ps.PublicSuffix]
 		existing.obj = ps
 		s.hashMapDB.publicSuffixByName[ps.PublicSuffix] = existing
+		s.Counter.psDBHit++
 	}
 }
 
@@ -253,6 +265,7 @@ func (s *Store) mapTLD() {
 		existing := s.hashMapDB.tldByName[k]
 		existing.obj = tld
 		s.hashMapDB.tldByName[k] = existing
+		s.Counter.tldCacheHit++
 	}
 
 	// Cache not full so the certificate can not be in the DB
@@ -272,6 +285,7 @@ func (s *Store) mapTLD() {
 		existing.obj = tld
 		s.hashMapDB.tldByName[tld.Tld] = existing
 		s.cache.tldByName.Add(tld.Tld, tld)
+		s.Counter.tldDBHit++
 	}
 	return
 }
@@ -289,6 +303,7 @@ func (s *Store) StoreBatchPostHook() error {
 			s.hashMapDB.tldByName[k] = str
 			s.ids.tlds++
 			s.cache.tldByName.Add(k, res)
+			s.Counter.tldNew++
 		}
 	}
 
@@ -307,6 +322,7 @@ func (s *Store) StoreBatchPostHook() error {
 			s.hashMapDB.publicSuffixByName[k] = str
 			s.ids.suffixes++
 			s.cache.publicSuffixByName.Add(k, res)
+			s.Counter.psNew++
 		}
 	}
 
@@ -331,6 +347,7 @@ func (s *Store) StoreBatchPostHook() error {
 			s.hashMapDB.apexByName[k] = str
 			s.ids.apexes++
 			s.cache.apexByName.Add(k, res)
+			s.Counter.apexNew++
 		}
 	}
 
@@ -359,6 +376,7 @@ func (s *Store) StoreBatchPostHook() error {
 			s.hashMapDB.fqdnByName[k] = str
 			s.ids.fqdns++
 			s.cache.fqdnByName.Add(k, res)
+			s.Counter.fqdnNew++
 		}
 	}
 
@@ -391,7 +409,7 @@ func (s *Store) StoreBatchPostHook() error {
 			s.inserts.certs = append(s.inserts.certs, cert)
 			s.ids.certs++
 			s.cache.certByFingerprint.Add(k, cert)
-
+			s.Counter.certNew++
 		}
 
 		l, err := s.getOrCreateLog(certstr.entry.Log)

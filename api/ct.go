@@ -111,9 +111,6 @@ func (s *Server) StoreLogEntries(str api.CtApi_StoreLogEntriesServer) error {
 				}
 			}()
 		}
-
-		log.Info().Msgf("%v", s.Store.Counter)
-		s.Store.ResetCounter()
 	}
 	wg.Wait()
 

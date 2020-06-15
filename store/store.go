@@ -314,7 +314,7 @@ func (s *Store) runPostHooks() error {
 }
 
 func (s *Store) conditionalPostHooks() error {
-	if s.updates.Len()+s.inserts.Len() >= s.batchSize {
+	if len(s.hashMapDB.certByFingerprint) >= s.batchSize {
 		return s.runPostHooks()
 	}
 	return nil
@@ -778,11 +778,14 @@ func storeCachedValuePosthook() postHook {
 		s.inserts = NewModelSet()
 		s.hashMapDB = NewBatchQueryDB()
 
+		log.Info().Msgf("%v", s.Counter)
+		s.ResetCounter()
+
 		if err := tx.Commit(); err != nil {
 			return errs.Wrap(err, "committing transaction")
 		}
 
-		log.Info().Msgf("successfully wrote to the database")
+		//log.Info().Msgf("successfully wrote to the database")
 		return nil
 	}
 }
