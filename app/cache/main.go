@@ -31,7 +31,7 @@ func main() {
 
 	opts := store.Opts{
 		AllowedInterval: 36 * time.Hour,
-		BatchSize:       50000,
+		BatchSize:       10000,
 	}
 
 	start := time.Now()
