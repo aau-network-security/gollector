@@ -267,6 +267,8 @@ type Store struct {
 	Ready           *Ready
 	Counter         counter
 	hashMapDB       hashMapDB
+	Timing          []string
+	CounterList     []counter
 }
 
 type counter struct {
@@ -641,6 +643,8 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 			certDBHit:    0,
 			certNew:      0,
 		},
+		Timing:      []string{},
+		CounterList: []counter{},
 	}
 
 	postHook := storeCachedValuePosthook()
@@ -784,7 +788,11 @@ func storeCachedValuePosthook() postHook {
 		s.inserts = NewModelSet()
 		s.hashMapDB = NewBatchQueryDB()
 
-		log.Info().Msgf("%d, %d", finishTimeRetrieve.Microseconds(), finishTimeInsert.Microseconds())
+		timing := fmt.Sprintf("%d, %d;", finishTimeRetrieve.Microseconds(), finishTimeInsert.Microseconds())
+
+		s.Timing = append(s.Timing, timing)
+		s.CounterList = append(s.CounterList, s.Counter)
+		//log.Info().Msgf("%d, %d", finishTimeRetrieve.Microseconds(), finishTimeInsert.Microseconds())
 
 		//log.Info().Msgf("%v", s.Counter)
 		s.ResetCounter()
