@@ -666,7 +666,9 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 func storeCachedValuePosthook() postHook {
 	return func(s *Store) error {
 
+		startTimeRetrieve := time.Now()
 		s.MapBatchWithCacheAndDB()
+		finishTimeRetrieve := time.Since(startTimeRetrieve)
 
 		err := s.StoreBatchPostHook()
 		if err != nil {
@@ -680,6 +682,8 @@ func storeCachedValuePosthook() postHook {
 		defer tx.Rollback()
 
 		// inserts
+		startTimeInsert := time.Now()
+
 		if len(s.inserts.fqdns) > 0 {
 			if err := tx.Insert(&s.inserts.fqdns); err != nil {
 				return errs.Wrap(err, "insert fqdns")
@@ -754,6 +758,8 @@ func storeCachedValuePosthook() postHook {
 			}
 		}
 
+		finishTimeInsert := time.Since(startTimeInsert)
+
 		// updates
 		if len(s.updates.apexes) > 0 {
 			a := s.updates.apexList()
@@ -778,7 +784,9 @@ func storeCachedValuePosthook() postHook {
 		s.inserts = NewModelSet()
 		s.hashMapDB = NewBatchQueryDB()
 
-		log.Info().Msgf("%v", s.Counter)
+		log.Info().Msgf("%d, %d", finishTimeRetrieve.Microseconds(), finishTimeInsert.Microseconds())
+
+		//log.Info().Msgf("%v", s.Counter)
 		s.ResetCounter()
 
 		if err := tx.Commit(); err != nil {

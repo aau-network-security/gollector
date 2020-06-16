@@ -44,9 +44,9 @@ func main() {
 			LogSize:   1000,
 			TLDSize:   2000,
 			PSuffSize: 10000,
-			ApexSize:  500000,
-			FQDNSize:  500000,
-			CertSize:  500000,
+			ApexSize:  1000000,
+			FQDNSize:  1000000,
+			CertSize:  1000000,
 		},
 	}
 
