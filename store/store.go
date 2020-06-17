@@ -654,15 +654,49 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		return nil, errs.Wrap(err, "migrate models")
 	}
 
-	go func() {
-		if err := s.init(); err != nil {
-			log.Error().Msgf("error while initializing database: %s", err)
+	//go func() {
+	//	if err := s.init(); err != nil {
+	//		log.Error().Msgf("error while initializing database: %s", err)
+	//	}
+	//
+	//	s.cache.describe()
+	//
+	//	s.Ready.Finish()
+	//}()
+
+	//for i := 0; i < 216000000; i++ {
+	//
+	//	fp := fmt.Sprintf("%x", sha256.Sum256([]byte(fmt.Sprintf("%d", i))))
+	//
+	//	cert := &models.Certificate{
+	//		ID:                uint(i),
+	//		Sha256Fingerprint: fp,
+	//	}
+	//	s.cache.certByFingerprint.Add(fp, cert)
+	//}
+
+	for i := 0; i < 216000000; i++ {
+		fqdn := fmt.Sprintf("www.google%d.com", i)
+		model := &models.Fqdn{
+			ID:             uint(i),
+			Fqdn:           fqdn,
+			TldID:          uint(i),
+			ApexID:         uint(i),
+			PublicSuffixID: uint(i),
 		}
+		s.cache.fqdnByName.Add(fqdn, model)
+	}
 
-		s.cache.describe()
-
-		s.Ready.Finish()
-	}()
+	for i := 0; i < 9000000; i++ {
+		apex := fmt.Sprintf("google%d.com", i)
+		model := &models.Apex{
+			ID:             uint(i),
+			Apex:           apex,
+			TldID:          uint(i),
+			PublicSuffixID: uint(i),
+		}
+		s.cache.apexByName.Add(apex, model)
+	}
 
 	return &s, nil
 }
