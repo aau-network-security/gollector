@@ -18,15 +18,15 @@ type PublicSuffix struct {
 }
 
 type Apex struct {
-	ID             uint `gorm:"primary_key" pg:",pk"`
-	Apex           string
+	ID             uint   `gorm:"primary_key" pg:",pk"`
+	Apex           string `sql:"index"`
 	TldID          uint
 	PublicSuffixID uint
 }
 
 type Fqdn struct {
-	ID             uint `gorm:"primary_key" pg:",pk"`
-	Fqdn           string
+	ID             uint   `gorm:"primary_key" pg:",pk"`
+	Fqdn           string `sql:"index"`
 	TldID          uint
 	PublicSuffixID uint
 	ApexID         uint
@@ -94,8 +94,8 @@ type CertificateToFqdn struct {
 }
 
 type Certificate struct {
-	ID                uint `gorm:"primary_key" pg:",pk"`
-	Sha256Fingerprint string
+	ID                uint   `gorm:"primary_key" pg:",pk"`
+	Sha256Fingerprint string `sql:"index"`
 }
 
 type LogEntry struct {
