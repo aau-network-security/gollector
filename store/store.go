@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 	"time"
@@ -157,6 +158,7 @@ type Ids struct {
 	fqdns        uint
 	fqdnsAnon    uint
 	certs        uint
+	certsToFqdn  uint
 	logs         uint
 	recordTypes  uint
 }
@@ -689,44 +691,106 @@ func storeCachedValuePosthook() postHook {
 		startTimeInsert := time.Now()
 
 		if len(s.inserts.fqdns) > 0 {
-			if err := tx.Insert(&s.inserts.fqdns); err != nil {
+			r, w := io.Pipe()
+			go func() {
+				for _, fqdn := range s.inserts.fqdns {
+					_, _ = fmt.Fprintf(w, "%d\t%s\t%d\t%d\t%d\n", fqdn.ID, fqdn.Fqdn, fqdn.TldID, fqdn.PublicSuffixID, fqdn.ApexID)
+				}
+				w.Close()
+			}()
+			_, err := tx.CopyFrom(r, "COPY fqdns FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert fqdns")
 			}
 		}
 		if len(s.inserts.fqdnsAnon) > 0 {
-			if err := tx.Insert(&s.inserts.fqdnsAnon); err != nil {
+			r, w := io.Pipe()
+			go func() {
+				for _, fqdn := range s.inserts.fqdnsAnon {
+					_, _ = fmt.Fprintf(w, "%d\t%s\t%d\t%d\t%d\n", fqdn.ID, fqdn.Fqdn.Fqdn, fqdn.TldID, fqdn.PublicSuffixID, fqdn.ApexID)
+				}
+				w.Close()
+			}()
+			_, err := tx.CopyFrom(r, "COPY fqdns_anon FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert anon fqdns")
 			}
 		}
 		if len(s.inserts.apexes) > 0 {
-			a := s.inserts.apexList()
-			if err := tx.Insert(&a); err != nil {
+			r, w := io.Pipe()
+			go func() {
+				for _, apex := range s.inserts.apexList() {
+					_, _ = fmt.Fprintf(w, "%d\t%s\t%d\t%d\n", apex.ID, apex.Apex, apex.TldID, apex.PublicSuffixID)
+				}
+				w.Close()
+			}()
+			_, err := tx.CopyFrom(r, "COPY apexes FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert apexes")
 			}
 		}
 		if len(s.inserts.apexesAnon) > 0 {
-			a := s.inserts.apexAnonList()
-			if err := tx.Insert(&a); err != nil {
+			r, w := io.Pipe()
+			go func() {
+				for _, apex := range s.inserts.apexAnonList() {
+					_, _ = fmt.Fprintf(w, "%d\t%s\t%d\t%d\n", apex.ID, apex.Apex.Apex, apex.TldID, apex.PublicSuffixID)
+				}
+				w.Close()
+			}()
+			_, err := tx.CopyFrom(r, "COPY apexes_anon FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert anon apexes")
 			}
 		}
 		if len(s.inserts.publicSuffix) > 0 {
-			if err := tx.Insert(&s.inserts.publicSuffix); err != nil {
+			r, w := io.Pipe()
+			go func() {
+				for _, ps := range s.inserts.publicSuffix {
+					_, _ = fmt.Fprintf(w, "%d\t%d\t%s\n", ps.ID, ps.TldID, ps.PublicSuffix)
+				}
+				w.Close()
+			}()
+			_, err := tx.CopyFrom(r, "COPY public_suffixes FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert public suffix")
 			}
 		}
 		if len(s.inserts.publicSuffixAnon) > 0 {
-			if err := tx.Insert(&s.inserts.publicSuffixAnon); err != nil {
+			r, w := io.Pipe()
+			go func() {
+				for _, ps := range s.inserts.publicSuffixAnon {
+					_, _ = fmt.Fprintf(w, "%d\t%s\t%d\n", ps.ID, ps.PublicSuffix.PublicSuffix, ps.TldID)
+				}
+				w.Close()
+			}()
+			_, err := tx.CopyFrom(r, "COPY public_suffixes_anon FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert anon public suffix")
 			}
 		}
 		if len(s.inserts.tld) > 0 {
-			if err := tx.Insert(&s.inserts.tld); err != nil {
+			r, w := io.Pipe()
+			go func() {
+				for _, tld := range s.inserts.tld {
+					_, _ = fmt.Fprintf(w, "%d\t%s\n", tld.ID, tld.Tld)
+				}
+				w.Close()
+			}()
+			_, err := tx.CopyFrom(r, "COPY tlds FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert tld")
 			}
 		}
 		if len(s.inserts.tldAnon) > 0 {
-			if err := tx.Insert(&s.inserts.tldAnon); err != nil {
+			r, w := io.Pipe()
+			go func() {
+				for _, tld := range s.inserts.tldAnon {
+					_, _ = fmt.Fprintf(w, "%d\t%s\n", tld.ID, tld.Tld.Tld)
+				}
+				w.Close()
+			}()
+			_, err := tx.CopyFrom(r, "COPY tlds_anon FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert tld")
 			}
 		}
@@ -742,12 +806,29 @@ func storeCachedValuePosthook() postHook {
 			}
 		}
 		if len(s.inserts.certs) > 0 {
-			if err := tx.Insert(&s.inserts.certs); err != nil {
+			r, w := io.Pipe()
+			go func() {
+				for _, c := range s.inserts.certs {
+					_, _ = fmt.Fprintf(w, "%d\t%s\n", c.ID, c.Sha256Fingerprint)
+				}
+				w.Close()
+			}()
+			_, err := tx.CopyFrom(r, "COPY certificates FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert certs")
 			}
 		}
 		if len(s.inserts.certToFqdns) > 0 {
-			if err := tx.Insert(&s.inserts.certToFqdns); err != nil {
+			r, w := io.Pipe()
+			go func() {
+				for _, cf := range s.inserts.certToFqdns {
+					line := fmt.Sprintf("%d\t%d\t%d\n", cf.ID, cf.FqdnID, cf.CertificateID)
+					_, _ = fmt.Fprintf(w, line)
+				}
+				w.Close()
+			}()
+			_, err := tx.CopyFrom(r, "COPY certificate_to_fqdns FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert cert-to-fqdns")
 			}
 		}
