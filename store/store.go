@@ -625,6 +625,13 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		panic(err)
 	}
 
+	if _, err := fh.Write([]byte("apex-cache-hit,apex-db-hit,apex-new,fqdn-cache-hit,fqdn-db-hit,fqdn-new\n")); err != nil {
+		panic(err)
+	}
+	if _, err := fdb.Write([]byte("select,insert\n")); err != nil {
+		panic(err)
+	}
+
 	os.Getwd()
 
 	//todo remove the counter

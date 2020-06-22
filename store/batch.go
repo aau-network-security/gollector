@@ -4,7 +4,6 @@ import (
 	"crypto/sha256"
 	b64 "encoding/base64"
 	"fmt"
-	"strings"
 
 	"github.com/rs/zerolog/log"
 
@@ -115,26 +114,25 @@ func (s *Store) mapCert() {
 		s.Counter.tldCacheHit++
 	}
 
-	//todo not sure if commet it or not
-	//// Cache not full so the certificate can not be in the DB
-	//if s.cache.certByFingerprint.Len() < s.cacheOpts.CertSize {
-	//	return
-	//}
-	//
-	////map with DB
-	//var certsFoundInDB []*models.Certificate
-	//
-	//if err := s.db.Model(&certsFoundInDB).Where("sha256_fingerprint in (?)", pg.In(certsNotFoundInCache)).Select(); err != nil {
-	//	log.Error().Msgf("error retrieve Certificates from DB [mapCert]: %s", err)
-	//}
-	//
-	//for _, c := range certsFoundInDB {
-	//	existing := s.hashMapDB.certByFingerprint[c.Sha256Fingerprint]
-	//	existing.cert = c
-	//	s.hashMapDB.certByFingerprint[c.Sha256Fingerprint] = existing
-	//	s.cache.certByFingerprint.Add(c.Sha256Fingerprint, c)
-	//	s.Counter.tldDBHit++
-	//}
+	// Cache not full so the certificate can not be in the DB
+	if s.cache.certByFingerprint.Len() < s.cacheOpts.CertSize {
+		return
+	}
+
+	//map with DB
+	var certsFoundInDB []*models.Certificate
+
+	if err := s.db.Model(&certsFoundInDB).Where("sha256_fingerprint in (?)", pg.In(certsNotFoundInCache)).Select(); err != nil {
+		log.Error().Msgf("error retrieve Certificates from DB [mapCert]: %s", err)
+	}
+
+	for _, c := range certsFoundInDB {
+		existing := s.hashMapDB.certByFingerprint[c.Sha256Fingerprint]
+		existing.cert = c
+		s.hashMapDB.certByFingerprint[c.Sha256Fingerprint] = existing
+		s.cache.certByFingerprint.Add(c.Sha256Fingerprint, c)
+		s.Counter.tldDBHit++
+	}
 }
 
 func (s *Store) mapFQDN() {
@@ -309,10 +307,9 @@ func (s *Store) StoreBatchPostHook() error {
 	for k, str := range s.hashMapDB.tldByName {
 		//tld := str.obj.(*models.Tld)
 		if str.obj == nil {
-			newK := strings.Trim(k, "\t \n")
 			res := &models.Tld{
 				ID:  s.ids.tlds,
-				Tld: newK,
+				Tld: k,
 			}
 			s.inserts.tld = append(s.inserts.tld, res)
 			str.obj = res
@@ -329,11 +326,10 @@ func (s *Store) StoreBatchPostHook() error {
 			tldstr := s.hashMapDB.tldByName[str.domain.tld.normal]
 			tld := tldstr.obj.(*models.Tld)
 
-			newK := strings.Trim(k, "\t \n")
 			res := &models.PublicSuffix{
 				ID:           s.ids.suffixes,
 				TldID:        tld.ID,
-				PublicSuffix: newK,
+				PublicSuffix: k,
 			}
 			str.obj = res
 			s.inserts.publicSuffix = append(s.inserts.publicSuffix, res)
@@ -354,12 +350,11 @@ func (s *Store) StoreBatchPostHook() error {
 			suffixstr := s.hashMapDB.publicSuffixByName[str.domain.publicSuffix.normal]
 			suffix := suffixstr.obj.(*models.PublicSuffix)
 
-			newK := strings.Trim(k, "\t \n")
 			res := &models.Apex{
 				ID:             s.ids.apexes,
 				TldID:          tld.ID,
 				PublicSuffixID: suffix.ID,
-				Apex:           newK,
+				Apex:           k,
 			}
 			str.obj = res
 			s.inserts.apexes[res.ID] = res
@@ -383,13 +378,12 @@ func (s *Store) StoreBatchPostHook() error {
 			apexstr := s.hashMapDB.apexByName[str.domain.apex.normal]
 			apex := apexstr.obj.(*models.Apex)
 
-			newK := strings.Trim(k, "\t \n")
 			res := &models.Fqdn{
 				ID:             s.ids.fqdns,
 				TldID:          tld.ID,
 				PublicSuffixID: suffix.ID,
 				ApexID:         apex.ID,
-				Fqdn:           newK,
+				Fqdn:           k,
 			}
 			str.obj = res
 			s.inserts.fqdns = append(s.inserts.fqdns, res)
