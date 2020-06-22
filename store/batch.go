@@ -5,8 +5,9 @@ import (
 	b64 "encoding/base64"
 	"fmt"
 
+	"github.com/go-pg/pg/types"
+
 	"github.com/aau-network-security/gollector/store/models"
-	"github.com/go-pg/pg"
 	"github.com/rs/zerolog/log"
 )
 
@@ -120,8 +121,19 @@ func (s *Store) mapCert() {
 
 	//map with DB
 	var certsFoundInDB []*models.Certificate
+	var id uint
+	var sha256Fingerprint string
+	var raw string
 
-	if err := s.db.Model(&certsFoundInDB).Where("sha256_fingerprint in (?)", pg.In(certsNotFoundInCache)).Select(); err != nil {
+	iter := s.db.Query(`SELECT * FROM certificates WHERE sha256_fingerprint IN ?`, types.InSlice(certsNotFoundInCache)).Iter()
+	for iter.Scan(&id, &sha256Fingerprint, &raw) {
+		certsFoundInDB = append(certsFoundInDB, &models.Certificate{
+			ID:                id,
+			Sha256Fingerprint: sha256Fingerprint,
+			Raw:               raw,
+		})
+	}
+	if err := iter.Close(); err != nil {
 		log.Error().Msgf("error retrieve Certificates from DB [mapCert]: %s", err)
 	}
 
@@ -162,8 +174,20 @@ func (s *Store) mapFQDN() {
 
 	//map with DB
 	var fqdnFoundInDB []*models.Fqdn
+	var id, tldID, psID, apexID uint
+	var fqdn string
 
-	if err := s.db.Model(&fqdnFoundInDB).Where("fqdn in (?)", pg.In(fqndNotFoundInCache)).Select(); err != nil {
+	iter := s.db.Query(`SELECT * FROM fqdns WHERE fqdn IN ?`, types.InSlice(fqndNotFoundInCache)).Iter()
+	for iter.Scan(&id, &fqdn, &tldID, &psID, &apexID) {
+		fqdnFoundInDB = append(fqdnFoundInDB, &models.Fqdn{
+			ID:             id,
+			Fqdn:           fqdn,
+			TldID:          tldID,
+			PublicSuffixID: psID,
+			ApexID:         apexID,
+		})
+	}
+	if err := iter.Close(); err != nil {
 		log.Error().Msgf("error retrieve FQDN from DB [mapFQDN]: %s", err)
 	}
 
@@ -204,8 +228,19 @@ func (s *Store) mapApex() {
 
 	//map with DB
 	var apexFoundInDB []*models.Apex
+	var id, tldID, psID uint
+	var apex string
 
-	if err := s.db.Model(&apexFoundInDB).Where("apex in (?)", pg.In(apexNotFoundInCache)).Select(); err != nil {
+	iter := s.db.Query(`SELECT * FROM apexes WHERE apex IN ?`, types.InSlice(apexNotFoundInCache)).Iter()
+	for iter.Scan(&id, &apex, &tldID, &psID) {
+		apexFoundInDB = append(apexFoundInDB, &models.Apex{
+			ID:             id,
+			Apex:           apex,
+			TldID:          tldID,
+			PublicSuffixID: psID,
+		})
+	}
+	if err := iter.Close(); err != nil {
 		log.Error().Msgf("error retrieve Apex from DB [mapApex]: %s", err)
 	}
 
@@ -246,8 +281,18 @@ func (s *Store) mapPublicSuffix() {
 
 	//map with DB
 	var psFoundInDB []*models.PublicSuffix
+	var id, tldID uint
+	var ps string
 
-	if err := s.db.Model(&psFoundInDB).Where("public_suffix in (?)", pg.In(psNotFoundInCache)).Select(); err != nil {
+	iter := s.db.Query(`SELECT * FROM public_suffixes WHERE public_suffix IN ?`, types.InSlice(psNotFoundInCache)).Iter()
+	for iter.Scan(&id, &ps, &tldID) {
+		psFoundInDB = append(psFoundInDB, &models.PublicSuffix{
+			ID:           id,
+			PublicSuffix: ps,
+			TldID:        tldID,
+		})
+	}
+	if err := iter.Close(); err != nil {
 		log.Error().Msgf("error retrieve PS from DB [mapPublicSuffix]: %s", err)
 	}
 
@@ -255,6 +300,7 @@ func (s *Store) mapPublicSuffix() {
 		existing := s.hashMapDB.publicSuffixByName[ps.PublicSuffix]
 		existing.obj = ps
 		s.hashMapDB.publicSuffixByName[ps.PublicSuffix] = existing
+		s.cache.publicSuffixByName.Add(ps.PublicSuffix, ps)
 		s.Counter.psDBHit++
 	}
 }
@@ -287,8 +333,17 @@ func (s *Store) mapTLD() {
 
 	//map with DB
 	var tldFoundInDB []*models.Tld
+	var id uint
+	var tld string
 
-	if err := s.db.Model(&tldFoundInDB).Where("tld in (?)", pg.In(tldNotFoundInCache)).Select(); err != nil {
+	iter := s.db.Query(`SELECT * FROM tlds WHERE tld IN ?`, types.InSlice(tldNotFoundInCache)).Iter()
+	for iter.Scan(&id, &tld) {
+		tldFoundInDB = append(tldFoundInDB, &models.Tld{
+			ID:  id,
+			Tld: tld,
+		})
+	}
+	if err := iter.Close(); err != nil {
 		log.Error().Msgf("error retrieve TLD from DB [mapTLD]: %s", err)
 	}
 
@@ -413,9 +468,11 @@ func (s *Store) StoreBatchPostHook() error {
 				fqdn := fqdnstr.obj.(*models.Fqdn)
 
 				ctof := models.CertificateToFqdn{
+					ID:            s.ids.certToFqdn,
 					CertificateID: cert.ID,
 					FqdnID:        fqdn.ID,
 				}
+				s.ids.certToFqdn++
 				s.inserts.certToFqdns = append(s.inserts.certToFqdns, &ctof)
 			}
 
@@ -432,6 +489,7 @@ func (s *Store) StoreBatchPostHook() error {
 		}
 
 		le := models.LogEntry{
+			ID:            s.ids.logEntries,
 			LogID:         l.ID,
 			Index:         certstr.entry.Index,
 			CertificateID: certstr.cert.ID,
@@ -439,7 +497,7 @@ func (s *Store) StoreBatchPostHook() error {
 			StageID:       certstr.sid,
 			IsPrecert:     certstr.entry.IsPrecert,
 		}
-
+		s.ids.logEntries++
 		s.inserts.logEntries = append(s.inserts.logEntries, &le)
 	}
 

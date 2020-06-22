@@ -20,11 +20,17 @@ func (s *Store) getLogFromCacheOrDB(log ct.Log) (*models.Log, error) {
 		if s.cache.logByUrl.Len() < s.cacheOpts.LogSize {
 			return nil, cacheNotFull
 		}
-		var log models.Log
-		if err := s.db.Model(&log).Where("url = ?", log.Url).First(); err != nil {
+		var id uint
+		var url, description string
+		if err := s.db.Query(`SELECT id FROM logs WHERE url = ? LIMIT 1`,
+			log.Url).Scan(&id, &url, &description); err != nil {
 			return nil, err
 		}
-		return &log, nil //It is in DB
+		return &models.Log{
+			ID:          id,
+			Url:         url,
+			Description: description,
+		}, nil //It is in DB
 	}
 	res := lI.(*models.Log)
 	return res, nil //It is in Cache
@@ -39,7 +45,9 @@ func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
 			Url:         log.Url,
 			Description: log.Description,
 		}
-		if err := s.db.Insert(l); err != nil {
+
+		if err := s.db.Query(`INSERT INTO logs (id, url, description) VALUES (?, ?, ?)`,
+			l.ID, l.Url, l.Description).Exec(); err != nil {
 			return nil, errors.Wrap(err, "insert log")
 		}
 
@@ -52,22 +60,22 @@ func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
 
 func (s *Store) getCertFromCacheOrDB(fp string) (*models.Certificate, error) {
 	//Check if it is in the cache
-	certI, ok := s.cache.certByFingerprint.Get(fp)
-	if !ok {
-		if s.cache.certByFingerprint.Len() < s.cacheOpts.CertSize {
-			return nil, cacheNotFull
-		}
-		var cert models.Certificate
-		if err := s.db.Model(&cert).Where("sha256_fingerprint = ?", fp).First(); err != nil {
-			s.Counter.certNew++
-			return nil, err
-		}
-		s.Counter.certDBHit++
-		return &cert, nil //It is in DB
-	}
-	s.Counter.certCacheHit++
-	res := certI.(*models.Certificate)
-	return res, nil //It is in Cache
+	//certI, ok := s.cache.certByFingerprint.Get(fp)
+	//if !ok {
+	//	if s.cache.certByFingerprint.Len() < s.cacheOpts.CertSize {
+	//		return nil, cacheNotFull
+	//	}
+	//	var cert models.Certificate
+	//	if err := s.db.Model(&cert).Where("sha256_fingerprint = ?", fp).First(); err != nil {
+	//		s.Counter.certNew++
+	//		return nil, err
+	//	}
+	//	s.Counter.certDBHit++
+	//	return &cert, nil //It is in DB
+	//}
+	//s.Counter.certCacheHit++
+	//res := certI.(*models.Certificate)
+	return nil, nil //It is in Cache
 }
 
 func (s *Store) getOrCreateCertificate(c *x509.Certificate) (*models.Certificate, error) {

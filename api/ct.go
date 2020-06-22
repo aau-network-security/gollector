@@ -118,9 +118,10 @@ func (s *Server) StoreLogEntries(str api.CtApi_StoreLogEntriesServer) error {
 }
 
 func (s *Server) GetLastDBEntry(ctx context.Context, url *api.KnownLogURL) (*api.Index, error) {
-	logEntryIndex, err := s.Store.GetLastIndexLog(url.LogURL)
-	if err != nil {
-		return nil, err
-	}
-	return &api.Index{Start: logEntryIndex}, nil
+	//todo AAAAAAAA fix this ASAP
+	//logEntryIndex, err := s.Store.GetLastIndexLog(url.LogURL)
+	//if err != nil {
+	//	return nil, err
+	//}
+	return &api.Index{Start: 0}, nil
 }

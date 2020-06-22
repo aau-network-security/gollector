@@ -9,6 +9,7 @@ require (
 	github.com/getsentry/sentry-go v0.3.0
 	github.com/go-acme/lego v2.7.2+incompatible
 	github.com/go-pg/pg v8.0.6+incompatible
+	github.com/gocql/gocql v0.0.0-20200615160627-420e3b873d91
 	github.com/golang/protobuf v1.3.2
 	github.com/google/certificate-transparency-go v1.0.22-0.20190613123100-f1b2d813b630
 	github.com/google/pprof v0.0.0-20200604032702-163a225fb653 // indirect

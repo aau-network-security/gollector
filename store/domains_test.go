@@ -1,8 +1,9 @@
 package store
 
 import (
-	"github.com/aau-network-security/gollector/store/models"
 	"testing"
+
+	"github.com/aau-network-security/gollector/store/models"
 )
 
 type TestLabelAnonymizer struct{}
@@ -407,10 +408,10 @@ func TestGetOrCreateFqdnAnon_WithUnanon(t *testing.T) {
 
 // check for correct working of LRU Cache
 func TestLRUCache(t *testing.T) {
-	tests := []struct{
-		domain 		string
-		tld			string
-		isInCache	bool
+	tests := []struct {
+		domain    string
+		tld       string
+		isInCache bool
 	}{
 		{
 			"www.example.co.uk",
@@ -434,7 +435,6 @@ func TestLRUCache(t *testing.T) {
 		},
 	}
 
-
 	conf := Config{
 		User:     "postgres",
 		Password: "postgres",
@@ -449,7 +449,7 @@ func TestLRUCache(t *testing.T) {
 		t.Fatalf("failed to open store: %s", err)
 	}
 
-	for _, test := range tests{
+	for _, test := range tests {
 		domain, err := NewDomain(test.domain)
 		if err != nil {
 			t.Fatalf("failed to created new domain: %s", err)
@@ -461,7 +461,7 @@ func TestLRUCache(t *testing.T) {
 	}
 
 	//Check if the TLD are in the cache
-	for _, test := range tests{
+	for _, test := range tests {
 		_, ok := s.cache.tldByName.Get(test.tld)
 		if ok != test.isInCache {
 			t.Fatal("Failed to use the LRU Cache")
@@ -472,7 +472,7 @@ func TestLRUCache(t *testing.T) {
 		t.Fatalf("failed to run store post hooks: %s", err)
 	}
 
-	for _, test := range tests{
+	for _, test := range tests {
 
 		d, err := NewDomain(test.domain)
 		if err != nil {
@@ -480,13 +480,13 @@ func TestLRUCache(t *testing.T) {
 		}
 		_, ok := s.cache.tldByName.Get(d.tld.normal)
 		if !ok {
-			var tld models.Tld
-			if err := s.db.Model(&tld).Where("tld = ?", d.tld.normal).First(); err != nil {
-				t.Fatal(err)
-			}
+			//var tld models.Tld
+			//if err := s.db.Model(&tld).Where("tld = ?", d.tld.normal).First(); err != nil {
+			//	t.Fatal(err)
+			//}
 		}
 
-		if ok != test.isInCache{
+		if ok != test.isInCache {
 			t.Fatal("failed, the TLD should have been in the cache or viceversa")
 		}
 	}

@@ -3,20 +3,19 @@ package store
 import (
 	"time"
 
-	"github.com/aau-network-security/gollector/testing"
 	"github.com/jinzhu/gorm"
 	"github.com/pkg/errors"
 )
 
 func OpenStore(conf Config) (*Store, *gorm.DB, string, error) {
-	g, err := conf.Open()
-	if err != nil {
-		return nil, nil, "", errors.Wrap(err, "failed to open gorm database")
-	}
+	//g, err := conf.Open()
+	//if err != nil {
+	//	return nil, nil, "", errors.Wrap(err, "failed to open gorm database")
+	//}
 
-	if err := testing.ResetDb(g); err != nil {
-		return nil, nil, "", errors.Wrap(err, "failed to reset database")
-	}
+	//if err := testing.ResetDb(g); err != nil {
+	//	return nil, nil, "", errors.Wrap(err, "failed to reset database")
+	//}
 
 	opts := Opts{
 		BatchSize: 10,
@@ -42,5 +41,5 @@ func OpenStore(conf Config) (*Store, *gorm.DB, string, error) {
 		return nil, nil, "", errors.Wrap(err, "failed to start measurement")
 	}
 
-	return s, g, muid, nil
+	return s, nil, muid, nil
 }

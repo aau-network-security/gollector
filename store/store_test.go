@@ -380,11 +380,11 @@ func TestHashMap(t *testing.T) {
 func TestDebug(t *testing.T) {
 
 	conf := Config{
-		User:     "postgres",
-		Password: "postgres",
+		User:     "cassandra",
+		Password: "cassandra",
 		DBName:   "domains",
 		Host:     "localhost",
-		Port:     10001,
+		Port:     9042,
 	}
 
 	s, g, muid, err := OpenStore(conf)

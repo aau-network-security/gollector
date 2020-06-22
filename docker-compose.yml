@@ -68,6 +68,18 @@ services:
     networks:
       - gollector
 
+  cassandra:
+    container_name: gollector-cassandra
+    image: cassandra:2.1.20
+    volumes:
+      - "./db/cassandra-init.sh:/cassandra-init.sh"
+      - ${CASSANDRA_VOLUME?err}:/var/lib/cassandra # persistent storage of database
+    command: "sh /cassandra-init.sh"
+    ports:
+      - "9042:9042"
+    networks:
+      - gollector
+
 # docker network create --subnet "10.13.20.0/24" gollector
 networks:
   gollector:

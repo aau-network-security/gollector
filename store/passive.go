@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/aau-network-security/gollector/store/models"
-	"github.com/pkg/errors"
 )
 
 type splunkEntryMap struct {
@@ -48,17 +47,17 @@ func (s *Store) getorCreateRecordType(rtype string) (*models.RecordType, error) 
 	rtI, ok := s.cache.recordTypeByName.Get(rtype)
 	//todo implement request to the DB here
 	if !ok {
-		rt := &models.RecordType{
-			ID:   s.ids.recordTypes,
-			Type: rtype,
-		}
-		if err := s.db.Insert(rt); err != nil {
-			return nil, errors.Wrap(err, "insert record type")
-		}
-
-		s.cache.recordTypeByName.Add(rtype, rt)
-		s.ids.recordTypes++
-		return rt, nil
+		//rt := &models.RecordType{
+		//	ID:   s.ids.recordTypes,
+		//	Type: rtype,
+		//}
+		//if err := s.db.Insert(rt); err != nil {
+		//	return nil, errors.Wrap(err, "insert record type")
+		//}
+		//
+		//s.cache.recordTypeByName.Add(rtype, rt)
+		//s.ids.recordTypes++
+		return nil, nil
 	}
 	rt := rtI.(*models.RecordType)
 	return rt, nil
