@@ -44,9 +44,9 @@ func main() {
 			LogSize:   1000,
 			TLDSize:   2000,
 			PSuffSize: 10000,
-			ApexSize:  1000000,
-			FQDNSize:  1000000,
-			CertSize:  1000000,
+			ApexSize:  63000,
+			FQDNSize:  1474000,
+			CertSize:  673000,
 		},
 	}
 
@@ -83,23 +83,32 @@ func main() {
 	}
 
 	// open output file
-	fo, err := os.Create("output/output.txt")
+	fmp, err := os.Create("output/mapentry_exec_time.txt")
 	if err != nil {
 		panic(err)
 	}
 	// close fo on exit and check for its returned error
 	defer func() {
-		if err := fo.Close(); err != nil {
+		if err := fmp.Close(); err != nil {
 			panic(err)
 		}
 	}()
 
 	serv := api.Server{
-		Conf:          conf.Api,
-		Store:         s,
-		Log:           logger,
-		BenchmarkFile: fo,
+		Conf:             conf.Api,
+		Store:            s,
+		Log:              logger,
+		MapEntryExecTime: fmp,
 	}
+
+	defer func() {
+		if err := serv.Store.DBTime.Close(); err != nil {
+			panic(err)
+		}
+		if err := serv.Store.HitCount.Close(); err != nil {
+			panic(err)
+		}
+	}()
 
 	addr := fmt.Sprintf(":%d", conf.Api.Api.Port)
 	lis, err := net.Listen("tcp", addr)

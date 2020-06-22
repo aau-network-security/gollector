@@ -396,7 +396,7 @@ func TestDebug(t *testing.T) {
 	sanLists := [][]string{
 		{
 			"www.a.com",
-			"www.b.org",
+			"www.b.org\n",
 		},
 		{
 			"www.b.org",

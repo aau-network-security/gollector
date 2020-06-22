@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -267,8 +268,8 @@ type Store struct {
 	Ready           *Ready
 	Counter         counter
 	hashMapDB       hashMapDB
-	Timing          []string
-	CounterList     []counter
+	HitCount        *os.File
+	DBTime          *os.File
 }
 
 type counter struct {
@@ -609,6 +610,22 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		db.AddQueryHook(&debugHook{})
 	}
 
+	fh, err := os.Create("output/hit_count.txt")
+	if err != nil {
+		panic(err)
+	}
+	fdb, err := os.Create("output/db_exec_time.txt")
+	if err != nil {
+		panic(err)
+	}
+
+	if _, err := fh.Write([]byte("apex-cache-hit, apex-db-hit, apex-new, fqdn-cache-hit, fqdn-db-hit, fqdn-new\n")); err != nil {
+		panic(err)
+	}
+	if _, err := fdb.Write([]byte("select, insert\n")); err != nil {
+		panic(err)
+	}
+
 	//todo remove the counter
 	s := Store{
 		conf:            conf,
@@ -643,8 +660,8 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 			certDBHit:    0,
 			certNew:      0,
 		},
-		Timing:      []string{},
-		CounterList: []counter{},
+		HitCount: fh,
+		DBTime:   fdb,
 	}
 
 	postHook := storeCachedValuePosthook()
@@ -788,13 +805,16 @@ func storeCachedValuePosthook() postHook {
 		s.inserts = NewModelSet()
 		s.hashMapDB = NewBatchQueryDB()
 
-		timing := fmt.Sprintf("%d, %d;", finishTimeRetrieve.Microseconds(), finishTimeInsert.Microseconds())
+		DBtiming := fmt.Sprintf("%d, %d\n", finishTimeRetrieve.Microseconds(), finishTimeInsert.Microseconds())
 
-		s.Timing = append(s.Timing, timing)
-		s.CounterList = append(s.CounterList, s.Counter)
-		//log.Info().Msgf("%d, %d", finishTimeRetrieve.Microseconds(), finishTimeInsert.Microseconds())
+		counterString := fmt.Sprintf("%d, %d, %d, %d, %d, %d\n", s.Counter.apexCacheHit, s.Counter.apexDBHit, s.Counter.apexNew, s.Counter.fqdnCacheHit, s.Counter.fqdnDBHit, s.Counter.fqdnNew)
+		if _, err := s.HitCount.Write([]byte(counterString)); err != nil {
+			panic(err)
+		}
+		if _, err := s.DBTime.Write([]byte(DBtiming)); err != nil {
+			panic(err)
+		}
 
-		//log.Info().Msgf("%v", s.Counter)
 		s.ResetCounter()
 
 		if err := tx.Commit(); err != nil {

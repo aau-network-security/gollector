@@ -39,10 +39,10 @@ func timeFromUnix(ts int64) time.Time {
 }
 
 type Server struct {
-	Conf          Config
-	Store         *store.Store
-	Log           app.ErrLogger
-	BenchmarkFile *os.File
+	Conf             Config
+	Store            *store.Store
+	Log              app.ErrLogger
+	MapEntryExecTime *os.File
 }
 
 func (s *Server) Run(lis net.Listener) error {

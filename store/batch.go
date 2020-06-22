@@ -2,12 +2,12 @@ package store
 
 import (
 	"crypto/sha256"
+	b64 "encoding/base64"
 	"fmt"
-
-	"github.com/rs/zerolog/log"
 
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/go-pg/pg"
+	"github.com/rs/zerolog/log"
 )
 
 type domainstruct struct {
@@ -198,6 +198,10 @@ func (s *Store) mapApex() {
 		return
 	}
 
+	if len(apexNotFoundInCache) == 0 {
+		return
+	}
+
 	//map with DB
 	var apexFoundInDB []*models.Apex
 
@@ -236,6 +240,10 @@ func (s *Store) mapPublicSuffix() {
 		return
 	}
 
+	if len(psNotFoundInCache) == 0 {
+		return
+	}
+
 	//map with DB
 	var psFoundInDB []*models.PublicSuffix
 
@@ -270,6 +278,10 @@ func (s *Store) mapTLD() {
 
 	// Cache not full so the certificate can not be in the DB
 	if s.cache.tldByName.Len() < s.cacheOpts.TLDSize {
+		return
+	}
+
+	if len(tldNotFoundInCache) == 0 {
 		return
 	}
 
@@ -384,9 +396,11 @@ func (s *Store) StoreBatchPostHook() error {
 	for k, certstr := range s.hashMapDB.certByFingerprint {
 		if certstr.cert == nil {
 			// get TLD name from domain object
+			certEnc := b64.StdEncoding.EncodeToString(certstr.entry.Cert.Raw)
 			cert := &models.Certificate{
 				ID:                s.ids.certs,
 				Sha256Fingerprint: k,
+				Raw:               certEnc,
 			}
 
 			// create an association between FQDNs in database and the newly created certificate

@@ -93,7 +93,7 @@ func (s *Server) StoreLogEntries(str api.CtApi_StoreLogEntriesServer) error {
 
 				// write a chunk
 				finishTime := time.Since(startTime)
-				if _, err := s.BenchmarkFile.Write([]byte(strconv.FormatInt(finishTime.Microseconds(), 10) + ",")); err != nil {
+				if _, err := s.MapEntryExecTime.Write([]byte(strconv.FormatInt(finishTime.Microseconds(), 10) + ",")); err != nil {
 					panic(err)
 				}
 			}
