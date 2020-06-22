@@ -478,6 +478,19 @@ func TestDebug(t *testing.T) {
 	}
 
 	_ = g
+
+	//map with DB
+	//var certs []*models.Certificate
+	//if err := s.db.Model(&certs).Order("id ASC").Select(); err != nil {
+	//	t.Fatalf("unable to get cert from DB: %s", err)
+	//}
+	//certRaw, _ := b64.StdEncoding.DecodeString(certs[0].Raw)
+	//c, err := x509.ParseCertificate(certRaw)
+	//if err != nil {
+	//	t.Fatalf("unable to parse raw cert from DB: %s", err)
+	//}
+	//
+	//t.Log(c.DNSNames)
 }
 
 func TestResetDB(t *testing.T) {

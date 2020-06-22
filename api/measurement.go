@@ -43,9 +43,6 @@ func (s *Server) StopMeasurement(ctx context.Context, muid *api.MeasurementId) (
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	log.Info().Msgf("%v", s.Store.CounterList)
-	log.Info().Msgf("%v", s.Store.Timing)
-
 	log.Debug().Str("muid", muid.Id).Msgf("stopped measurement")
 
 	return &api.Empty{}, nil

@@ -3,6 +3,7 @@ package store
 import (
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -271,6 +272,8 @@ type Store struct {
 	hashMapDB       hashMapDB
 	Timing          []string
 	CounterList     []counter
+	HitCount        *os.File
+	DBTime          *os.File
 }
 
 type counter struct {
@@ -611,6 +614,19 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		db.AddQueryHook(&debugHook{})
 	}
 
+	//todo remove ebenchmark files
+
+	fh, err := os.Create("output/hit_count.txt")
+	if err != nil {
+		panic(err)
+	}
+	fdb, err := os.Create("output/db_exec_time.txt")
+	if err != nil {
+		panic(err)
+	}
+
+	os.Getwd()
+
 	//todo remove the counter
 	s := Store{
 		conf:            conf,
@@ -647,6 +663,8 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		},
 		Timing:      []string{},
 		CounterList: []counter{},
+		HitCount:    fh,
+		DBTime:      fdb,
 	}
 
 	postHook := storeCachedValuePosthook()
@@ -654,6 +672,17 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 
 	if err := s.migrate(); err != nil {
 		return nil, errs.Wrap(err, "migrate models")
+	}
+
+	//todo maybe too dangerous... remove it
+	tableList := []string{"apexes", "certificate_to_fqdns", "certificates", "fqdns", "log_entries", "public_suffixes", "tlds"}
+
+	for _, tl := range tableList {
+		line := fmt.Sprintf("ALTER TABLE %s SET UNLOGGED;", tl)
+		_, err := s.db.Exec(line)
+		if err != nil {
+			log.Debug().Msgf("error creating unlogged %s table: %s", tl, err.Error())
+		}
 	}
 
 	go func() {
@@ -694,7 +723,8 @@ func storeCachedValuePosthook() postHook {
 			r, w := io.Pipe()
 			go func() {
 				for _, fqdn := range s.inserts.fqdns {
-					_, _ = fmt.Fprintf(w, "%d\t%s\t%d\t%d\t%d\n", fqdn.ID, fqdn.Fqdn, fqdn.TldID, fqdn.PublicSuffixID, fqdn.ApexID)
+					line := fmt.Sprintf("%d\t%s\t%d\t%d\t%d\n", fqdn.ID, fqdn.Fqdn, fqdn.TldID, fqdn.PublicSuffixID, fqdn.ApexID)
+					_, _ = fmt.Fprintf(w, line)
 				}
 				w.Close()
 			}()
@@ -809,7 +839,7 @@ func storeCachedValuePosthook() postHook {
 			r, w := io.Pipe()
 			go func() {
 				for _, c := range s.inserts.certs {
-					_, _ = fmt.Fprintf(w, "%d\t%s\n", c.ID, c.Sha256Fingerprint)
+					_, _ = fmt.Fprintf(w, "%d\t%s\t%s\n", c.ID, c.Sha256Fingerprint, c.Raw)
 				}
 				w.Close()
 			}()
@@ -869,13 +899,15 @@ func storeCachedValuePosthook() postHook {
 		s.inserts = NewModelSet()
 		s.hashMapDB = NewBatchQueryDB()
 
-		timing := fmt.Sprintf("%d, %d;", finishTimeRetrieve.Microseconds(), finishTimeInsert.Microseconds())
+		DBtiming := fmt.Sprintf("%d, %d\n", finishTimeRetrieve.Microseconds(), finishTimeInsert.Microseconds())
 
-		s.Timing = append(s.Timing, timing)
-		s.CounterList = append(s.CounterList, s.Counter)
-		//log.Info().Msgf("%d, %d", finishTimeRetrieve.Microseconds(), finishTimeInsert.Microseconds())
-
-		//log.Info().Msgf("%v", s.Counter)
+		counterString := fmt.Sprintf("%d,%d,%d,%d,%d,%d\n", s.Counter.apexCacheHit, s.Counter.apexDBHit, s.Counter.apexNew, s.Counter.fqdnCacheHit, s.Counter.fqdnDBHit, s.Counter.fqdnNew)
+		if _, err := s.HitCount.Write([]byte(counterString)); err != nil {
+			panic(err)
+		}
+		if _, err := s.DBTime.Write([]byte(DBtiming)); err != nil {
+			panic(err)
+		}
 		s.ResetCounter()
 
 		if err := tx.Commit(); err != nil {

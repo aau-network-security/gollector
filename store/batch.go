@@ -2,7 +2,9 @@ package store
 
 import (
 	"crypto/sha256"
+	b64 "encoding/base64"
 	"fmt"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 
@@ -113,25 +115,26 @@ func (s *Store) mapCert() {
 		s.Counter.tldCacheHit++
 	}
 
-	// Cache not full so the certificate can not be in the DB
-	if s.cache.certByFingerprint.Len() < s.cacheOpts.CertSize {
-		return
-	}
-
-	//map with DB
-	var certsFoundInDB []*models.Certificate
-
-	if err := s.db.Model(&certsFoundInDB).Where("sha256_fingerprint in (?)", pg.In(certsNotFoundInCache)).Select(); err != nil {
-		log.Error().Msgf("error retrieve Certificates from DB [mapCert]: %s", err)
-	}
-
-	for _, c := range certsFoundInDB {
-		existing := s.hashMapDB.certByFingerprint[c.Sha256Fingerprint]
-		existing.cert = c
-		s.hashMapDB.certByFingerprint[c.Sha256Fingerprint] = existing
-		s.cache.certByFingerprint.Add(c.Sha256Fingerprint, c)
-		s.Counter.tldDBHit++
-	}
+	//todo not sure if commet it or not
+	//// Cache not full so the certificate can not be in the DB
+	//if s.cache.certByFingerprint.Len() < s.cacheOpts.CertSize {
+	//	return
+	//}
+	//
+	////map with DB
+	//var certsFoundInDB []*models.Certificate
+	//
+	//if err := s.db.Model(&certsFoundInDB).Where("sha256_fingerprint in (?)", pg.In(certsNotFoundInCache)).Select(); err != nil {
+	//	log.Error().Msgf("error retrieve Certificates from DB [mapCert]: %s", err)
+	//}
+	//
+	//for _, c := range certsFoundInDB {
+	//	existing := s.hashMapDB.certByFingerprint[c.Sha256Fingerprint]
+	//	existing.cert = c
+	//	s.hashMapDB.certByFingerprint[c.Sha256Fingerprint] = existing
+	//	s.cache.certByFingerprint.Add(c.Sha256Fingerprint, c)
+	//	s.Counter.tldDBHit++
+	//}
 }
 
 func (s *Store) mapFQDN() {
@@ -198,6 +201,10 @@ func (s *Store) mapApex() {
 		return
 	}
 
+	if len(apexNotFoundInCache) == 0 {
+		return
+	}
+
 	//map with DB
 	var apexFoundInDB []*models.Apex
 
@@ -233,6 +240,10 @@ func (s *Store) mapPublicSuffix() {
 
 	// Cache not full so the certificate can not be in the DB
 	if s.cache.publicSuffixByName.Len() < s.cacheOpts.PSuffSize {
+		return
+	}
+
+	if len(psNotFoundInCache) == 0 {
 		return
 	}
 
@@ -273,6 +284,10 @@ func (s *Store) mapTLD() {
 		return
 	}
 
+	if len(tldNotFoundInCache) == 0 {
+		return
+	}
+
 	//map with DB
 	var tldFoundInDB []*models.Tld
 
@@ -294,9 +309,10 @@ func (s *Store) StoreBatchPostHook() error {
 	for k, str := range s.hashMapDB.tldByName {
 		//tld := str.obj.(*models.Tld)
 		if str.obj == nil {
+			newK := strings.Trim(k, "\t \n")
 			res := &models.Tld{
 				ID:  s.ids.tlds,
-				Tld: k,
+				Tld: newK,
 			}
 			s.inserts.tld = append(s.inserts.tld, res)
 			str.obj = res
@@ -312,10 +328,12 @@ func (s *Store) StoreBatchPostHook() error {
 			// get TLD name from public suffix object
 			tldstr := s.hashMapDB.tldByName[str.domain.tld.normal]
 			tld := tldstr.obj.(*models.Tld)
+
+			newK := strings.Trim(k, "\t \n")
 			res := &models.PublicSuffix{
 				ID:           s.ids.suffixes,
 				TldID:        tld.ID,
-				PublicSuffix: k,
+				PublicSuffix: newK,
 			}
 			str.obj = res
 			s.inserts.publicSuffix = append(s.inserts.publicSuffix, res)
@@ -336,11 +354,12 @@ func (s *Store) StoreBatchPostHook() error {
 			suffixstr := s.hashMapDB.publicSuffixByName[str.domain.publicSuffix.normal]
 			suffix := suffixstr.obj.(*models.PublicSuffix)
 
+			newK := strings.Trim(k, "\t \n")
 			res := &models.Apex{
 				ID:             s.ids.apexes,
 				TldID:          tld.ID,
 				PublicSuffixID: suffix.ID,
-				Apex:           k,
+				Apex:           newK,
 			}
 			str.obj = res
 			s.inserts.apexes[res.ID] = res
@@ -364,12 +383,13 @@ func (s *Store) StoreBatchPostHook() error {
 			apexstr := s.hashMapDB.apexByName[str.domain.apex.normal]
 			apex := apexstr.obj.(*models.Apex)
 
+			newK := strings.Trim(k, "\t \n")
 			res := &models.Fqdn{
 				ID:             s.ids.fqdns,
 				TldID:          tld.ID,
 				PublicSuffixID: suffix.ID,
 				ApexID:         apex.ID,
-				Fqdn:           k,
+				Fqdn:           newK,
 			}
 			str.obj = res
 			s.inserts.fqdns = append(s.inserts.fqdns, res)
@@ -384,9 +404,11 @@ func (s *Store) StoreBatchPostHook() error {
 	for k, certstr := range s.hashMapDB.certByFingerprint {
 		if certstr.cert == nil {
 			// get TLD name from domain object
+			certEnc := b64.StdEncoding.EncodeToString(certstr.entry.Cert.Raw)
 			cert := &models.Certificate{
 				ID:                s.ids.certs,
 				Sha256Fingerprint: k,
+				Raw:               certEnc,
 			}
 
 			// create an association between FQDNs in database and the newly created certificate
