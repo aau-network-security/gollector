@@ -70,9 +70,10 @@ services:
 
   cassandra:
     container_name: gollector-cassandra
-    image: cassandra:2.1.20
+    image: cassandra:3.11.6
     volumes:
       - "./db/cassandra-init.sh:/cassandra-init.sh"
+#     - "./db/cassandra-env.sh:/etc/cassandra/cassandra-env.sh"
       - ${CASSANDRA_VOLUME?err}:/var/lib/cassandra # persistent storage of database
     command: "sh /cassandra-init.sh"
     ports:

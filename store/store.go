@@ -14,7 +14,6 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/jinzhu/gorm"
 	_ "github.com/lib/pq"
-	errs "github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 )
 
@@ -612,7 +611,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		Password: conf.Password,
 	}
 	cluster.Keyspace = conf.DBName
-	cluster.Consistency = gocql.Quorum
+	cluster.Consistency = gocql.Any
 	session, err := cluster.CreateSession()
 	if err != nil {
 		panic(err)
@@ -692,6 +691,21 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 	return &s, nil
 }
 
+func processBatches(in chan *gocql.Query, wg *sync.WaitGroup) {
+	wg.Add(1)
+	for q := range in {
+		for {
+			if err := q.Exec(); err != nil {
+				log.Printf("Couldn't insert [%s]: %s", q.String(), err)
+				continue // Keep trying on i/o error.
+			}
+			break
+		}
+	}
+	fmt.Print("ok")
+	wg.Done()
+}
+
 func storeCachedValuePosthook() postHook {
 	return func(s *Store) error {
 
@@ -713,15 +727,17 @@ func storeCachedValuePosthook() postHook {
 		// inserts
 		startTimeInsert := time.Now()
 
+		in := make(chan *gocql.Query, 0)
+		var wg sync.WaitGroup
+		for i := 0; i < 10; i++ {
+			go processBatches(in, &wg)
+		}
+
 		if len(s.inserts.fqdns) > 0 {
 			insert := "INSERT INTO fqdns (id, fqdn, tld_id, public_suffix_id, apex_id) VALUES (?, ?, ?, ?, ?)"
-			batch := s.db.NewBatch(gocql.UnloggedBatch)
-
 			for _, fqdn := range s.inserts.fqdns {
-				batch.Query(insert, fqdn.ID, fqdn.Fqdn, fqdn.TldID, fqdn.PublicSuffixID, fqdn.ApexID)
-			}
-			if err := s.db.ExecuteBatch(batch); err != nil {
-				return errs.Wrap(err, "insert fqdns")
+				q := s.db.Query(insert, fqdn.ID, fqdn.Fqdn, fqdn.TldID, fqdn.PublicSuffixID, fqdn.ApexID)
+				in <- q
 			}
 		}
 		//if len(s.inserts.fqdnsAnon) > 0 {
@@ -729,96 +745,94 @@ func storeCachedValuePosthook() postHook {
 		//		return errs.Wrap(err, "insert anon fqdns")
 		//	}
 		//}
-		if len(s.inserts.apexes) > 0 {
-			aList := s.inserts.apexList()
-			insert := "INSERT INTO apexes (id, apex, tld_id, public_suffix_id) VALUES (?, ?, ?, ?)"
-			batch := s.db.NewBatch(gocql.UnloggedBatch)
-
-			for _, a := range aList {
-				batch.Query(insert, a.ID, a.Apex, a.TldID, a.PublicSuffixID)
-			}
-			if err := s.db.ExecuteBatch(batch); err != nil {
-				return errs.Wrap(err, "insert apexes")
-			}
-		}
-		//if len(s.inserts.apexesAnon) > 0 {
-		//	a := s.inserts.apexAnonList()
-		//	if err := tx.Insert(&a); err != nil {
-		//		return errs.Wrap(err, "insert anon apexes")
+		//if len(s.inserts.apexes) > 0 {
+		//	aList := s.inserts.apexList()
+		//	insert := "INSERT INTO apexes (id, apex, tld_id, public_suffix_id) VALUES (?, ?, ?, ?)"
+		//	batch := s.db.NewBatch(gocql.LoggedBatch)
+		//	for _, a := range aList {
+		//		batch.Query(insert, a.ID, a.Apex, a.TldID, a.PublicSuffixID)
+		//	}
+		//	if err := s.db.ExecuteBatch(batch); err != nil {
+		//		return errs.Wrap(err, "insert apexes")
 		//	}
 		//}
-		if len(s.inserts.publicSuffix) > 0 {
-			insert := "INSERT INTO public_suffixes (id, public_suffix, tld_id) VALUES (?, ?, ?)"
-			batch := s.db.NewBatch(gocql.UnloggedBatch)
-
-			for _, ps := range s.inserts.publicSuffix {
-				batch.Query(insert, ps.ID, ps.PublicSuffix, ps.TldID)
-			}
-			if err := s.db.ExecuteBatch(batch); err != nil {
-				return errs.Wrap(err, "insert public suffix")
-			}
-		}
-		//if len(s.inserts.publicSuffixAnon) > 0 {
-		//	if err := tx.Insert(&s.inserts.publicSuffixAnon); err != nil {
-		//		return errs.Wrap(err, "insert anon public suffix")
+		////if len(s.inserts.apexesAnon) > 0 {
+		////	a := s.inserts.apexAnonList()
+		////	if err := tx.Insert(&a); err != nil {
+		////		return errs.Wrap(err, "insert anon apexes")
+		////	}
+		////}
+		//if len(s.inserts.publicSuffix) > 0 {
+		//	insert := "INSERT INTO public_suffixes (id, public_suffix, tld_id) VALUES (?, ?, ?)"
+		//	batch := s.db.NewBatch(gocql.LoggedBatch)
+		//
+		//	for _, ps := range s.inserts.publicSuffix {
+		//		batch.Query(insert, ps.ID, ps.PublicSuffix, ps.TldID)
+		//	}
+		//	if err := s.db.ExecuteBatch(batch); err != nil {
+		//		return errs.Wrap(err, "insert public suffix")
 		//	}
 		//}
-		if len(s.inserts.tld) > 0 {
-			insert := "INSERT INTO tlds (id, tld) VALUES (?, ?)"
-			batch := s.db.NewBatch(gocql.UnloggedBatch)
-
-			for _, t := range s.inserts.tld {
-				batch.Query(insert, t.ID, t.Tld)
-			}
-			if err := s.db.ExecuteBatch(batch); err != nil {
-				return errs.Wrap(err, "insert tld")
-			}
-		}
-		//if len(s.inserts.tldAnon) > 0 {
-		//	if err := tx.Insert(&s.inserts.tldAnon); err != nil {
+		////if len(s.inserts.publicSuffixAnon) > 0 {
+		////	if err := tx.Insert(&s.inserts.publicSuffixAnon); err != nil {
+		////		return errs.Wrap(err, "insert anon public suffix")
+		////	}
+		////}
+		//if len(s.inserts.tld) > 0 {
+		//	insert := "INSERT INTO tlds (id, tld) VALUES (?, ?)"
+		//	batch := s.db.NewBatch(gocql.LoggedBatch)
+		//
+		//	for _, t := range s.inserts.tld {
+		//		batch.Query(insert, t.ID, t.Tld)
+		//	}
+		//	if err := s.db.ExecuteBatch(batch); err != nil {
 		//		return errs.Wrap(err, "insert tld")
 		//	}
 		//}
-		//if len(s.inserts.zoneEntries) > 0 {
-		//	z := s.inserts.zoneEntryList()
-		//	if err := tx.Insert(&z); err != nil {
-		//		return errs.Wrap(err, "insert zone entries")
+		////if len(s.inserts.tldAnon) > 0 {
+		////	if err := tx.Insert(&s.inserts.tldAnon); err != nil {
+		////		return errs.Wrap(err, "insert tld")
+		////	}
+		////}
+		////if len(s.inserts.zoneEntries) > 0 {
+		////	z := s.inserts.zoneEntryList()
+		////	if err := tx.Insert(&z); err != nil {
+		////		return errs.Wrap(err, "insert zone entries")
+		////	}
+		////}
+		//if len(s.inserts.logEntries) > 0 {
+		//	insert := "INSERT INTO log_entries (id, log_entry, timestamp, is_precert, certificate_id, log_id, stage_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
+		//	batch := s.db.NewBatch(gocql.LoggedBatch)
+		//
+		//	for _, l := range s.inserts.logEntries {
+		//		batch.Query(insert, l.ID, l.Index, l.Timestamp, l.IsPrecert, l.CertificateID, l.LogID, l.StageID)
+		//	}
+		//	if err := s.db.ExecuteBatch(batch); err != nil {
+		//		return errs.Wrap(err, "insert log entries")
 		//	}
 		//}
-		if len(s.inserts.logEntries) > 0 {
-			insert := "INSERT INTO log_entries (id, log_entry, timestamp, is_precert, certificate_id, log_id, stage_id) VALUES (?, ?, ?, ?, ?, ?, ?)"
-			batch := s.db.NewBatch(gocql.UnloggedBatch)
-
-			for _, l := range s.inserts.logEntries {
-				fmt.Println(l)
-				batch.Query(insert, l.ID, l.Index, l.Timestamp, l.IsPrecert, l.CertificateID, l.LogID, l.StageID)
-			}
-			if err := s.db.ExecuteBatch(batch); err != nil {
-				return errs.Wrap(err, "insert log entries")
-			}
-		}
-		if len(s.inserts.certs) > 0 {
-			insert := "INSERT INTO certificates (id, sha256_fingerprint, raw) VALUES (?, ?, ?)"
-			batch := s.db.NewBatch(gocql.UnloggedBatch)
-
-			for _, c := range s.inserts.certs {
-				batch.Query(insert, c.ID, c.Sha256Fingerprint, c.Raw)
-			}
-			if err := s.db.ExecuteBatch(batch); err != nil {
-				return errs.Wrap(err, "insert certs")
-			}
-		}
-		if len(s.inserts.certToFqdns) > 0 {
-			insert := "INSERT INTO certificate_to_fqdns (id, fqdn_id, certificate_id) VALUES (?, ?, ?)"
-			batch := s.db.NewBatch(gocql.UnloggedBatch)
-
-			for _, cf := range s.inserts.certToFqdns {
-				batch.Query(insert, cf.ID, cf.FqdnID, cf.CertificateID)
-			}
-			if err := s.db.ExecuteBatch(batch); err != nil {
-				return errs.Wrap(err, "insert cert-to-fqdns")
-			}
-		}
+		//if len(s.inserts.certs) > 0 {
+		//	insert := "INSERT INTO certificates (id, sha256_fingerprint, raw) VALUES (?, ?, ?)"
+		//	batch := s.db.NewBatch(gocql.LoggedBatch)
+		//
+		//	for _, c := range s.inserts.certs {
+		//		batch.Query(insert, c.ID, c.Sha256Fingerprint, c.Raw)
+		//	}
+		//	if err := s.db.ExecuteBatch(batch); err != nil {
+		//		return errs.Wrap(err, "insert certs")
+		//	}
+		//}
+		//if len(s.inserts.certToFqdns) > 0 {
+		//	insert := "INSERT INTO certificate_to_fqdns (id, fqdn_id, certificate_id) VALUES (?, ?, ?)"
+		//	batch := s.db.NewBatch(gocql.LoggedBatch)
+		//
+		//	for _, cf := range s.inserts.certToFqdns {
+		//		batch.Query(insert, cf.ID, cf.FqdnID, cf.CertificateID)
+		//	}
+		//	if err := s.db.ExecuteBatch(batch); err != nil {
+		//		return errs.Wrap(err, "insert cert-to-fqdns")
+		//	}
+		//}
 		//if len(s.inserts.passiveEntries) > 0 {
 		//	if err := tx.Insert(&s.inserts.passiveEntries); err != nil {
 		//		return errs.Wrap(err, "insert passive entries")
@@ -871,6 +885,10 @@ func storeCachedValuePosthook() postHook {
 		//if err := tx.Commit(); err != nil {
 		//	return errs.Wrap(err, "committing transaction")
 		//}
+
+		fmt.Println("bathc inserted")
+		close(in)
+		wg.Wait()
 		return nil
 	}
 }
