@@ -4,8 +4,7 @@ import (
 	"crypto/sha256"
 	b64 "encoding/base64"
 	"fmt"
-
-	"github.com/go-pg/pg/types"
+	"strings"
 
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/rs/zerolog/log"
@@ -125,7 +124,8 @@ func (s *Store) mapCert() {
 	var sha256Fingerprint string
 	var raw string
 
-	iter := s.db.Query(`SELECT * FROM certificates WHERE sha256_fingerprint IN ?`, types.InSlice(certsNotFoundInCache)).Iter()
+	q := fmt.Sprintf("SELECT id, sha256_fingerprint, raw FROM certificates WHERE sha256_fingerprint IN %s", "('"+strings.Join(certsNotFoundInCache, "', '")+"')")
+	iter := s.db.Query(q).Iter()
 	for iter.Scan(&id, &sha256Fingerprint, &raw) {
 		certsFoundInDB = append(certsFoundInDB, &models.Certificate{
 			ID:                id,
@@ -177,7 +177,8 @@ func (s *Store) mapFQDN() {
 	var id, tldID, psID, apexID uint
 	var fqdn string
 
-	iter := s.db.Query(`SELECT * FROM fqdns WHERE fqdn IN ?`, types.InSlice(fqndNotFoundInCache)).Iter()
+	q := fmt.Sprintf("SELECT id, fqdn, tld_id, public_suffix_id, apex_id FROM fqdns WHERE fqdn IN %s", "('"+strings.Join(fqndNotFoundInCache, "', '")+"')")
+	iter := s.db.Query(q).Iter()
 	for iter.Scan(&id, &fqdn, &tldID, &psID, &apexID) {
 		fqdnFoundInDB = append(fqdnFoundInDB, &models.Fqdn{
 			ID:             id,
@@ -231,7 +232,8 @@ func (s *Store) mapApex() {
 	var id, tldID, psID uint
 	var apex string
 
-	iter := s.db.Query(`SELECT * FROM apexes WHERE apex IN ?`, types.InSlice(apexNotFoundInCache)).Iter()
+	q := fmt.Sprintf("SELECT id, apex, tld_id, public_suffix_id FROM apexes WHERE apex IN %s", "('"+strings.Join(apexNotFoundInCache, "', '")+"')")
+	iter := s.db.Query(q).Iter()
 	for iter.Scan(&id, &apex, &tldID, &psID) {
 		apexFoundInDB = append(apexFoundInDB, &models.Apex{
 			ID:             id,
@@ -284,7 +286,8 @@ func (s *Store) mapPublicSuffix() {
 	var id, tldID uint
 	var ps string
 
-	iter := s.db.Query(`SELECT * FROM public_suffixes WHERE public_suffix IN ?`, types.InSlice(psNotFoundInCache)).Iter()
+	q := fmt.Sprintf("SELECT id, public_suffix, tld_id FROM public_suffixes WHERE public_suffix IN %s", "('"+strings.Join(psNotFoundInCache, "', '")+"')")
+	iter := s.db.Query(q).Iter()
 	for iter.Scan(&id, &ps, &tldID) {
 		psFoundInDB = append(psFoundInDB, &models.PublicSuffix{
 			ID:           id,
@@ -336,7 +339,8 @@ func (s *Store) mapTLD() {
 	var id uint
 	var tld string
 
-	iter := s.db.Query(`SELECT * FROM tlds WHERE tld IN ?`, types.InSlice(tldNotFoundInCache)).Iter()
+	q := fmt.Sprintf("SELECT id, tld FROM tlds WHERE tld IN %s", "('"+strings.Join(tldNotFoundInCache, "', '")+"')")
+	iter := s.db.Query(q).Iter()
 	for iter.Scan(&id, &tld) {
 		tldFoundInDB = append(tldFoundInDB, &models.Tld{
 			ID:  id,
