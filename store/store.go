@@ -158,7 +158,9 @@ type Ids struct {
 	fqdns        uint
 	fqdnsAnon    uint
 	certs        uint
+	certsFqdns   uint
 	logs         uint
+	logEntry     uint
 	recordTypes  uint
 }
 
@@ -579,6 +581,19 @@ func (hook *debugHook) BeforeQuery(qe *pg.QueryEvent) {
 
 func (hook *debugHook) AfterQuery(qe *pg.QueryEvent) {}
 
+//func (hook *debugHook) BeforeQuery(ctx context.Context, qe *pg.QueryEvent) (context.Context, error) {
+//	fq, err := qe.FormattedQuery()
+//	if err != nil {
+//		return ctx, err
+//	}
+//	log.Debug().Msgf("%s", fq)
+//	return ctx, nil
+//}
+//
+//func (hook *debugHook) AfterQuery(context.Context, *pg.QueryEvent) error {
+//	return nil
+//}
+
 func (s *Store) ResetCounter() {
 	s.Counter.apexCacheHit = 0
 	s.Counter.apexDBHit = 0
@@ -706,100 +721,174 @@ func storeCachedValuePosthook() postHook {
 		startTimeInsert := time.Now()
 
 		if len(s.inserts.fqdns) > 0 {
-			if err := tx.Insert(&s.inserts.fqdns); err != nil {
+			sq := ""
+			for _, fqdn := range s.inserts.fqdns {
+				sf := fmt.Sprintf("%d\t%s\t%d\t%d\t%d\n", fqdn.ID, fqdn.Fqdn, fqdn.TldID, fqdn.PublicSuffixID, fqdn.ApexID)
+				sq = sq + sf
+			}
+			r := strings.NewReader(sq)
+			_, err := tx.CopyFrom(r, "COPY fqdns FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert fqdns")
 			}
 		}
 		if len(s.inserts.fqdnsAnon) > 0 {
-			if err := tx.Insert(&s.inserts.fqdnsAnon); err != nil {
+			sq := ""
+			for _, fqdn := range s.inserts.fqdnsAnon {
+				sf := fmt.Sprintf("%d\t%s\t%d\t%d\t%d\t%d\n", fqdn.ID, fqdn.Fqdn.Fqdn, fqdn.TldID, fqdn.PublicSuffixID, fqdn.ApexID, fqdn.FqdnID)
+				sq = sq + sf
+			}
+			r := strings.NewReader(sq)
+			_, err := tx.CopyFrom(r, "COPY fqdns_anon FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert anon fqdns")
 			}
 		}
 		if len(s.inserts.apexes) > 0 {
-			a := s.inserts.apexList()
-			if err := tx.Insert(&a); err != nil {
+			sq := ""
+			for _, apex := range s.inserts.apexList() {
+				sf := fmt.Sprintf("%d\t%s\t%d\t%d\n", apex.ID, apex.Apex, apex.TldID, apex.PublicSuffixID)
+				sq = sq + sf
+			}
+			r := strings.NewReader(sq)
+			_, err := tx.CopyFrom(r, "COPY apexes FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert apexes")
 			}
 		}
 		if len(s.inserts.apexesAnon) > 0 {
-			a := s.inserts.apexAnonList()
-			if err := tx.Insert(&a); err != nil {
+			sq := ""
+			for _, apex := range s.inserts.apexAnonList() {
+				sf := fmt.Sprintf("%d\t%s\t%d\t%d\t%d\n", apex.ID, apex.Apex.Apex, apex.TldID, apex.PublicSuffixID, apex.ApexID)
+				sq = sq + sf
+			}
+			r := strings.NewReader(sq)
+			_, err := tx.CopyFrom(r, "COPY apexes_anon FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert anon apexes")
 			}
 		}
 		if len(s.inserts.publicSuffix) > 0 {
-			if err := tx.Insert(&s.inserts.publicSuffix); err != nil {
+			sq := ""
+			for _, ps := range s.inserts.publicSuffix {
+				sf := fmt.Sprintf("%d\t%d\t%s\n", ps.ID, ps.TldID, ps.PublicSuffix)
+				sq = sq + sf
+			}
+			r := strings.NewReader(sq)
+			_, err := tx.CopyFrom(r, "COPY public_suffixes FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert public suffix")
 			}
 		}
 		if len(s.inserts.publicSuffixAnon) > 0 {
-			if err := tx.Insert(&s.inserts.publicSuffixAnon); err != nil {
+			sq := ""
+			for _, ps := range s.inserts.publicSuffixAnon {
+				sf := fmt.Sprintf("%d\t%d\t%s\t%d\n", ps.ID, ps.TldID, ps.PublicSuffix.PublicSuffix, ps.PublicSuffixID)
+				sq = sq + sf
+			}
+			r := strings.NewReader(sq)
+			_, err := tx.CopyFrom(r, "COPY public_suffixes_anon FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert anon public suffix")
 			}
 		}
 		if len(s.inserts.tld) > 0 {
-			if err := tx.Insert(&s.inserts.tld); err != nil {
+			sq := ""
+			for _, tld := range s.inserts.tld {
+				sf := fmt.Sprintf("%d\t%s\n", tld.ID, tld.Tld)
+				sq = sq + sf
+			}
+			r := strings.NewReader(sq)
+			_, err := tx.CopyFrom(r, "COPY tlds FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert tld")
 			}
 		}
 		if len(s.inserts.tldAnon) > 0 {
-			if err := tx.Insert(&s.inserts.tldAnon); err != nil {
-				return errs.Wrap(err, "insert tld")
+			sq := ""
+			for _, tld := range s.inserts.tldAnon {
+				sf := fmt.Sprintf("%d\t%s\t%d\n", tld.ID, tld.Tld.Tld, tld.TldID)
+				sq = sq + sf
+			}
+			r := strings.NewReader(sq)
+			_, err := tx.CopyFrom(r, "COPY tlds_anon FROM STDIN")
+			if err != nil {
+				return errs.Wrap(err, "insert anon tld")
 			}
 		}
-		if len(s.inserts.zoneEntries) > 0 {
-			z := s.inserts.zoneEntryList()
-			if err := tx.Insert(&z); err != nil {
-				return errs.Wrap(err, "insert zone entries")
-			}
-		}
+		//if len(s.inserts.zoneEntries) > 0 {
+		//	z := s.inserts.zoneEntryList()
+		//	if err := tx.Insert(&z); err != nil {
+		//		return errs.Wrap(err, "insert zone entries")
+		//	}
+		//}
 		if len(s.inserts.logEntries) > 0 {
-			if err := tx.Insert(&s.inserts.logEntries); err != nil {
+			sq := ""
+			for _, l := range s.inserts.logEntries {
+				sf := fmt.Sprintf("%d\t%d\t%v\t%t\t%d\t%d\t%d\n", l.ID, l.Index, l.Timestamp, l.IsPrecert, l.CertificateID, l.LogID, l.StageID)
+				sq = sq + sf
+			}
+			r := strings.NewReader(sq)
+			_, err := tx.CopyFrom(r, "COPY log_entries FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert log entries")
 			}
 		}
 		if len(s.inserts.certs) > 0 {
-			if err := tx.Insert(&s.inserts.certs); err != nil {
+			sq := ""
+			for _, c := range s.inserts.certs {
+				sf := fmt.Sprintf("%d\t%s\t%s\n", c.ID, c.Sha256Fingerprint, c.Raw)
+				sq = sq + sf
+			}
+			r := strings.NewReader(sq)
+			_, err := tx.CopyFrom(r, "COPY certificates FROM STDIN")
+			if err != nil {
 				return errs.Wrap(err, "insert certs")
 			}
 		}
 		if len(s.inserts.certToFqdns) > 0 {
-			if err := tx.Insert(&s.inserts.certToFqdns); err != nil {
-				return errs.Wrap(err, "insert cert-to-fqdns")
+			sq := ""
+			for _, cf := range s.inserts.certToFqdns {
+				sf := fmt.Sprintf("%d\t%d\t%d\n", cf.ID, cf.FqdnID, cf.CertificateID)
+				sq = sq + sf
+			}
+			r := strings.NewReader(sq)
+			_, err := tx.CopyFrom(r, "COPY certificate_to_fqdns FROM STDIN")
+			if err != nil {
+				return errs.Wrap(err, "insert certs to fqdns")
 			}
 		}
-		if len(s.inserts.passiveEntries) > 0 {
-			if err := tx.Insert(&s.inserts.passiveEntries); err != nil {
-				return errs.Wrap(err, "insert passive entries")
-			}
-		}
-		if len(s.inserts.entradaEntries) > 0 {
-			if err := tx.Insert(&s.inserts.entradaEntries); err != nil {
-				return errs.Wrap(err, "insert entrada entries")
-			}
-		}
-
+		//if len(s.inserts.passiveEntries) > 0 {
+		//	if err := tx.Insert(&s.inserts.passiveEntries); err != nil {
+		//		return errs.Wrap(err, "insert passive entries")
+		//	}
+		//}
+		//if len(s.inserts.entradaEntries) > 0 {
+		//	if err := tx.Insert(&s.inserts.entradaEntries); err != nil {
+		//		return errs.Wrap(err, "insert entrada entries")
+		//	}
+		//}
 		finishTimeInsert := time.Since(startTimeInsert)
 
 		// updates
-		if len(s.updates.apexes) > 0 {
-			a := s.updates.apexList()
-			if err := tx.Update(&a); err != nil {
-				return errs.Wrap(err, "update apexes")
-			}
-		}
-		if len(s.updates.zoneEntries) > 0 {
-			z := s.updates.zoneEntryList()
-			_, err := tx.Model(&z).Column("last_seen").Update()
-			if err != nil {
-				return errs.Wrap(err, "update zone entries")
-			}
-		}
-		if len(s.updates.passiveEntries) > 0 {
-			if _, err := tx.Model(&s.updates.passiveEntries).Column("first_seen").Update(); err != nil {
-				return errs.Wrap(err, "update passive entries")
-			}
-		}
+		//if len(s.updates.apexes) > 0 {
+		//	a := s.updates.apexList()
+		//	if err := tx.Update(&a); err != nil {
+		//		return errs.Wrap(err, "update apexes")
+		//	}
+		//}
+		//if len(s.updates.zoneEntries) > 0 {
+		//	z := s.updates.zoneEntryList()
+		//	_, err := tx.Model(&z).Column("last_seen").Update()
+		//	if err != nil {
+		//		return errs.Wrap(err, "update zone entries")
+		//	}
+		//}
+		//if len(s.updates.passiveEntries) > 0 {
+		//	if _, err := tx.Model(&s.updates.passiveEntries).Column("first_seen").Update(); err != nil {
+		//		return errs.Wrap(err, "update passive entries")
+		//	}
+		//}
 
 		s.updates = NewModelSet()
 		s.inserts = NewModelSet()

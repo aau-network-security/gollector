@@ -139,7 +139,7 @@ func (s *Store) StoreLogEntry(muid string, entry LogEntry) error {
 		LogID:         l.ID,
 		Index:         entry.Index,
 		CertificateID: cert.ID,
-		Timestamp:     entry.Ts,
+		Timestamp:     entry.Ts.Format("2006-01-02 15:04:05"),
 		StageID:       sid,
 		IsPrecert:     entry.IsPrecert,
 	}

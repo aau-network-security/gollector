@@ -413,9 +413,11 @@ func (s *Store) StoreBatchPostHook() error {
 				fqdn := fqdnstr.obj.(*models.Fqdn)
 
 				ctof := models.CertificateToFqdn{
+					ID:            s.ids.certsFqdns,
 					CertificateID: cert.ID,
 					FqdnID:        fqdn.ID,
 				}
+				s.ids.certsFqdns++
 				s.inserts.certToFqdns = append(s.inserts.certToFqdns, &ctof)
 			}
 
@@ -432,14 +434,15 @@ func (s *Store) StoreBatchPostHook() error {
 		}
 
 		le := models.LogEntry{
+			ID:            s.ids.logEntry,
 			LogID:         l.ID,
 			Index:         certstr.entry.Index,
 			CertificateID: certstr.cert.ID,
-			Timestamp:     certstr.entry.Ts,
+			Timestamp:     certstr.entry.Ts.Format("2006-01-02 15:04:05"),
 			StageID:       certstr.sid,
 			IsPrecert:     certstr.entry.IsPrecert,
 		}
-
+		s.ids.logEntry++
 		s.inserts.logEntries = append(s.inserts.logEntries, &le)
 	}
 

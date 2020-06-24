@@ -2,12 +2,13 @@ package store
 
 import (
 	"errors"
+	"strings"
+	"time"
+
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/go-pg/pg"
 	"github.com/google/uuid"
 	errs "github.com/pkg/errors"
-	"strings"
-	"time"
 )
 
 var (

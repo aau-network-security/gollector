@@ -9,7 +9,8 @@ require (
 	github.com/getsentry/sentry-go v0.3.0
 	github.com/go-acme/lego v2.7.2+incompatible
 	github.com/go-pg/pg v8.0.6+incompatible
-	github.com/golang/protobuf v1.3.2
+	github.com/go-pg/pg/v10 v10.0.0-beta.2
+	github.com/golang/protobuf v1.4.2
 	github.com/google/certificate-transparency-go v1.0.22-0.20190613123100-f1b2d813b630
 	github.com/google/pprof v0.0.0-20200604032702-163a225fb653 // indirect
 	github.com/google/trillian v1.3.2 // indirect
@@ -26,13 +27,11 @@ require (
 	github.com/rs/zerolog v1.15.0
 	github.com/vbauerster/mpb/v4 v4.10.1
 	github.com/weppos/publicsuffix-go v0.10.0
-	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
+	golang.org/x/crypto v0.0.0-20200604202706-70a84ac30bf9
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
-	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980 // indirect
 	golang.org/x/text v0.3.2
-	google.golang.org/grpc v1.24.0
-	gopkg.in/yaml.v2 v2.2.4
-	mellium.im/sasl v0.2.1 // indirect
+	google.golang.org/grpc v1.29.1
+	gopkg.in/yaml.v2 v2.2.7
 )
 
 replace github.com/google/trillian v1.3.2 => github.com/google/trillian v1.3.1
