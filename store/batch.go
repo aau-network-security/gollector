@@ -316,6 +316,7 @@ func (s *Store) StoreBatchPostHook() error {
 			s.ids.tlds++
 			s.cache.tldByName.Add(k, res)
 			s.Counter.tldNew++
+			s.Readers.tlds.WriteString(fmt.Sprintf("%d,%s\n", res.ID, res.Tld))
 		}
 	}
 
@@ -335,6 +336,8 @@ func (s *Store) StoreBatchPostHook() error {
 			s.ids.suffixes++
 			s.cache.publicSuffixByName.Add(k, res)
 			s.Counter.psNew++
+			s.Readers.suffixes.WriteString(fmt.Sprintf("%d,%d,%s\n", res.ID, res.TldID, res.PublicSuffix))
+
 		}
 	}
 
@@ -360,6 +363,7 @@ func (s *Store) StoreBatchPostHook() error {
 			s.ids.apexes++
 			s.cache.apexByName.Add(k, res)
 			s.Counter.apexNew++
+			s.Readers.apexes.WriteString(fmt.Sprintf("%d,%s,%d,%d\n", res.ID, res.Apex, res.TldID, res.PublicSuffixID))
 		}
 	}
 
@@ -389,6 +393,8 @@ func (s *Store) StoreBatchPostHook() error {
 			s.ids.fqdns++
 			s.cache.fqdnByName.Add(k, res)
 			s.Counter.fqdnNew++
+			s.Readers.fqdns.WriteString(fmt.Sprintf("%d,%s,%d,%d,%d\n", res.ID, res.Fqdn, res.TldID, res.PublicSuffixID, res.ApexID))
+
 		}
 	}
 
@@ -419,6 +425,8 @@ func (s *Store) StoreBatchPostHook() error {
 				}
 				s.ids.certsFqdns++
 				s.inserts.certToFqdns = append(s.inserts.certToFqdns, &ctof)
+				s.Readers.certsFqdns.WriteString(fmt.Sprintf("%d,%d,%d\n", ctof.ID, ctof.FqdnID, ctof.CertificateID))
+
 			}
 
 			certstr.cert = cert
@@ -426,6 +434,8 @@ func (s *Store) StoreBatchPostHook() error {
 			s.ids.certs++
 			s.cache.certByFingerprint.Add(k, cert)
 			s.Counter.certNew++
+			s.Readers.certs.WriteString(fmt.Sprintf("%d,%s,%s\n", cert.ID, cert.Sha256Fingerprint, cert.Raw))
+
 		}
 
 		l, err := s.getOrCreateLog(certstr.entry.Log)
@@ -444,6 +454,7 @@ func (s *Store) StoreBatchPostHook() error {
 		}
 		s.ids.logEntry++
 		s.inserts.logEntries = append(s.inserts.logEntries, &le)
+		s.Readers.logEntry.WriteString(fmt.Sprintf("%d,%d,%s,%t,%d,%d,%d\n", le.ID, le.Index, le.Timestamp, le.IsPrecert, le.CertificateID, le.LogID, le.StageID))
 	}
 
 	return nil

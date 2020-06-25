@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"strings"
@@ -11,7 +12,6 @@ import (
 	"github.com/go-pg/pg"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/jinzhu/gorm"
-	_ "github.com/lib/pq"
 	errs "github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 )
@@ -272,6 +272,43 @@ type Store struct {
 	hashMapDB       hashMapDB
 	HitCount        *os.File
 	DBTime          *os.File
+	Readers         Readers
+}
+
+type Readers struct {
+	zoneEntries  *bytes.Buffer
+	tlds         *bytes.Buffer
+	tldsAnon     *bytes.Buffer
+	suffixes     *bytes.Buffer
+	suffixesAnon *bytes.Buffer
+	apexes       *bytes.Buffer
+	apexesAnon   *bytes.Buffer
+	fqdns        *bytes.Buffer
+	fqdnsAnon    *bytes.Buffer
+	certs        *bytes.Buffer
+	certsFqdns   *bytes.Buffer
+	logs         *bytes.Buffer
+	logEntry     *bytes.Buffer
+	recordTypes  *bytes.Buffer
+}
+
+func NewReaders() Readers {
+	return Readers{
+		zoneEntries:  &bytes.Buffer{},
+		tlds:         &bytes.Buffer{},
+		tldsAnon:     &bytes.Buffer{},
+		suffixes:     &bytes.Buffer{},
+		suffixesAnon: &bytes.Buffer{},
+		apexes:       &bytes.Buffer{},
+		apexesAnon:   &bytes.Buffer{},
+		fqdns:        &bytes.Buffer{},
+		fqdnsAnon:    &bytes.Buffer{},
+		certs:        &bytes.Buffer{},
+		certsFqdns:   &bytes.Buffer{},
+		logs:         &bytes.Buffer{},
+		logEntry:     &bytes.Buffer{},
+		recordTypes:  &bytes.Buffer{},
+	}
 }
 
 type counter struct {
@@ -677,6 +714,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		},
 		HitCount: fh,
 		DBTime:   fdb,
+		Readers:  NewReaders(),
 	}
 
 	postHook := storeCachedValuePosthook()
@@ -721,100 +759,80 @@ func storeCachedValuePosthook() postHook {
 		startTimeInsert := time.Now()
 
 		if len(s.inserts.fqdns) > 0 {
-			sq := ""
-			for _, fqdn := range s.inserts.fqdns {
-				sf := fmt.Sprintf("%d\t%s\t%d\t%d\t%d\n", fqdn.ID, fqdn.Fqdn, fqdn.TldID, fqdn.PublicSuffixID, fqdn.ApexID)
-				sq = sq + sf
-			}
-			r := strings.NewReader(sq)
-			_, err := tx.CopyFrom(r, "COPY fqdns FROM STDIN")
+			_, err := tx.CopyFrom(s.Readers.fqdns, "COPY fqdns FROM STDIN WITH CSV")
 			if err != nil {
 				return errs.Wrap(err, "insert fqdns")
 			}
 		}
 		if len(s.inserts.fqdnsAnon) > 0 {
-			sq := ""
-			for _, fqdn := range s.inserts.fqdnsAnon {
-				sf := fmt.Sprintf("%d\t%s\t%d\t%d\t%d\t%d\n", fqdn.ID, fqdn.Fqdn.Fqdn, fqdn.TldID, fqdn.PublicSuffixID, fqdn.ApexID, fqdn.FqdnID)
-				sq = sq + sf
-			}
-			r := strings.NewReader(sq)
-			_, err := tx.CopyFrom(r, "COPY fqdns_anon FROM STDIN")
-			if err != nil {
-				return errs.Wrap(err, "insert anon fqdns")
-			}
+			//r, w := io.Pipe()
+			//go func() {
+			//	for _, fqdn := range s.inserts.fqdnsAnon {
+			//		_, _ = fmt.Fprintf(w, "%d\t%s\t%d\t%d\t%d\n", fqdn.ID, fqdn.Fqdn.Fqdn, fqdn.TldID, fqdn.PublicSuffixID, fqdn.ApexID)
+			//	}
+			//	w.Close()
+			//}()
+			//_, err := tx.CopyFrom(s.Readers.fqdnsAnon, "COPY fqdns_anon FROM STDIN")
+			//if err != nil {
+			//	return errs.Wrap(err, "insert anon fqdns")
+			//}
 		}
 		if len(s.inserts.apexes) > 0 {
-			sq := ""
-			for _, apex := range s.inserts.apexList() {
-				sf := fmt.Sprintf("%d\t%s\t%d\t%d\n", apex.ID, apex.Apex, apex.TldID, apex.PublicSuffixID)
-				sq = sq + sf
-			}
-			r := strings.NewReader(sq)
-			_, err := tx.CopyFrom(r, "COPY apexes FROM STDIN")
+			_, err := tx.CopyFrom(s.Readers.apexes, "COPY apexes FROM STDIN WITH CSV")
 			if err != nil {
 				return errs.Wrap(err, "insert apexes")
 			}
 		}
 		if len(s.inserts.apexesAnon) > 0 {
-			sq := ""
-			for _, apex := range s.inserts.apexAnonList() {
-				sf := fmt.Sprintf("%d\t%s\t%d\t%d\t%d\n", apex.ID, apex.Apex.Apex, apex.TldID, apex.PublicSuffixID, apex.ApexID)
-				sq = sq + sf
-			}
-			r := strings.NewReader(sq)
-			_, err := tx.CopyFrom(r, "COPY apexes_anon FROM STDIN")
-			if err != nil {
-				return errs.Wrap(err, "insert anon apexes")
-			}
+			//r, w := io.Pipe()
+			//go func() {
+			//	for _, apex := range s.inserts.apexAnonList() {
+			//		_, _ = fmt.Fprintf(w, "%d\t%s\t%d\t%d\n", apex.ID, apex.Apex.Apex, apex.TldID, apex.PublicSuffixID)
+			//	}
+			//	w.Close()
+			//}()
+			//_, err := tx.CopyFrom(s.Readers.apexesAnon, "COPY apexes_anon FROM STDIN")
+			//if err != nil {
+			//	return errs.Wrap(err, "insert anon apexes")
+			//}
 		}
 		if len(s.inserts.publicSuffix) > 0 {
-			sq := ""
-			for _, ps := range s.inserts.publicSuffix {
-				sf := fmt.Sprintf("%d\t%d\t%s\n", ps.ID, ps.TldID, ps.PublicSuffix)
-				sq = sq + sf
-			}
-			r := strings.NewReader(sq)
-			_, err := tx.CopyFrom(r, "COPY public_suffixes FROM STDIN")
+			_, err := tx.CopyFrom(s.Readers.suffixes, "COPY public_suffixes FROM STDIN WITH CSV")
 			if err != nil {
 				return errs.Wrap(err, "insert public suffix")
 			}
 		}
 		if len(s.inserts.publicSuffixAnon) > 0 {
-			sq := ""
-			for _, ps := range s.inserts.publicSuffixAnon {
-				sf := fmt.Sprintf("%d\t%d\t%s\t%d\n", ps.ID, ps.TldID, ps.PublicSuffix.PublicSuffix, ps.PublicSuffixID)
-				sq = sq + sf
-			}
-			r := strings.NewReader(sq)
-			_, err := tx.CopyFrom(r, "COPY public_suffixes_anon FROM STDIN")
-			if err != nil {
-				return errs.Wrap(err, "insert anon public suffix")
-			}
+			//r, w := io.Pipe()
+			//go func() {
+			//	for _, ps := range s.inserts.publicSuffixAnon {
+			//		_, _ = fmt.Fprintf(w, "%d\t%s\t%d\n", ps.ID, ps.PublicSuffix.PublicSuffix, ps.TldID)
+			//	}
+			//	w.Close()
+			//}()
+			//_, err := tx.CopyFrom(r, "COPY public_suffixes_anon FROM STDIN")
+			//if err != nil {
+			//	return errs.Wrap(err, "insert anon public suffix")
+			//}
 		}
 		if len(s.inserts.tld) > 0 {
-			sq := ""
-			for _, tld := range s.inserts.tld {
-				sf := fmt.Sprintf("%d\t%s\n", tld.ID, tld.Tld)
-				sq = sq + sf
-			}
-			r := strings.NewReader(sq)
-			_, err := tx.CopyFrom(r, "COPY tlds FROM STDIN")
+			_, err = tx.CopyFrom(s.Readers.tlds, "COPY tlds FROM STDIN WITH CSV")
 			if err != nil {
 				return errs.Wrap(err, "insert tld")
 			}
 		}
 		if len(s.inserts.tldAnon) > 0 {
-			sq := ""
-			for _, tld := range s.inserts.tldAnon {
-				sf := fmt.Sprintf("%d\t%s\t%d\n", tld.ID, tld.Tld.Tld, tld.TldID)
-				sq = sq + sf
-			}
-			r := strings.NewReader(sq)
-			_, err := tx.CopyFrom(r, "COPY tlds_anon FROM STDIN")
-			if err != nil {
-				return errs.Wrap(err, "insert anon tld")
-			}
+			//r, w := io.Pipe()
+			//go func() {
+			//	for _, tld := range s.inserts.tldAnon {
+			//		_, _ = fmt.Fprintf(w, "%d\t%s\t%d\n", tld.ID, tld.Tld.Tld, tld.TldID)
+			//	}
+			//	w.Close()
+			//}()
+			//_, err := tx.CopyFrom(r, "COPY tlds_anon FROM STDIN")
+			//if err != nil {
+			//	return errs.Wrap(err, "insert tld")
+			//}
 		}
 		//if len(s.inserts.zoneEntries) > 0 {
 		//	z := s.inserts.zoneEntryList()
@@ -822,40 +840,24 @@ func storeCachedValuePosthook() postHook {
 		//		return errs.Wrap(err, "insert zone entries")
 		//	}
 		//}
+
 		if len(s.inserts.logEntries) > 0 {
-			sq := ""
-			for _, l := range s.inserts.logEntries {
-				sf := fmt.Sprintf("%d\t%d\t%v\t%t\t%d\t%d\t%d\n", l.ID, l.Index, l.Timestamp, l.IsPrecert, l.CertificateID, l.LogID, l.StageID)
-				sq = sq + sf
-			}
-			r := strings.NewReader(sq)
-			_, err := tx.CopyFrom(r, "COPY log_entries FROM STDIN")
+			_, err := tx.CopyFrom(s.Readers.logEntry, "COPY log_entries FROM STDIN  WITH CSV")
 			if err != nil {
-				return errs.Wrap(err, "insert log entries")
+				return errs.Wrap(err, "insert certs")
 			}
 		}
 		if len(s.inserts.certs) > 0 {
-			sq := ""
-			for _, c := range s.inserts.certs {
-				sf := fmt.Sprintf("%d\t%s\t%s\n", c.ID, c.Sha256Fingerprint, c.Raw)
-				sq = sq + sf
-			}
-			r := strings.NewReader(sq)
-			_, err := tx.CopyFrom(r, "COPY certificates FROM STDIN")
+			_, err := tx.CopyFrom(s.Readers.certs, "COPY certificates FROM STDIN  WITH CSV")
 			if err != nil {
 				return errs.Wrap(err, "insert certs")
 			}
 		}
 		if len(s.inserts.certToFqdns) > 0 {
-			sq := ""
-			for _, cf := range s.inserts.certToFqdns {
-				sf := fmt.Sprintf("%d\t%d\t%d\n", cf.ID, cf.FqdnID, cf.CertificateID)
-				sq = sq + sf
-			}
-			r := strings.NewReader(sq)
-			_, err := tx.CopyFrom(r, "COPY certificate_to_fqdns FROM STDIN")
+
+			_, err := tx.CopyFrom(s.Readers.certsFqdns, "COPY certificate_to_fqdns FROM STDIN  WITH CSV")
 			if err != nil {
-				return errs.Wrap(err, "insert certs to fqdns")
+				return errs.Wrap(err, "insert cert-to-fqdns")
 			}
 		}
 		//if len(s.inserts.passiveEntries) > 0 {
@@ -893,17 +895,17 @@ func storeCachedValuePosthook() postHook {
 		s.updates = NewModelSet()
 		s.inserts = NewModelSet()
 		s.hashMapDB = NewBatchQueryDB()
+		s.Readers = NewReaders()
 
 		DBtiming := fmt.Sprintf("%d, %d\n", finishTimeRetrieve.Microseconds(), finishTimeInsert.Microseconds())
 
-		counterString := fmt.Sprintf("%d, %d, %d, %d, %d, %d\n", s.Counter.apexCacheHit, s.Counter.apexDBHit, s.Counter.apexNew, s.Counter.fqdnCacheHit, s.Counter.fqdnDBHit, s.Counter.fqdnNew)
+		counterString := fmt.Sprintf("%d,%d,%d,%d,%d,%d\n", s.Counter.apexCacheHit, s.Counter.apexDBHit, s.Counter.apexNew, s.Counter.fqdnCacheHit, s.Counter.fqdnDBHit, s.Counter.fqdnNew)
 		if _, err := s.HitCount.Write([]byte(counterString)); err != nil {
 			panic(err)
 		}
 		if _, err := s.DBTime.Write([]byte(DBtiming)); err != nil {
 			panic(err)
 		}
-
 		s.ResetCounter()
 
 		if err := tx.Commit(); err != nil {

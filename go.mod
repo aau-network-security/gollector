@@ -19,7 +19,7 @@ require (
 	github.com/ianlancetaylor/demangle v0.0.0-20200524003926-2c5affb30a03 // indirect
 	github.com/jinzhu/gorm v1.9.11
 	github.com/jlaffaye/ftp v0.0.0-20190828173736-6aaa91c7796e
-	github.com/lib/pq v1.2.0
+	github.com/lib/pq v1.7.0
 	github.com/mholt/certmagic v0.7.6-0.20191016061957-c52848a21de3
 	github.com/miekg/dns v1.1.22
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
