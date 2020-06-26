@@ -191,7 +191,7 @@ func main() {
 				WorkerCount: conf.WorkerCount,
 				StartIndex:  0,
 				//EndIndex:    end,
-				EndIndex: 500000,
+				EndIndex: 5000000,
 			}
 
 			count, err = ct.Scan(ctx, &l, entryFn, opts)

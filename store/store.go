@@ -2,14 +2,16 @@ package store
 
 import (
 	"fmt"
+	"os"
+	"sync"
+	"time"
+
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/go-pg/pg"
 	"github.com/jinzhu/gorm"
 	_ "github.com/lib/pq"
 	errs "github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
-	"sync"
-	"time"
 )
 
 var (
@@ -235,6 +237,7 @@ type Store struct {
 	ms              measurementState
 	anonymizer      *Anonymizer
 	Ready           *Ready
+	BenchmarkFile   *os.File
 }
 
 func (s *Store) WithAnonymizer(a *Anonymizer) *Store {
@@ -264,7 +267,7 @@ func (s *Store) runPostHooks() error {
 }
 
 func (s *Store) conditionalPostHooks() error {
-	if s.updates.Len()+s.inserts.Len() >= s.batchSize {
+	if len(s.inserts.certs) >= s.batchSize {
 		return s.runPostHooks()
 	}
 	return nil
@@ -510,6 +513,12 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		db.AddQueryHook(&debugHook{})
 	}
 
+	// open output file
+	fo, err := os.Create("output/db_exec_time.txt")
+	if err != nil {
+		panic(err)
+	}
+
 	s := Store{
 		conf:            conf,
 		db:              db,
@@ -524,6 +533,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		anonymizer:      &DefaultAnonymizer,
 		ms:              NewMeasurementState(),
 		Ready:           NewReady(),
+		BenchmarkFile:   fo,
 	}
 
 	postHook := storeCachedValuePosthook()
@@ -553,6 +563,8 @@ func storeCachedValuePosthook() postHook {
 			return err
 		}
 		defer tx.Rollback()
+
+		startTime := time.Now()
 
 		// inserts
 		if len(s.inserts.fqdns) > 0 {
@@ -627,6 +639,12 @@ func storeCachedValuePosthook() postHook {
 			if _, err := tx.Model(&s.updates.passiveEntries).Column("first_seen").Update(); err != nil {
 				return errs.Wrap(err, "update passive entries")
 			}
+		}
+
+		finishTime := time.Since(startTime)
+		DBtiming := fmt.Sprintf("%d\n", finishTime.Microseconds())
+		if _, err := s.BenchmarkFile.Write([]byte(DBtiming)); err != nil {
+			panic(err)
 		}
 
 		s.updates = NewModelSet()
