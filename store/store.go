@@ -671,6 +671,24 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		return nil, errs.Wrap(err, "migrate models")
 	}
 
+	tableList := []string{"apexes", "certificate_to_fqdns", "certificates", "fqdns", "log_entries", "public_suffixes", "tlds"}
+
+	for _, tl := range tableList {
+		line := fmt.Sprintf("ALTER TABLE %s SET UNLOGGED;", tl)
+		_, err := s.db.Exec(line)
+		if err != nil {
+			log.Debug().Msgf("error creating unlogged %s table: %s", tl, err.Error())
+		}
+	}
+
+	for _, tl := range tableList {
+		line := fmt.Sprintf("ALTER TABLE %s SET (autovacuum_enabled = false);", tl)
+		_, err := s.db.Exec(line)
+		if err != nil {
+			log.Debug().Msgf("error setting [autovacuum_enabled=false] %s table: %s", tl, err.Error())
+		}
+	}
+
 	go func() {
 		if err := s.init(); err != nil {
 			log.Error().Msgf("error while initializing database: %s", err)

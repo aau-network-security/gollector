@@ -396,11 +396,11 @@ func (s *Store) StoreBatchPostHook() error {
 	for k, certstr := range s.hashMapDB.certByFingerprint {
 		if certstr.cert == nil {
 			// get TLD name from domain object
-			certEnc := b64.StdEncoding.EncodeToString(certstr.entry.Cert.Raw)
+			_ = b64.StdEncoding.EncodeToString(certstr.entry.Cert.Raw)
 			cert := &models.Certificate{
 				ID:                s.ids.certs,
 				Sha256Fingerprint: k,
-				Raw:               certEnc,
+				Raw:               certstr.entry.Cert.Raw,
 			}
 
 			// create an association between FQDNs in database and the newly created certificate

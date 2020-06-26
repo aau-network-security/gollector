@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/aau-network-security/gollector/collectors/ct"
-
 	"github.com/aau-network-security/gollector/store/models"
 	tst "github.com/aau-network-security/gollector/testing"
 	"github.com/google/certificate-transparency-go/x509"
@@ -387,7 +386,7 @@ func TestDebug(t *testing.T) {
 		Port:     10001,
 	}
 
-	s, g, muid, err := OpenStore(conf)
+	s, _, muid, err := OpenStore(conf)
 
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
@@ -477,7 +476,6 @@ func TestDebug(t *testing.T) {
 		t.Fatalf("unexpected error while running post hooks: %s", err)
 	}
 
-	_ = g
 }
 
 func TestResetDB(t *testing.T) {
