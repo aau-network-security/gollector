@@ -1,17 +1,18 @@
 package store
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 	"time"
+
+	"github.com/lib/pq"
 
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/go-pg/pg"
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/jinzhu/gorm"
-	_ "github.com/lib/pq"
 	errs "github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 )
@@ -158,6 +159,8 @@ type Ids struct {
 	fqdns        uint
 	fqdnsAnon    uint
 	certs        uint
+	certFqdns    uint
+	logEntries   uint
 	logs         uint
 	recordTypes  uint
 }
@@ -254,6 +257,7 @@ func NewReady() *Ready {
 type Store struct {
 	conf            Config
 	db              *pg.DB
+	db_pq           *sql.DB
 	cache           cache
 	cacheOpts       CacheOpts
 	m               *sync.Mutex
@@ -324,20 +328,21 @@ func (s *Store) conditionalPostHooks() error {
 }
 
 func (s *Store) GetLastIndexLog(knowLogURL string) (int64, error) {
-	var knowLog models.Log
-	if err := s.db.Model(&knowLog).Where("url = ?", knowLogURL).First(); err != nil {
-		if !strings.Contains(err.Error(), "no rows in result set") {
-			return 0, err
-		}
-		return 0, nil //know log in not present in DB (it's new)
-	}
-
-	var lastLogEntry models.LogEntry
-	if err := s.db.Model(&lastLogEntry).Where("log_id = ?", knowLog.ID).Last(); err != nil {
-		return 0, err
-	}
-
-	return int64(lastLogEntry.Index + 1), nil
+	//var knowLog models.Log
+	//if err := s.db.Model(&knowLog).Where("url = ?", knowLogURL).First(); err != nil {
+	//	if !strings.Contains(err.Error(), "no rows in result set") {
+	//		return 0, err
+	//	}
+	//	return 0, nil //know log in not present in DB (it's new)
+	//}
+	//
+	//var lastLogEntry models.LogEntry
+	//if err := s.db.Model(&lastLogEntry).Where("log_id = ?", knowLog.ID).Last(); err != nil {
+	//	return 0, err
+	//}
+	//
+	//return int64(lastLogEntry.Index + 1), nil
+	return 0, nil
 }
 
 // use Gorm's auto migrate functionality
@@ -377,177 +382,177 @@ func (s *Store) migrate() error {
 
 //todo implement a limit
 func (s *Store) init() error {
-	var tlds []*models.Tld
-	if err := s.db.Model(&tlds).Order("id ASC").Select(); err != nil {
-		return err
-	}
-	for _, tld := range tlds {
-		s.cache.tldByName.Add(tld.Tld, tld)
-	}
-
-	var tldsAnon []*models.TldAnon
-	if err := s.db.Model(&tldsAnon).Order("id ASC").Select(); err != nil {
-		return err
-	}
-	for _, tld := range tldsAnon {
-		s.cache.tldAnonByName.Add(tld.Tld.Tld, tld)
-	}
-
-	var suffixes []*models.PublicSuffix
-	if err := s.db.Model(&suffixes).Order("id ASC").Select(); err != nil {
-		return err
-	}
-	for _, suffix := range suffixes {
-		s.cache.publicSuffixByName.Add(suffix.PublicSuffix, suffix)
-	}
-
-	var suffixesAnon []*models.PublicSuffixAnon
-	if err := s.db.Model(&suffixesAnon).Order("id ASC").Select(); err != nil {
-		return err
-	}
-	for _, suffix := range suffixesAnon {
-		s.cache.publicSuffixAnonByName.Add(suffix.PublicSuffix.PublicSuffix, suffix)
-	}
-
-	var apexes []*models.Apex
-	if err := s.db.Model(&apexes).Order("id ASC").Select(); err != nil {
-		return err
-	}
-	for _, apex := range apexes {
-		s.cache.apexByName.Add(apex.Apex, apex)
-		s.cache.apexById.Add(apex.ID, apex)
-	}
-
-	var apexesAnon []*models.ApexAnon
-	if err := s.db.Model(&apexesAnon).Order("id ASC").Select(); err != nil {
-		return err
-	}
-	for _, apex := range apexesAnon {
-		s.cache.apexByNameAnon.Add(apex.Apex.Apex, apex)
-	}
-
-	var fqdns []*models.Fqdn
-	if err := s.db.Model(&fqdns).Order("id ASC").Select(); err != nil {
-		return err
-	}
-	fqdnsById := make(map[uint]*models.Fqdn)
-	for _, fqdn := range fqdns {
-		s.cache.fqdnByName.Add(fqdn.Fqdn, fqdn)
-		fqdnsById[fqdn.ID] = fqdn
-	}
-
-	var fqdnsAnon []*models.FqdnAnon
-	if err := s.db.Model(&fqdnsAnon).Order("id ASC").Select(); err != nil {
-		return err
-	}
-	for _, fqdn := range fqdnsAnon {
-		s.cache.fqdnByNameAnon.Add(fqdn.Fqdn.Fqdn, fqdn)
-	}
-
-	var entries []*models.ZonefileEntry
-	if err := s.db.Model(&entries).Order("id ASC").Select(); err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		apexI, _ := s.cache.apexById.Get(entry.ApexID)
-		apex := apexI.(models.Apex)
-		s.cache.zoneEntriesByApexName.Add(apex.Apex, entry)
-	}
-
-	var logs []*models.Log
-	if err := s.db.Model(&logs).Order("id ASC").Select(); err != nil {
-		return err
-	}
-	for _, l := range logs {
-		s.cache.logByUrl.Add(l.Url, l)
-	}
-
-	var certs []*models.Certificate
-	if err := s.db.Model(&certs).Order("id ASC").Select(); err != nil {
-		return err
-	}
-	for _, c := range certs {
-		s.cache.certByFingerprint.Add(c.Sha256Fingerprint, c)
-	}
-
-	var rtypes []*models.RecordType
-	if err := s.db.Model(&rtypes).Order("id ASC").Select(); err != nil {
-		return err
-	}
-	rtypeById := make(map[uint]*models.RecordType)
-	for _, rtype := range rtypes {
-		s.cache.recordTypeByName.Add(rtype.Type, rtype)
-		rtypeById[rtype.ID] = rtype
-	}
-
-	var passiveEntries []*models.PassiveEntry
-	if err := s.db.Model(&passiveEntries).Order("id ASC").Select(); err != nil {
-		return err
-	}
-	for _, entry := range passiveEntries {
-		fqdn := fqdnsById[entry.FqdnID]
-		rtype := rtypeById[entry.RecordTypeID]
-		s.cache.passiveEntryByFqdn.add(fqdn.Fqdn, rtype.Type, entry)
-	}
-
-	var measurements []*models.Measurement
-	if err := s.db.Model(&measurements).Order("id ASC").Select(); err != nil {
-		return err
-	}
-
-	var stages []*models.Stage
-	if err := s.db.Model(&stages).Order("id ASC").Select(); err != nil {
-		return err
-	}
+	//var tlds []*models.Tld
+	//if err := s.db.Model(&tlds).Order("id ASC").Select(); err != nil {
+	//	return err
+	//}
+	//for _, tld := range tlds {
+	//	s.cache.tldByName.Add(tld.Tld, tld)
+	//}
+	//
+	//var tldsAnon []*models.TldAnon
+	//if err := s.db.Model(&tldsAnon).Order("id ASC").Select(); err != nil {
+	//	return err
+	//}
+	//for _, tld := range tldsAnon {
+	//	s.cache.tldAnonByName.Add(tld.Tld.Tld, tld)
+	//}
+	//
+	//var suffixes []*models.PublicSuffix
+	//if err := s.db.Model(&suffixes).Order("id ASC").Select(); err != nil {
+	//	return err
+	//}
+	//for _, suffix := range suffixes {
+	//	s.cache.publicSuffixByName.Add(suffix.PublicSuffix, suffix)
+	//}
+	//
+	//var suffixesAnon []*models.PublicSuffixAnon
+	//if err := s.db.Model(&suffixesAnon).Order("id ASC").Select(); err != nil {
+	//	return err
+	//}
+	//for _, suffix := range suffixesAnon {
+	//	s.cache.publicSuffixAnonByName.Add(suffix.PublicSuffix.PublicSuffix, suffix)
+	//}
+	//
+	//var apexes []*models.Apex
+	//if err := s.db.Model(&apexes).Order("id ASC").Select(); err != nil {
+	//	return err
+	//}
+	//for _, apex := range apexes {
+	//	s.cache.apexByName.Add(apex.Apex, apex)
+	//	s.cache.apexById.Add(apex.ID, apex)
+	//}
+	//
+	//var apexesAnon []*models.ApexAnon
+	//if err := s.db.Model(&apexesAnon).Order("id ASC").Select(); err != nil {
+	//	return err
+	//}
+	//for _, apex := range apexesAnon {
+	//	s.cache.apexByNameAnon.Add(apex.Apex.Apex, apex)
+	//}
+	//
+	//var fqdns []*models.Fqdn
+	//if err := s.db.Model(&fqdns).Order("id ASC").Select(); err != nil {
+	//	return err
+	//}
+	//fqdnsById := make(map[uint]*models.Fqdn)
+	//for _, fqdn := range fqdns {
+	//	s.cache.fqdnByName.Add(fqdn.Fqdn, fqdn)
+	//	fqdnsById[fqdn.ID] = fqdn
+	//}
+	//
+	//var fqdnsAnon []*models.FqdnAnon
+	//if err := s.db.Model(&fqdnsAnon).Order("id ASC").Select(); err != nil {
+	//	return err
+	//}
+	//for _, fqdn := range fqdnsAnon {
+	//	s.cache.fqdnByNameAnon.Add(fqdn.Fqdn.Fqdn, fqdn)
+	//}
+	//
+	//var entries []*models.ZonefileEntry
+	//if err := s.db.Model(&entries).Order("id ASC").Select(); err != nil {
+	//	return err
+	//}
+	//for _, entry := range entries {
+	//	apexI, _ := s.cache.apexById.Get(entry.ApexID)
+	//	apex := apexI.(models.Apex)
+	//	s.cache.zoneEntriesByApexName.Add(apex.Apex, entry)
+	//}
+	//
+	//var logs []*models.Log
+	//if err := s.db.Model(&logs).Order("id ASC").Select(); err != nil {
+	//	return err
+	//}
+	//for _, l := range logs {
+	//	s.cache.logByUrl.Add(l.Url, l)
+	//}
+	//
+	//var certs []*models.Certificate
+	//if err := s.db.Model(&certs).Order("id ASC").Select(); err != nil {
+	//	return err
+	//}
+	//for _, c := range certs {
+	//	s.cache.certByFingerprint.Add(c.Sha256Fingerprint, c)
+	//}
+	//
+	//var rtypes []*models.RecordType
+	//if err := s.db.Model(&rtypes).Order("id ASC").Select(); err != nil {
+	//	return err
+	//}
+	//rtypeById := make(map[uint]*models.RecordType)
+	//for _, rtype := range rtypes {
+	//	s.cache.recordTypeByName.Add(rtype.Type, rtype)
+	//	rtypeById[rtype.ID] = rtype
+	//}
+	//
+	//var passiveEntries []*models.PassiveEntry
+	//if err := s.db.Model(&passiveEntries).Order("id ASC").Select(); err != nil {
+	//	return err
+	//}
+	//for _, entry := range passiveEntries {
+	//	fqdn := fqdnsById[entry.FqdnID]
+	//	rtype := rtypeById[entry.RecordTypeID]
+	//	s.cache.passiveEntryByFqdn.add(fqdn.Fqdn, rtype.Type, entry)
+	//}
+	//
+	//var measurements []*models.Measurement
+	//if err := s.db.Model(&measurements).Order("id ASC").Select(); err != nil {
+	//	return err
+	//}
+	//
+	//var stages []*models.Stage
+	//if err := s.db.Model(&stages).Order("id ASC").Select(); err != nil {
+	//	return err
+	//}
 
 	s.ids.zoneEntries = 1
-	if len(entries) > 0 {
-		s.ids.zoneEntries = entries[len(entries)-1].ID + 1
-	}
+	//if len(entries) > 0 {
+	//	s.ids.zoneEntries = entries[len(entries)-1].ID + 1
+	//}
 	s.ids.tlds = 1
-	if len(tlds) > 0 {
-		s.ids.tlds = tlds[len(tlds)-1].ID + 1
-	}
+	//if len(tlds) > 0 {
+	//	s.ids.tlds = tlds[len(tlds)-1].ID + 1
+	//}
 	s.ids.tldsAnon = 1
-	if len(tldsAnon) > 0 {
-		s.ids.tldsAnon = tldsAnon[len(tldsAnon)-1].ID + 1
-	}
+	//if len(tldsAnon) > 0 {
+	//	s.ids.tldsAnon = tldsAnon[len(tldsAnon)-1].ID + 1
+	//}
 	s.ids.suffixes = 1
-	if len(suffixes) > 0 {
-		s.ids.suffixes = suffixes[len(suffixes)-1].ID + 1
-	}
+	//if len(suffixes) > 0 {
+	//	s.ids.suffixes = suffixes[len(suffixes)-1].ID + 1
+	//}
 	s.ids.suffixesAnon = 1
-	if len(suffixesAnon) > 0 {
-		s.ids.suffixesAnon = suffixesAnon[len(suffixesAnon)-1].ID + 1
-	}
+	//if len(suffixesAnon) > 0 {
+	//	s.ids.suffixesAnon = suffixesAnon[len(suffixesAnon)-1].ID + 1
+	//}
 	s.ids.apexes = 1
-	if len(apexes) > 0 {
-		s.ids.apexes = apexes[len(apexes)-1].ID + 1
-	}
+	//if len(apexes) > 0 {
+	//	s.ids.apexes = apexes[len(apexes)-1].ID + 1
+	//}
 	s.ids.apexesAnon = 1
-	if len(apexesAnon) > 0 {
-		s.ids.apexesAnon = apexesAnon[len(apexesAnon)-1].ID + 1
-	}
+	//if len(apexesAnon) > 0 {
+	//	s.ids.apexesAnon = apexesAnon[len(apexesAnon)-1].ID + 1
+	//}
 	s.ids.fqdns = 1
-	if len(fqdns) > 0 {
-		s.ids.fqdns = fqdns[len(fqdns)-1].ID + 1
-	}
+	//if len(fqdns) > 0 {
+	//	s.ids.fqdns = fqdns[len(fqdns)-1].ID + 1
+	//}
 	s.ids.fqdnsAnon = 1
-	if len(fqdnsAnon) > 0 {
-		s.ids.fqdnsAnon = fqdnsAnon[len(fqdnsAnon)-1].ID + 1
-	}
+	//if len(fqdnsAnon) > 0 {
+	//	s.ids.fqdnsAnon = fqdnsAnon[len(fqdnsAnon)-1].ID + 1
+	//}
 	s.ids.logs = 1
-	if len(logs) > 0 {
-		s.ids.logs = logs[len(logs)-1].ID + 1
-	}
+	//if len(logs) > 0 {
+	//	s.ids.logs = logs[len(logs)-1].ID + 1
+	//}
 	s.ids.certs = 1
-	if len(certs) > 0 {
-		s.ids.certs = certs[len(certs)-1].ID + 1
-	}
+	//if len(certs) > 0 {
+	//	s.ids.certs = certs[len(certs)-1].ID + 1
+	//}
 	s.ids.recordTypes = 1
-	if len(rtypes) > 0 {
-		s.ids.recordTypes = rtypes[len(rtypes)-1].ID + 1
-	}
+	//if len(rtypes) > 0 {
+	//	s.ids.recordTypes = rtypes[len(rtypes)-1].ID + 1
+	//}
 
 	return nil
 }
@@ -610,6 +615,15 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		db.AddQueryHook(&debugHook{})
 	}
 
+	connStr := fmt.Sprintf("user=%s password=%s host=%s port=%d dbname=%s sslmode=disable", conf.User, conf.Password, conf.Host, conf.Port, conf.DBName)
+	db_pq, err := sql.Open("postgres", connStr)
+	if err != nil {
+		return nil, err
+	}
+	db_pq.SetMaxIdleConns(10)
+	db_pq.SetMaxOpenConns(10)
+	db_pq.SetConnMaxLifetime(0)
+
 	fh, err := os.Create("output/hit_count.txt")
 	if err != nil {
 		panic(err)
@@ -630,6 +644,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 	s := Store{
 		conf:            conf,
 		db:              db,
+		db_pq:           db_pq,
 		cache:           newCache(opts.CacheOpts),
 		cacheOpts:       opts.CacheOpts,
 		allowedInterval: opts.AllowedInterval,
@@ -696,7 +711,7 @@ func storeCachedValuePosthook() postHook {
 			return err
 		}
 
-		tx, err := s.db.Begin()
+		tx, err := s.db_pq.Begin()
 		if err != nil {
 			return err
 		}
@@ -706,100 +721,183 @@ func storeCachedValuePosthook() postHook {
 		startTimeInsert := time.Now()
 
 		if len(s.inserts.fqdns) > 0 {
-			if err := tx.Insert(&s.inserts.fqdns); err != nil {
+			stmt, _ := tx.Prepare(pq.CopyIn("fqdns", "id", "fqdn", "tld_id", "public_suffix_id", "apex_id"))
+			for _, fqdn := range s.inserts.fqdns {
+				_, err := stmt.Exec(fqdn.ID, fqdn.Fqdn, fqdn.TldID, fqdn.PublicSuffixID, fqdn.ApexID)
+				if err != nil {
+					fmt.Println(err)
+				}
+			}
+			_, err = stmt.Exec()
+			if err != nil {
+				return errs.Wrap(err, "insert fqdns")
+			}
+			err = stmt.Close()
+			if err != nil {
 				return errs.Wrap(err, "insert fqdns")
 			}
 		}
-		if len(s.inserts.fqdnsAnon) > 0 {
-			if err := tx.Insert(&s.inserts.fqdnsAnon); err != nil {
-				return errs.Wrap(err, "insert anon fqdns")
-			}
-		}
+		//if len(s.inserts.fqdnsAnon) > 0 {
+		//	if err := tx.Insert(&s.inserts.fqdnsAnon); err != nil {
+		//		return errs.Wrap(err, "insert anon fqdns")
+		//	}
+		//}
 		if len(s.inserts.apexes) > 0 {
-			a := s.inserts.apexList()
-			if err := tx.Insert(&a); err != nil {
+			stmt, _ := tx.Prepare(pq.CopyIn("apexes", "id", "apex", "tld_id", "public_suffix_id"))
+			for _, a := range s.inserts.apexList() {
+				_, err := stmt.Exec(a.ID, a.Apex, a.TldID, a.PublicSuffixID)
+				if err != nil {
+					fmt.Println(err)
+				}
+			}
+			_, err = stmt.Exec()
+			if err != nil {
+				return errs.Wrap(err, "insert apexes")
+			}
+			err = stmt.Close()
+			if err != nil {
 				return errs.Wrap(err, "insert apexes")
 			}
 		}
-		if len(s.inserts.apexesAnon) > 0 {
-			a := s.inserts.apexAnonList()
-			if err := tx.Insert(&a); err != nil {
-				return errs.Wrap(err, "insert anon apexes")
-			}
-		}
+		//if len(s.inserts.apexesAnon) > 0 {
+		//	a := s.inserts.apexAnonList()
+		//	if err := tx.Insert(&a); err != nil {
+		//		return errs.Wrap(err, "insert anon apexes")
+		//	}
+		//}
 		if len(s.inserts.publicSuffix) > 0 {
-			if err := tx.Insert(&s.inserts.publicSuffix); err != nil {
-				return errs.Wrap(err, "insert public suffix")
+			stmt, _ := tx.Prepare(pq.CopyIn("public_suffixes", "id", "tld_id", "public_suffix"))
+			for _, ps := range s.inserts.publicSuffix {
+				_, err := stmt.Exec(ps.ID, ps.TldID, ps.PublicSuffix)
+				if err != nil {
+					fmt.Println(err)
+				}
+			}
+			_, err = stmt.Exec()
+			if err != nil {
+				return errs.Wrap(err, "insert ps")
+			}
+			err = stmt.Close()
+			if err != nil {
+				return errs.Wrap(err, "insert ps")
 			}
 		}
-		if len(s.inserts.publicSuffixAnon) > 0 {
-			if err := tx.Insert(&s.inserts.publicSuffixAnon); err != nil {
-				return errs.Wrap(err, "insert anon public suffix")
-			}
-		}
+		//if len(s.inserts.publicSuffixAnon) > 0 {
+		//	if err := tx.Insert(&s.inserts.publicSuffixAnon); err != nil {
+		//		return errs.Wrap(err, "insert anon public suffix")
+		//	}
+		//}
 		if len(s.inserts.tld) > 0 {
-			if err := tx.Insert(&s.inserts.tld); err != nil {
+			stmt, _ := tx.Prepare(pq.CopyIn("tlds", "id", "tld"))
+			for _, tld := range s.inserts.tld {
+				_, err := stmt.Exec(tld.ID, tld.Tld)
+				if err != nil {
+					fmt.Println(err)
+				}
+			}
+			_, err = stmt.Exec()
+			if err != nil {
+				return errs.Wrap(err, "insert tld")
+			}
+			err = stmt.Close()
+			if err != nil {
 				return errs.Wrap(err, "insert tld")
 			}
 		}
-		if len(s.inserts.tldAnon) > 0 {
-			if err := tx.Insert(&s.inserts.tldAnon); err != nil {
-				return errs.Wrap(err, "insert tld")
-			}
-		}
-		if len(s.inserts.zoneEntries) > 0 {
-			z := s.inserts.zoneEntryList()
-			if err := tx.Insert(&z); err != nil {
-				return errs.Wrap(err, "insert zone entries")
-			}
-		}
+		//if len(s.inserts.tldAnon) > 0 {
+		//	if err := tx.Insert(&s.inserts.tldAnon); err != nil {
+		//		return errs.Wrap(err, "insert tld")
+		//	}
+		//}
+		//if len(s.inserts.zoneEntries) > 0 {
+		//	z := s.inserts.zoneEntryList()
+		//	if err := tx.Insert(&z); err != nil {
+		//		return errs.Wrap(err, "insert zone entries")
+		//	}
+		//}
 		if len(s.inserts.logEntries) > 0 {
-			if err := tx.Insert(&s.inserts.logEntries); err != nil {
+			stmt, _ := tx.Prepare(pq.CopyIn("log_entries", "id", "index", "timestamp", "is_precert", "certificate_id", "log_id", "stage_id"))
+			for _, l := range s.inserts.logEntries {
+				_, err := stmt.Exec(l.ID, l.Index, l.Timestamp, l.IsPrecert, l.CertificateID, l.LogID, l.StageID)
+				if err != nil {
+					fmt.Println(err)
+				}
+			}
+			_, err = stmt.Exec()
+			if err != nil {
+				return errs.Wrap(err, "insert log entries")
+			}
+			err = stmt.Close()
+			if err != nil {
 				return errs.Wrap(err, "insert log entries")
 			}
 		}
 		if len(s.inserts.certs) > 0 {
-			if err := tx.Insert(&s.inserts.certs); err != nil {
+			stmt, _ := tx.Prepare(pq.CopyIn("certificates", "id", "sha256_fingerprint", "raw"))
+			for _, c := range s.inserts.certs {
+				_, err := stmt.Exec(c.ID, c.Sha256Fingerprint, c.Raw)
+				if err != nil {
+					fmt.Println(err)
+				}
+			}
+			_, err = stmt.Exec()
+			if err != nil {
+				return errs.Wrap(err, "insert certs")
+			}
+			err = stmt.Close()
+			if err != nil {
 				return errs.Wrap(err, "insert certs")
 			}
 		}
 		if len(s.inserts.certToFqdns) > 0 {
-			if err := tx.Insert(&s.inserts.certToFqdns); err != nil {
-				return errs.Wrap(err, "insert cert-to-fqdns")
+			stmt, _ := tx.Prepare(pq.CopyIn("certificate_to_fqdns", "id", "fqdn_id", "certificate_id"))
+			for _, c := range s.inserts.certToFqdns {
+				_, err := stmt.Exec(c.ID, c.FqdnID, c.CertificateID)
+				if err != nil {
+					fmt.Println(err)
+				}
+			}
+			_, err = stmt.Exec()
+			if err != nil {
+				return errs.Wrap(err, "insert certToFqdns")
+			}
+			err = stmt.Close()
+			if err != nil {
+				return errs.Wrap(err, "insert certToFqdns")
 			}
 		}
-		if len(s.inserts.passiveEntries) > 0 {
-			if err := tx.Insert(&s.inserts.passiveEntries); err != nil {
-				return errs.Wrap(err, "insert passive entries")
-			}
-		}
-		if len(s.inserts.entradaEntries) > 0 {
-			if err := tx.Insert(&s.inserts.entradaEntries); err != nil {
-				return errs.Wrap(err, "insert entrada entries")
-			}
-		}
+		//if len(s.inserts.passiveEntries) > 0 {
+		//	if err := tx.Insert(&s.inserts.passiveEntries); err != nil {
+		//		return errs.Wrap(err, "insert passive entries")
+		//	}
+		//}
+		//if len(s.inserts.entradaEntries) > 0 {
+		//	if err := tx.Insert(&s.inserts.entradaEntries); err != nil {
+		//		return errs.Wrap(err, "insert entrada entries")
+		//	}
+		//}
 
 		finishTimeInsert := time.Since(startTimeInsert)
 
 		// updates
-		if len(s.updates.apexes) > 0 {
-			a := s.updates.apexList()
-			if err := tx.Update(&a); err != nil {
-				return errs.Wrap(err, "update apexes")
-			}
-		}
-		if len(s.updates.zoneEntries) > 0 {
-			z := s.updates.zoneEntryList()
-			_, err := tx.Model(&z).Column("last_seen").Update()
-			if err != nil {
-				return errs.Wrap(err, "update zone entries")
-			}
-		}
-		if len(s.updates.passiveEntries) > 0 {
-			if _, err := tx.Model(&s.updates.passiveEntries).Column("first_seen").Update(); err != nil {
-				return errs.Wrap(err, "update passive entries")
-			}
-		}
+		//if len(s.updates.apexes) > 0 {
+		//	a := s.updates.apexList()
+		//	if err := tx.Update(&a); err != nil {
+		//		return errs.Wrap(err, "update apexes")
+		//	}
+		//}
+		//if len(s.updates.zoneEntries) > 0 {
+		//	z := s.updates.zoneEntryList()
+		//	_, err := tx.Model(&z).Column("last_seen").Update()
+		//	if err != nil {
+		//		return errs.Wrap(err, "update zone entries")
+		//	}
+		//}
+		//if len(s.updates.passiveEntries) > 0 {
+		//	if _, err := tx.Model(&s.updates.passiveEntries).Column("first_seen").Update(); err != nil {
+		//		return errs.Wrap(err, "update passive entries")
+		//	}
+		//}
 
 		s.updates = NewModelSet()
 		s.inserts = NewModelSet()
