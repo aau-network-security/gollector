@@ -6,6 +6,22 @@ import (
 	"github.com/aau-network-security/gollector/store/models"
 )
 
+func (s *Store) getStoreZoneEntryFromCacheOrDB(apex *models.Apex) (*models.ZonefileEntry, error) {
+	existingZEI, ok := s.cache.zoneEntriesByApexName.Get(apex.Apex)
+	if !ok {
+		if s.cache.zoneEntriesByApexName.Len() < s.cacheOpts.ApexSize {
+			return nil, cacheNotFull
+		}
+		var ze models.ZonefileEntry
+		if err := s.db.Model(&ze).Where("apex_id = ?", apex.ID).First(); err != nil {
+			return nil, err
+		}
+		return &ze, nil //It is in DB
+	}
+	existingZE := existingZEI.(*models.ZonefileEntry)
+	return existingZE, nil
+}
+
 func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.ZonefileEntry, error) {
 	s.m.Lock()
 	defer s.m.Unlock()
@@ -27,9 +43,8 @@ func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.Z
 		return nil, err
 	}
 
-	existingZEI, ok := s.cache.zoneEntriesByApexName.Get(apex.Apex)
-	//todo implement request in the db here
-	if !ok {
+	existingZE, err := s.getStoreZoneEntryFromCacheOrDB(apex)
+	if err != nil {
 		// non-active domain, create a new zone entry
 		newZoneEntry := &models.ZonefileEntry{
 			ID:        s.ids.zoneEntries,
@@ -50,7 +65,6 @@ func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.Z
 
 		return newZoneEntry, nil
 	}
-	existingZE := existingZEI.(*models.ZonefileEntry)
 	limit := existingZE.LastSeen.Add(s.allowedInterval)
 	if t.After(limit) {
 		// detected re-registration, set old entry inactive and create new

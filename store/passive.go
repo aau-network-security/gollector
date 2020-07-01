@@ -46,19 +46,22 @@ func newSplunkEntryMap() splunkEntryMap {
 
 func (s *Store) getorCreateRecordType(rtype string) (*models.RecordType, error) {
 	rtI, ok := s.cache.recordTypeByName.Get(rtype)
-	//todo implement request to the DB here
 	if !ok {
-		rt := &models.RecordType{
-			ID:   s.ids.recordTypes,
-			Type: rtype,
-		}
-		if err := s.db.Insert(rt); err != nil {
-			return nil, errors.Wrap(err, "insert record type")
-		}
+		var rt models.RecordType
+		if err := s.db.Model(&rt).Where("type = ?", rtype).First(); err != nil {
+			rt := &models.RecordType{
+				ID:   s.ids.recordTypes,
+				Type: rtype,
+			}
+			if err := s.db.Insert(rt); err != nil {
+				return nil, errors.Wrap(err, "insert record type")
+			}
 
-		s.cache.recordTypeByName.Add(rtype, rt)
-		s.ids.recordTypes++
-		return rt, nil
+			s.cache.recordTypeByName.Add(rtype, rt)
+			s.ids.recordTypes++
+			return rt, nil
+		}
+		return &rt, nil //It is in DB
 	}
 	rt := rtI.(*models.RecordType)
 	return rt, nil
@@ -74,7 +77,6 @@ func (s *Store) StorePassiveEntry(muid string, query string, queryType string, t
 	queryType = strings.ToLower(queryType)
 
 	pe, ok := s.cache.passiveEntryByFqdn.get(query, queryType)
-	//todo implement request db
 	if !ok {
 		// create a new entry
 		sid, ok := s.ms.SId(muid)
