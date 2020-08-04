@@ -3,11 +3,12 @@ package store
 import (
 	"crypto/sha256"
 	"fmt"
+	"time"
+
 	"github.com/aau-network-security/gollector/collectors/ct"
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/pkg/errors"
-	"time"
 )
 
 func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
@@ -36,6 +37,7 @@ func (s *Store) getOrCreateCertificate(c *x509.Certificate) (*models.Certificate
 		cert = &models.Certificate{
 			ID:                s.ids.certs,
 			Sha256Fingerprint: fp,
+			Raw:               c.Raw,
 		}
 
 		// create an association between FQDNs in database and the newly created certificate

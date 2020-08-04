@@ -27,6 +27,7 @@ require (
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/text v0.3.2
 	google.golang.org/grpc v1.24.0
+	gopkg.in/vmarkovtsev/go-lcss.v1 v1.0.0-20181020221121-dfc501d07ea0
 	gopkg.in/yaml.v2 v2.2.4
 	mellium.im/sasl v0.2.1 // indirect
 )

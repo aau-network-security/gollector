@@ -1,0 +1,3 @@
+apex-cache-hit, apex-db-hit, apex-new, fqdn-cache-hit, fqdn-db-hit, fqdn-new
+0, 0, 3, 0, 0, 4
+3, 0, 0, 4, 0, 0

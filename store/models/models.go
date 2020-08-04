@@ -96,6 +96,7 @@ type CertificateToFqdn struct {
 type Certificate struct {
 	ID                uint `gorm:"primary_key" pg:",pk"`
 	Sha256Fingerprint string
+	Raw               []byte `gorm:"type:bytea"`
 }
 
 type LogEntry struct {
