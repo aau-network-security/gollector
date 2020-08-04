@@ -27,3 +27,4 @@ _data
 ### Go Patch ###
 /vendor/
 /Godeps/
+/output
