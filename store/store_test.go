@@ -4,14 +4,15 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"fmt"
-	"github.com/aau-network-security/gollector/store/models"
-	tst "github.com/aau-network-security/gollector/testing"
-	"github.com/google/certificate-transparency-go/x509"
-	"github.com/google/certificate-transparency-go/x509/pkix"
 	"math/big"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/aau-network-security/gollector/store/models"
+	tst "github.com/aau-network-security/gollector/testing"
+	"github.com/google/certificate-transparency-go/x509"
+	"github.com/google/certificate-transparency-go/x509/pkix"
 )
 
 func selfSignedCert(notBefore, notAfter time.Time, sans []string) ([]byte, error) {
@@ -285,6 +286,37 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 			t.Fatalf("expected map %s to contain %d values, but got %d", c.name, c.expected, c.actual)
 		}
 	}
+}
+
+func TestParseCert(t *testing.T) {
+	conf := Config{
+		User:     "postgres",
+		Password: "postgres",
+		DBName:   "domains",
+		Host:     "localhost",
+		Port:     10001,
+	}
+
+	g, err := conf.Open()
+	if err != nil {
+		t.Fatalf("failed to open gorm database: %s", err)
+	}
+
+	var raw []byte
+	rows, err := g.Model(&models.Certificate{}).Where("id = ?", "2").Select("raw").Rows()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		rows.Scan(&raw)
+	}
+
+	cert, err := x509.ParseCertificate(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(cert.Issuer.String())
 }
 
 func TestInit(t *testing.T) {

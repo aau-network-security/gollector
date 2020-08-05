@@ -9,6 +9,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/vbauerster/mpb/v4/decor"
+
+	"github.com/vbauerster/mpb/v4"
+
 	_ "github.com/lib/pq"
 
 	"github.com/jinzhu/gorm"
@@ -31,6 +35,12 @@ type ExtractFeatures struct {
 	m         *sync.Mutex
 	batchSize int
 	inserts   []Features
+	cache     cache
+}
+
+type cache struct {
+	issuerIDs int
+	issuers   map[string]*Issuer
 }
 
 func NewInserts() []Features {
@@ -102,6 +112,10 @@ func NexExtractFeatures(batchSize int) (*ExtractFeatures, error) {
 		db:        db,
 		batchSize: batchSize,
 		inserts:   NewInserts(),
+		cache: cache{
+			issuerIDs: 0,
+			issuers:   map[string]*Issuer{},
+		},
 	}
 
 	g, err := conf.Open()
@@ -111,6 +125,23 @@ func NexExtractFeatures(batchSize int) (*ExtractFeatures, error) {
 
 	if err := g.AutoMigrate(Features{}).Error; err != nil {
 		return nil, err
+	}
+
+	if err := g.AutoMigrate(Issuer{}).Error; err != nil {
+		return nil, err
+	}
+
+	var issuers []*Issuer
+	if err := ef.db.Model(&issuers).Order("id ASC").Select(); err != nil {
+		return nil, err
+	}
+	for _, i := range issuers {
+		ef.cache.issuers[i.Name] = i
+	}
+
+	ef.cache.issuerIDs = 1
+	if len(issuers) > 1 {
+		ef.cache.issuerIDs = issuers[len(issuers)-1].ID + 1
 	}
 
 	return &ef, nil
@@ -129,6 +160,18 @@ func (ef *ExtractFeatures) Start() error {
 		return err
 	}
 
+	p := mpb.New(mpb.WithWidth(count))
+	bar := p.AddBar(int64(count),
+		mpb.PrependDecorators(
+			// display our name with one space on the right
+			decor.Name("Certificate Features", decor.WC{W: len("Certificate Features") + 1, C: decor.DidentRight}),
+			// replace ETA decorator with "done" message, OnComplete event
+			decor.OnComplete(
+				decor.AverageETA(decor.ET_STYLE_GO, decor.WC{W: 4}), "done",
+			),
+		),
+		mpb.AppendDecorators(decor.Percentage()))
+
 	for offset := 0; offset < count; offset += ef.batchSize {
 
 		var DBcerts []*models.Certificate
@@ -137,10 +180,10 @@ func (ef *ExtractFeatures) Start() error {
 		}
 		var x509List []*CertificateFeatures
 		for _, DBcert := range DBcerts {
+			bar.Increment()
 			cert, err := x509.ParseCertificate(DBcert.Raw)
 			if err != nil {
-				log.Debug().Msgf("error parsing the"+
-					" certificate ID = %d", DBcert.ID)
+				//log.Debug().Msgf("error parsing the certificate ID = %d", DBcert.ID)
 				continue
 			}
 			x509List = append(x509List, &CertificateFeatures{
@@ -171,15 +214,14 @@ func (ef *ExtractFeatures) getFeatures(certs []*CertificateFeatures) error {
 
 	for _, c := range certs {
 
-		fmt.Println(c.cert.DNSNames)
 		sf := getSanFeatures(c.cert)
 
 		vl := getValidationLevel(c.cert)
 
-		//issuerID, err := getOrCreateIssuer(c.cert.Issuer.CommonName)
-		//if err != nil {
-		//	return err
-		//}
+		issuerID, err := ef.getOrCreateIssuer(c.cert.Issuer.String())
+		if err != nil {
+			return err
+		}
 
 		notBefore := &c.cert.NotBefore
 		if notBefore.Unix() <= 1 {
@@ -192,7 +234,7 @@ func (ef *ExtractFeatures) getFeatures(certs []*CertificateFeatures) error {
 		}
 		validityPeriod := 0
 		if notAfter != nil && notBefore != nil {
-			diff := notBefore.Sub(*notAfter)
+			diff := notAfter.Sub(*notBefore)
 			validityPeriod = int(diff.Hours())
 		}
 
@@ -203,7 +245,7 @@ func (ef *ExtractFeatures) getFeatures(certs []*CertificateFeatures) error {
 
 		features := Features{
 			CertID:              c.id,
-			IssuerID:            c.id,
+			IssuerID:            issuerID,
 			Algo:                c.cert.SignatureAlgorithm.String(),
 			Country:             strings.Join(c.cert.Subject.Country, ","),
 			ValidationLevel:     vl,
@@ -232,9 +274,23 @@ func (ef *ExtractFeatures) getFeatures(certs []*CertificateFeatures) error {
 	return nil
 }
 
-func getOrCreateIssuer(name string) (uint, error) {
-	//todo create this function
-	return 0, nil
+func (ef *ExtractFeatures) getOrCreateIssuer(name string) (int, error) {
+	issuer, ok := ef.cache.issuers[name]
+	if !ok {
+		issuer = &Issuer{
+			ID:   ef.cache.issuerIDs,
+			Name: name,
+		}
+
+		if err := ef.db.Insert(issuer); err != nil {
+			return 0, errors.Wrap(err, "insert issuer")
+		}
+
+		ef.cache.issuers[name] = issuer
+		ef.cache.issuerIDs++
+	}
+	fmt.Println(issuer.ID)
+	return issuer.ID, nil
 }
 
 func (ef *ExtractFeatures) insert() error {

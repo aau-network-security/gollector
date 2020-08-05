@@ -8,7 +8,7 @@ import (
 type Features struct {
 	//Domain features
 	CertID          uint `gorm:"primary_key" pg:",pk"`
-	IssuerID        uint
+	IssuerID        int
 	Algo            string
 	Country         string        // Subject
 	ValidationLevel sql.NullInt64 // dv/ov/ev
@@ -34,7 +34,7 @@ type Features struct {
 }
 
 type Issuer struct {
-	ID         uint `gorm:"primary_key" pg:",pk"`
+	ID         int `gorm:"primary_key" pg:",pk"`
 	Name       string
 	Popularity sql.NullFloat64
 }
