@@ -1,6 +1,6 @@
-repository: gollector
+repository: bulldozer
 user: postgres
 password: postgres
 host: localhost
 port: 10001
-dbname: domains
+dbname: bulldozer

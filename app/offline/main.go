@@ -12,7 +12,7 @@ import (
 func main() {
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
-	batchSize := 1
+	batchSize := 1000
 	ef, err := extract_features.NexExtractFeatures(batchSize)
 	if err != nil {
 		log.Fatal().Msgf("error while creating store: %s", err)

@@ -1,15 +1,13 @@
 package extract_features
 
-type BulldozerCert struct {
+type Cert struct {
 	ID                uint `gorm:"primary_key" pg:",pk"`
 	Fingerprint       string
 	Raw               []byte
-	Domain            *BulldozerDomain
 	DomainID          uint
 	AppleWasValid     bool
 	NssWasValid       bool
 	MicrosoftWasValid bool
-	ValidationLevel   BulldozerValidationLevel
 	ValidationLevelID uint
 }
 

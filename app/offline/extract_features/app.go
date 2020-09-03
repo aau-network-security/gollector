@@ -205,8 +205,54 @@ func (ef *ExtractFeatures) Start() error {
 }
 
 func (ef *ExtractFeatures) StartBulldozer() error {
-	//todo Get the certificate from bulldozer and call getFeatures function
+	//Bulldozer
+	count, err := ef.db.Model((*Cert)(nil)).Count()
+	if err != nil {
+		return err
+	}
 
+	p := mpb.New(mpb.WithWidth(count))
+	bar := p.AddBar(int64(count),
+		mpb.PrependDecorators(
+			// display our name with one space on the right
+			decor.Name("Certificate Features", decor.WC{W: len("Certificate Features") + 1, C: decor.DidentRight}),
+			// replace ETA decorator with "done" message, OnComplete event
+			decor.OnComplete(
+				decor.AverageETA(decor.ET_STYLE_GO, decor.WC{W: 4}), "done",
+			),
+		),
+		mpb.AppendDecorators(decor.Percentage()))
+
+	for offset := 0; offset < count; offset += ef.batchSize {
+		var DBcerts []*Cert
+		if err := ef.db.Model(&DBcerts).Order("id ASC").Offset(offset).Limit(ef.batchSize).Select(); err != nil {
+			fmt.Println(err)
+			return err
+		}
+		var x509List []*CertificateFeatures
+		for _, DBcert := range DBcerts {
+			bar.Increment()
+
+			cert, err := x509.ParseCertificate(DBcert.Raw)
+			if err != nil {
+				//log.Debug().Msgf("error parsing the certificate ID = %d", DBcert.ID)
+				continue
+			}
+			x509List = append(x509List, &CertificateFeatures{
+				id:   DBcert.ID,
+				cert: cert,
+			})
+		}
+
+		err = ef.getFeatures(x509List)
+		if err != nil {
+			log.Error().Msg("Error while getting the features")
+		}
+		err = ef.insert()
+		if err != nil {
+			log.Error().Msgf("%v", err)
+		}
+	}
 	return nil
 }
 
@@ -289,7 +335,6 @@ func (ef *ExtractFeatures) getOrCreateIssuer(name string) (int, error) {
 		ef.cache.issuers[name] = issuer
 		ef.cache.issuerIDs++
 	}
-	fmt.Println(issuer.ID)
 	return issuer.ID, nil
 }
 
