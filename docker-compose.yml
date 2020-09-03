@@ -59,3 +59,11 @@ services:
       - ${DB_VOLUME?err}:/var/lib/postgresql/data # persistent storage of database
     ports:
       - "${POSTGRES_HOST?err}:${POSTGRES_PORT?err}:5432"
+  feat:
+    container_name: featuring
+    build:
+      context: .
+      dockerfile: app/offline/Dockerfile
+    command: [ "--config", "/config/offline.yml" ]
+    volumes:
+      - ./config:/config:ro # configuration files
