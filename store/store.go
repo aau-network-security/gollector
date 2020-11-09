@@ -157,6 +157,7 @@ type Ids struct {
 	fqdns        uint
 	fqdnsAnon    uint
 	certs        uint
+	certsToFqdn  uint
 	logs         uint
 	recordTypes  uint
 }
@@ -221,7 +222,7 @@ func newCache(opts CacheOpts) cache {
 		logByUrl:               newLRUCache(opts.LogSize),   //make(map[string]*models.Log),
 		certByFingerprint:      newLRUCache(opts.CertSize),  //make(map[string]*models.Certificate),
 		passiveEntryByFqdn:     newSplunkEntryMap(),
-		recordTypeByName:       newLRUCache(opts.ApexSize), //make(map[string]*models.RecordType), //todo ask kaspar
+		recordTypeByName:       newLRUCache(opts.TLDSize), //make(map[string]*models.RecordType),
 	}
 }
 
@@ -314,7 +315,7 @@ func (s *Store) runPostHooks() error {
 }
 
 func (s *Store) conditionalPostHooks() error {
-	if s.updates.Len()+s.inserts.Len() >= s.batchSize {
+	if len(s.hashMapDB.certByFingerprint) >= s.batchSize {
 		return s.runPostHooks()
 	}
 	return nil
@@ -650,6 +651,17 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		return nil, errs.Wrap(err, "migrate models")
 	}
 
+	//make the table unlogged to improve performance
+	tableList := []string{"apexes", "certificate_to_fqdns", "certificates", "fqdns", "log_entries", "public_suffixes", "tlds"}
+
+	for _, tl := range tableList {
+		line := fmt.Sprintf("ALTER TABLE %s SET UNLOGGED;", tl)
+		_, err := s.db.Exec(line)
+		if err != nil {
+			log.Debug().Msgf("error creating unlogged %s table: %s", tl, err.Error())
+		}
+	}
+
 	go func() {
 		if err := s.init(); err != nil {
 			log.Error().Msgf("error while initializing database: %s", err)
@@ -669,7 +681,7 @@ func storeCachedValuePosthook() postHook {
 		erorrs := s.MapBatchWithCacheAndDB()
 		if len(erorrs) != 0 {
 			//todo return err too
-			fmt.Println(erorrs)
+			log.Print(erorrs)
 		}
 		err := s.StoreBatchPostHook()
 		if err != nil {

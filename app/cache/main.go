@@ -37,6 +37,7 @@ func main() {
 		log.Fatal().Msgf("sentry configuration is invalid: %s", err)
 	}
 
+	//todo change those values according the available RAM
 	opts := store.Opts{
 		AllowedInterval: 36 * time.Hour,
 		BatchSize:       50000,
@@ -83,7 +84,7 @@ func main() {
 	}
 
 	// open output file
-	fo, err := os.Create("output/output.txt")
+	fo, err := os.Create("output/mapentry_exec_time.txt")
 	if err != nil {
 		panic(err)
 	}
@@ -100,6 +101,15 @@ func main() {
 		Log:           logger,
 		BenchmarkFile: fo,
 	}
+
+	defer func() {
+		if err := serv.Store.DBTime.Close(); err != nil {
+			panic(err)
+		}
+		if err := serv.Store.HitCount.Close(); err != nil {
+			panic(err)
+		}
+	}()
 
 	addr := fmt.Sprintf(":%d", conf.Api.Api.Port)
 	lis, err := net.Listen("tcp", addr)

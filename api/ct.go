@@ -111,18 +111,6 @@ func (s *Server) StoreLogEntries(str api.CtApi_StoreLogEntriesServer) error {
 				}
 			}()
 		}
-		//todo change the response to the client
-		//errs := s.Store.MapBatchWithCacheAndDB()
-		//if len(errs) != 0 {
-		//	fmt.Println(errs)
-		//}
-		//err = s.Store.StoreBatchPostHook()
-		//if err != nil {
-		//	fmt.Println(err)
-		//}
-
-		log.Info().Msgf("%v", s.Store.Counter)
-		s.Store.ResetCounter()
 	}
 	wg.Wait()
 

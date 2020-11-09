@@ -196,6 +196,7 @@ func main() {
 				return nil
 			}
 
+			//todo change this according to how many certificates we want to fetch
 			opts := ct.Options{
 				WorkerCount: conf.WorkerCount,
 				StartIndex:  0,

@@ -7,6 +7,7 @@ import (
 
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/go-pg/pg"
+	"github.com/rs/zerolog/log"
 )
 
 type domainstruct struct {
@@ -69,7 +70,6 @@ func (s *Store) MapEntry(muid string, entry LogEntry) error {
 	for _, d := range entry.Cert.DNSNames {
 		domain, err := NewDomain(d)
 		if err != nil {
-			// TODO: handle error (return all erors in a list perhaps)
 			continue
 		}
 		s.hashMapDB.fqdnByName[domain.fqdn.normal] = &domainstruct{
@@ -125,10 +125,16 @@ func (s *Store) mapCert() error {
 		s.hashMapDB.certByFingerprint[k] = existing
 	}
 
+	// Cache not full so the certificate can not be in the DB
+	if s.cache.certByFingerprint.Len() < s.cacheOpts.CertSize {
+		return nil
+	}
+
 	//map with DB
 	var certsFoundInDB []*models.Certificate
 
 	if err := s.db.Model(&certsFoundInDB).Where("sha256_fingerprint in (?)", pg.In(certsNotFoundInCache)).Select(); err != nil {
+		log.Error().Msgf("error retrieve Certificates from DB [mapCert]: %s", err)
 		return err
 	}
 
@@ -136,6 +142,7 @@ func (s *Store) mapCert() error {
 		existing := s.hashMapDB.certByFingerprint[c.Sha256Fingerprint]
 		existing.cert = c
 		s.hashMapDB.certByFingerprint[c.Sha256Fingerprint] = existing
+		s.cache.certByFingerprint.Add(c.Sha256Fingerprint, c)
 	}
 
 	return nil
@@ -157,10 +164,20 @@ func (s *Store) mapFQDN() error {
 		s.hashMapDB.fqdnByName[k] = existing
 	}
 
+	// Cache not full so the certificate can not be in the DB
+	if s.cache.fqdnByName.Len() < s.cacheOpts.FQDNSize {
+		return nil
+	}
+
+	if len(fqndNotFoundInCache) == 0 {
+		return nil
+	}
+
 	//map with DB
 	var fqdnFoundInDB []*models.Fqdn
 
 	if err := s.db.Model(&fqdnFoundInDB).Where("fqdn in (?)", pg.In(fqndNotFoundInCache)).Select(); err != nil {
+		log.Error().Msgf("error retrieve FQDN from DB [mapFQDN]: %s", err)
 		return err
 	}
 
@@ -168,6 +185,7 @@ func (s *Store) mapFQDN() error {
 		existing := s.hashMapDB.fqdnByName[f.Fqdn]
 		existing.obj = f
 		s.hashMapDB.fqdnByName[f.Fqdn] = existing
+		s.cache.fqdnByName.Add(f.Fqdn, f)
 	}
 	return nil
 }
@@ -183,15 +201,25 @@ func (s *Store) mapApex() error {
 			continue
 		}
 		apex := apexI.(*models.Apex)
-		existing := s.hashMapDB.fqdnByName[k]
+		existing := s.hashMapDB.apexByName[k]
 		existing.obj = apex
 		s.hashMapDB.apexByName[k] = existing
+	}
+
+	// Cache not full so the certificate can not be in the DB
+	if s.cache.apexByName.Len() < s.cacheOpts.ApexSize {
+		return nil
+	}
+
+	if len(apexNotFoundInCache) == 0 {
+		return nil
 	}
 
 	//map with DB
 	var apexFoundInDB []*models.Apex
 
 	if err := s.db.Model(&apexFoundInDB).Where("apex in (?)", pg.In(apexNotFoundInCache)).Select(); err != nil {
+		log.Error().Msgf("error retrieve Apex from DB [mapApex]: %s", err)
 		return err
 	}
 
@@ -199,6 +227,7 @@ func (s *Store) mapApex() error {
 		existing := s.hashMapDB.apexByName[a.Apex]
 		existing.obj = a
 		s.hashMapDB.apexByName[a.Apex] = existing
+		s.cache.apexByName.Add(a.Apex, a)
 	}
 	return nil
 }
@@ -219,10 +248,20 @@ func (s *Store) mapPublicSuffix() error {
 		s.hashMapDB.publicSuffixByName[k] = existing
 	}
 
+	// Cache not full so the certificate can not be in the DB
+	if s.cache.publicSuffixByName.Len() < s.cacheOpts.PSuffSize {
+		return nil
+	}
+
+	if len(psNotFoundInCache) == 0 {
+		return nil
+	}
+
 	//map with DB
 	var psFoundInDB []*models.PublicSuffix
 
 	if err := s.db.Model(&psFoundInDB).Where("public_suffix in (?)", pg.In(psNotFoundInCache)).Select(); err != nil {
+		log.Error().Msgf("error retrieve PS from DB [mapPublicSuffix]: %s", err)
 		return err
 	}
 
@@ -250,6 +289,15 @@ func (s *Store) mapTLD() error {
 		s.hashMapDB.tldByName[k] = existing
 	}
 
+	// Cache not full so the certificate can not be in the DB
+	if s.cache.tldByName.Len() < s.cacheOpts.TLDSize {
+		return nil
+	}
+
+	if len(tldNotFoundInCache) == 0 {
+		return nil
+	}
+
 	//map with DB
 	var tldFoundInDB []*models.Tld
 
@@ -261,6 +309,7 @@ func (s *Store) mapTLD() error {
 		existing := s.hashMapDB.tldByName[tld.Tld]
 		existing.obj = tld
 		s.hashMapDB.tldByName[tld.Tld] = existing
+		s.cache.tldByName.Add(tld.Tld, tld)
 	}
 	return nil
 }
@@ -277,6 +326,7 @@ func (s *Store) StoreBatchPostHook() error {
 			str.obj = res
 			s.hashMapDB.tldByName[k] = str
 			s.ids.tlds++
+			s.cache.tldByName.Add(k, res)
 		}
 	}
 
@@ -294,6 +344,7 @@ func (s *Store) StoreBatchPostHook() error {
 			s.inserts.publicSuffix = append(s.inserts.publicSuffix, res)
 			s.hashMapDB.publicSuffixByName[k] = str
 			s.ids.suffixes++
+			s.cache.publicSuffixByName.Add(k, res)
 		}
 	}
 
@@ -317,6 +368,7 @@ func (s *Store) StoreBatchPostHook() error {
 			s.inserts.apexes[res.ID] = res
 			s.hashMapDB.apexByName[k] = str
 			s.ids.apexes++
+			s.cache.apexByName.Add(k, res)
 		}
 	}
 
@@ -344,6 +396,7 @@ func (s *Store) StoreBatchPostHook() error {
 			s.inserts.fqdns = append(s.inserts.fqdns, res)
 			s.hashMapDB.fqdnByName[k] = str
 			s.ids.fqdns++
+			s.cache.fqdnByName.Add(k, res)
 		}
 	}
 
@@ -354,30 +407,31 @@ func (s *Store) StoreBatchPostHook() error {
 			cert := &models.Certificate{
 				ID:                s.ids.certs,
 				Sha256Fingerprint: k,
+				Raw:               certstr.entry.Cert.Raw,
 			}
 
 			// create an association between FQDNs in database and the newly created certificate
 			for _, d := range certstr.entry.Cert.DNSNames {
 				domain, err := NewDomain(d)
 				if err != nil {
-					// todo: handle error
 					continue
 				}
 				fqdnstr := s.hashMapDB.fqdnByName[domain.fqdn.normal]
 				fqdn := fqdnstr.obj.(*models.Fqdn)
 
 				ctof := models.CertificateToFqdn{
+					ID:            s.ids.certsToFqdn,
 					CertificateID: cert.ID,
 					FqdnID:        fqdn.ID,
 				}
 				s.inserts.certToFqdns = append(s.inserts.certToFqdns, &ctof)
+				s.ids.certsToFqdn++
 			}
-			// TODO: do not forget to insert in cache
 
 			certstr.cert = cert
 			s.inserts.certs = append(s.inserts.certs, cert)
 			s.ids.certs++
-
+			s.cache.certByFingerprint.Add(k, cert)
 		}
 
 		l, err := s.getOrCreateLog(certstr.entry.Log)
@@ -397,8 +451,5 @@ func (s *Store) StoreBatchPostHook() error {
 		s.inserts.logEntries = append(s.inserts.logEntries, &le)
 	}
 
-	// log entries
-
-	//todo return s.conditionalPostHooks()
 	return nil
 }
