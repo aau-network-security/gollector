@@ -3,9 +3,10 @@ package entrada
 import (
 	"context"
 	"database/sql"
-	imp "github.com/bippio/go-impala"
 	"io"
 	"time"
+
+	imp "github.com/bippio/go-impala"
 )
 
 var (
