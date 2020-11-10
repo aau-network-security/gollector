@@ -420,7 +420,6 @@ func (s *Store) StoreBatchPostHook() error {
 				fqdn := fqdnstr.obj.(*models.Fqdn)
 
 				ctof := models.CertificateToFqdn{
-					ID:            s.ids.certsToFqdn,
 					CertificateID: cert.ID,
 					FqdnID:        fqdn.ID,
 				}

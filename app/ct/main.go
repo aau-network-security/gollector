@@ -196,13 +196,12 @@ func main() {
 				return nil
 			}
 
-			//todo change this according to how many certificates we want to fetch
 			opts := ct.Options{
 				WorkerCount: conf.WorkerCount,
 				StartIndex:  0,
-				//EndIndex:    end,
-				//EndIndex: index.Start + 100,
-				EndIndex: 10000,
+				EndIndex:    end,
+				//EndIndex: 1000,
+				//EndIndex: 10000,
 			}
 
 			count, err = ct.Scan(ctx, &l, entryFn, opts)

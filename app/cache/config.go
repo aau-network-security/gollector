@@ -8,9 +8,24 @@ import (
 	"io/ioutil"
 )
 
+type cacheSize struct {
+	Log     int `yaml:"log"`
+	TLD     int `yaml:"tld"`
+	PSuffix int `yaml:"public-suffix"`
+	Apex    int `yaml:"apex"`
+	Fqdn    int `yaml:"fqdn"`
+	Cert    int `yaml:"cert"`
+}
+
+type storeOpts struct {
+	BatchSize int       `yaml:"batch-size"`
+	CacheSize cacheSize `yaml:"cache-size"`
+}
+
 type config struct {
-	Sentry app.Sentry `yaml:"sentry"`
-	Api    api.Config `yaml:"api"`
+	Sentry    app.Sentry `yaml:"sentry"`
+	Api       api.Config `yaml:"api"`
+	StoreOpts storeOpts  `yaml:"store"`
 }
 
 func readConfig(path string) (config, error) {

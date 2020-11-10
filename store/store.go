@@ -332,7 +332,10 @@ func (s *Store) GetLastIndexLog(knowLogURL string) (int64, error) {
 
 	var lastLogEntry models.LogEntry
 	if err := s.db.Model(&lastLogEntry).Where("log_id = ?", knowLog.ID).Last(); err != nil {
-		return 0, err
+		if !strings.Contains(err.Error(), "no rows in result set") {
+			return 0, err
+		}
+		return 0, nil
 	}
 
 	return int64(lastLogEntry.Index + 1), nil
@@ -755,6 +758,9 @@ func storeCachedValuePosthook() postHook {
 		}
 		if len(s.inserts.certToFqdns) > 0 {
 			if err := tx.Insert(&s.inserts.certToFqdns); err != nil {
+				for _, v := range s.inserts.certToFqdns {
+					fmt.Printf("%s\n", v.ID)
+				}
 				return errs.Wrap(err, "insert cert-to-fqdns")
 			}
 		}

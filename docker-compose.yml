@@ -12,8 +12,6 @@ services:
     ports:
       - "${GRPC_PORT}:${GRPC_PORT}"
       - "8881:8881"
-    networks:
-      - gollector
   entrada:
     container_name: gollector-entrada
     build:
@@ -22,8 +20,6 @@ services:
     command: [ "--config", "/config/entrada.yml" ]
     volumes:
       - ./config:/config:ro # configuration files
-    networks:
-      - gollector
   zones:
     container_name: gollector-zones
     build:
@@ -37,8 +33,6 @@ services:
     volumes:
       - ./config:/config:ro # configuration files
       - ${SSH_DIR}:/ssh:ro  # ssh keys
-    networks:
-      - gollector
   ct:
     container_name: gollector-ct
     build:
@@ -47,8 +41,6 @@ services:
     command: [ "--config", "/config/ct.yml", "-logtostderr" ]
     volumes:
       - ./config:/config:ro # configuration files
-    networks:
-      - gollector
   splunk:
     container_name: gollector-splunk
     build:
@@ -58,8 +50,6 @@ services:
     volumes:
       - ./config:/config:ro # configuration files
       - ${SPLUNK_DIR}:/splunk # directory containing Splunk JSON logs
-    networks:
-      - gollector
   db:
     container_name: gollector-db
     image: postgres
@@ -71,11 +61,3 @@ services:
       - ${DB_VOLUME?err}:/var/lib/postgresql/data # persistent storage of database
     ports:
       - "${POSTGRES_HOST?err}:${POSTGRES_PORT?err}:5432"
-    networks:
-      - gollector
-
-# docker network create --subnet "10.13.20.0/24" gollector
-networks:
-  gollector:
-    external:
-      name: gollector

@@ -37,17 +37,16 @@ func main() {
 		log.Fatal().Msgf("sentry configuration is invalid: %s", err)
 	}
 
-	//todo change those values according the available RAM
 	opts := store.Opts{
 		AllowedInterval: 36 * time.Hour,
-		BatchSize:       50000,
+		BatchSize:       conf.StoreOpts.BatchSize,
 		CacheOpts: store.CacheOpts{
-			LogSize:   1000,
-			TLDSize:   2000,
-			PSuffSize: 5000,
-			ApexSize:  20000,
-			FQDNSize:  20000,
-			CertSize:  20000,
+			LogSize:   conf.StoreOpts.CacheSize.Log,
+			TLDSize:   conf.StoreOpts.CacheSize.TLD,
+			PSuffSize: conf.StoreOpts.CacheSize.PSuffix,
+			ApexSize:  conf.StoreOpts.CacheSize.Apex,
+			FQDNSize:  conf.StoreOpts.CacheSize.Fqdn,
+			CertSize:  conf.StoreOpts.CacheSize.Cert,
 		},
 	}
 
@@ -101,15 +100,6 @@ func main() {
 		Log:           logger,
 		BenchmarkFile: fo,
 	}
-
-	defer func() {
-		if err := serv.Store.DBTime.Close(); err != nil {
-			panic(err)
-		}
-		if err := serv.Store.HitCount.Close(); err != nil {
-			panic(err)
-		}
-	}()
 
 	addr := fmt.Sprintf(":%d", conf.Api.Api.Port)
 	lis, err := net.Listen("tcp", addr)
