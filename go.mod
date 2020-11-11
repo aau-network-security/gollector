@@ -16,22 +16,23 @@ require (
 	github.com/google/uuid v1.1.1
 	github.com/hashicorp/golang-lru v0.5.4
 	github.com/ianlancetaylor/demangle v0.0.0-20200524003926-2c5affb30a03 // indirect
+	github.com/influxdata/influxdb-client-go/v2 v2.2.0
 	github.com/jinzhu/gorm v1.9.11
 	github.com/jlaffaye/ftp v0.0.0-20190828173736-6aaa91c7796e
 	github.com/lib/pq v1.2.0
 	github.com/mholt/certmagic v0.7.6-0.20191016061957-c52848a21de3
 	github.com/miekg/dns v1.1.22
 	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
-	github.com/pkg/errors v0.8.1
+	github.com/pkg/errors v0.9.1
 	github.com/rs/zerolog v1.15.0
 	github.com/vbauerster/mpb/v4 v4.10.1
 	github.com/weppos/publicsuffix-go v0.10.0
-	golang.org/x/crypto v0.0.0-20191011191535-87dc89f01550
+	golang.org/x/crypto v0.0.0-20191112222119-e1110fd1c708
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980 // indirect
 	golang.org/x/text v0.3.2
 	google.golang.org/grpc v1.24.0
-	gopkg.in/yaml.v2 v2.2.4
+	gopkg.in/yaml.v2 v2.3.0
 	mellium.im/sasl v0.2.1 // indirect
 )
 

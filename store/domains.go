@@ -129,19 +129,20 @@ func (s *Store) getTldFromCacheOrDB(domain *domain) (*models.Tld, error) {
 	resI, ok := s.cache.tldByName.Get(domain.tld.normal)
 	if !ok {
 		if s.cache.tldByName.Len() < s.cacheOpts.TLDSize {
+			s.influxService.StoreHit("cache-insert", "tld", 1)
 			return nil, cacheNotFull
 		}
 		//Check if it is in the DB
 		var tld models.Tld
 		if err := s.db.Model(&tld).Where("tld = ?", domain.tld.normal).First(); err != nil {
-			s.Counter.tldNew++
+			s.influxService.StoreHit("db-insert", "tld", 1)
 			return nil, err
 		}
-		s.Counter.tldDBHit++
+		s.influxService.StoreHit("db-hit", "tld", 1)
 		return &tld, nil //It is in DB
 	}
 	res := resI.(*models.Tld)
-	s.Counter.tldCacheHit++
+	s.influxService.StoreHit("cache-hit", "tld", 1)
 	return res, nil //It is in Cache
 }
 
@@ -149,15 +150,19 @@ func (s *Store) getTldAnonFromCacheOrDB(domain *domain) (*models.TldAnon, error)
 	anonI, ok := s.cache.tldAnonByName.Get(domain.tld.anon)
 	if !ok {
 		if s.cache.tldAnonByName.Len() < s.cacheOpts.TLDSize {
+			s.influxService.StoreHit("cache-insert", "tld-anon", 1)
 			return nil, cacheNotFull
 		}
 		var tldAnon models.TldAnon
 		if err := s.db.Model(&tldAnon).Where("tld = ?", domain.tld.normal).First(); err != nil {
+			s.influxService.StoreHit("db-insert", "tld-anon", 1)
 			return nil, err
 		}
+		s.influxService.StoreHit("db-hit", "tld-anon", 1)
 		return &tldAnon, nil //It is in DB
 	}
 	anon := anonI.(*models.TldAnon)
+	s.influxService.StoreHit("cache-hit", "tld-anon", 1)
 	return anon, nil //It is in Cache
 }
 
@@ -233,18 +238,19 @@ func (s *Store) getPublicSuffixFromCacheOrDB(domain *domain) (*models.PublicSuff
 	psI, ok := s.cache.publicSuffixByName.Get(domain.publicSuffix.normal)
 	if !ok {
 		if s.cache.publicSuffixByName.Len() < s.cacheOpts.PSuffSize {
+			s.influxService.StoreHit("cache-insert", "public-suffix", 1)
 			return nil, cacheNotFull
 		}
 		var ps models.PublicSuffix
 		if err := s.db.Model(&ps).Where("public_suffix = ?", domain.publicSuffix.normal).First(); err != nil {
-			s.Counter.psNew++
+			s.influxService.StoreHit("db-insert", "public-suffix", 1)
 			return nil, err
 		}
-		s.Counter.psDBHit++
+		s.influxService.StoreHit("db-hit", "public-suffix", 1)
 		return &ps, nil //It is in DB
 	}
 	ps := psI.(*models.PublicSuffix)
-	s.Counter.psCacheHit++
+	s.influxService.StoreHit("cache-hit", "public-suffix", 1)
 	return ps, nil //It is in Cache
 }
 
@@ -252,15 +258,19 @@ func (s *Store) getPublicSuffixAnonFromCacheOrDB(domain *domain) (*models.Public
 	psI, ok := s.cache.publicSuffixAnonByName.Get(domain.publicSuffix.anon)
 	if !ok {
 		if s.cache.publicSuffixAnonByName.Len() < s.cacheOpts.PSuffSize {
+			s.influxService.StoreHit("cache-insert", "public-suffix-anon", 1)
 			return nil, cacheNotFull
 		}
 		var psAnon models.PublicSuffixAnon
 		if err := s.db.Model(&psAnon).Where("public_suffix = ?", domain.publicSuffix.anon).First(); err != nil {
+			s.influxService.StoreHit("db-insert", "public-suffix-anon", 1)
 			return nil, err
 		}
+		s.influxService.StoreHit("db-hit", "public-suffix-anon", 1)
 		return &psAnon, nil //It is in DB
 	}
 	ps := psI.(*models.PublicSuffixAnon)
+	s.influxService.StoreHit("cache-hit", "public-suffix-anon", 1)
 	return ps, nil //It is in Cache
 }
 
@@ -350,18 +360,19 @@ func (s *Store) getApexFromCacheOrDB(domain *domain) (*models.Apex, error) {
 	aI, ok := s.cache.apexByName.Get(domain.apex.normal)
 	if !ok {
 		if s.cache.apexByName.Len() < s.cacheOpts.ApexSize {
+			s.influxService.StoreHit("cache-insert", "apex", 1)
 			return nil, cacheNotFull
 		}
 		var a models.Apex
 		if err := s.db.Model(&a).Where("apex = ?", domain.apex.normal).First(); err != nil {
-			s.Counter.apexNew++
+			s.influxService.StoreHit("db-insert", "apex", 1)
 			return nil, err
 		}
-		s.Counter.apexDBHit++
+		s.influxService.StoreHit("db-hit", "apex", 1)
 		return &a, nil //It is in DB
 	}
 	apex := aI.(*models.Apex)
-	s.Counter.apexCacheHit++
+	s.influxService.StoreHit("cache-hit", "apex", 1)
 	return apex, nil //It is in Cache
 }
 
@@ -369,15 +380,19 @@ func (s *Store) getApexAnonFromCacheOrDB(domain *domain) (*models.ApexAnon, erro
 	aI, ok := s.cache.apexByNameAnon.Get(domain.apex.anon)
 	if !ok {
 		if s.cache.apexByNameAnon.Len() < s.cacheOpts.ApexSize {
+			s.influxService.StoreHit("cache-insert", "apex-anon", 1)
 			return nil, cacheNotFull
 		}
 		var aAnon models.ApexAnon
 		if err := s.db.Model(&aAnon).Where("apex = ?", domain.apex.anon).First(); err != nil {
+			s.influxService.StoreHit("db-insert", "apex-anon", 1)
 			return nil, err
 		}
+		s.influxService.StoreHit("db-hit", "apex-anon", 1)
 		return &aAnon, nil //It is in DB
 	}
 	a := aI.(*models.ApexAnon)
+	s.influxService.StoreHit("cache-hit", "apex-anon", 1)
 	return a, nil //It is in Cache
 }
 
@@ -453,18 +468,19 @@ func (s *Store) getFqdnFromCacheOrDB(domain *domain) (*models.Fqdn, error) {
 	fqdnI, ok := s.cache.fqdnByName.Get(domain.fqdn.normal)
 	if !ok {
 		if s.cache.fqdnByName.Len() < s.cacheOpts.FQDNSize {
+			s.influxService.StoreHit("cache-insert", "fqdn", 1)
 			return nil, cacheNotFull
 		}
 		var fqdn models.Fqdn
 		if err := s.db.Model(&fqdn).Where("fqdn = ?", domain.fqdn.normal).First(); err != nil {
-			s.Counter.fqdnNew++
+			s.influxService.StoreHit("db-insert", "fqdn", 1)
 			return nil, err
 		}
-		s.Counter.fqdnDBHit++
+		s.influxService.StoreHit("db-hit", "fqdn", 1)
 		return &fqdn, nil //It is in DB
 	}
 	fqdn := fqdnI.(*models.Fqdn)
-	s.Counter.fqdnCacheHit++
+	s.influxService.StoreHit("cache-hit", "fqdn", 1)
 	return fqdn, nil //It is in Cache
 }
 
@@ -472,15 +488,19 @@ func (s *Store) getFqdnAnonFromCacheOrDB(domain *domain) (*models.FqdnAnon, erro
 	fqdnI, ok := s.cache.fqdnByNameAnon.Get(domain.fqdn.anon)
 	if !ok {
 		if s.cache.fqdnByNameAnon.Len() < s.cacheOpts.FQDNSize {
+			s.influxService.StoreHit("cache-insert", "fqdn-anon", 1)
 			return nil, cacheNotFull
 		}
 		var fqdnAnon models.FqdnAnon
 		if err := s.db.Model(&fqdnAnon).Where("fqdn = ?", domain.fqdn.anon).First(); err != nil {
+			s.influxService.StoreHit("db-insert", "fqdn-anon", 1)
 			return nil, err
 		}
+		s.influxService.StoreHit("db-hit", "fqdn-anon", 1)
 		return &fqdnAnon, nil //It is in DB
 	}
 	fqdnAnon := fqdnI.(*models.FqdnAnon)
+	s.influxService.StoreHit("cache-hit", "fqdn-anon", 1)
 	return fqdnAnon, nil //It is in Cache
 }
 

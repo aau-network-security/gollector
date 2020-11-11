@@ -35,7 +35,7 @@ type HashMapDB struct {
 	certByFingerprint      map[string]*certstruct
 }
 
-func NewBatchQueryDB() HashMapDB {
+func NewHashMapDB() HashMapDB {
 	return HashMapDB{
 		tldByName:              make(map[string]*domainstruct),
 		tldAnonByName:          make(map[string]*domainstruct),
@@ -54,6 +54,8 @@ func (s *Store) MapEntry(muid string, entry LogEntry) error {
 	defer s.m.Unlock()
 
 	s.ensureReady()
+
+	s.influxService.LogCount(entry.Log.Url)
 
 	sid, ok := s.ms.SId(muid)
 	if !ok {
@@ -88,8 +90,7 @@ func (s *Store) MapEntry(muid string, entry LogEntry) error {
 	return s.conditionalPostHooks()
 }
 
-func (s *Store) MapBatchWithCacheAndDB() []error {
-
+func (s *Store) findIdsInCacheAndDb() []error {
 	var errs []error
 	if err := s.mapCert(); err != nil {
 		errs = append(errs, err)
@@ -109,6 +110,7 @@ func (s *Store) MapBatchWithCacheAndDB() []error {
 	return errs
 }
 
+// collect ids for all observed certificates in the batch, either from the cache or the database
 func (s *Store) mapCert() error {
 
 	var certsNotFoundInCache []string
@@ -119,6 +121,7 @@ func (s *Store) mapCert() error {
 			certsNotFoundInCache = append(certsNotFoundInCache, k)
 			continue
 		}
+		s.influxService.StoreHit("cache-hit", "cert", 1)
 		cert := certI.(*models.Certificate)
 		existing := s.hashMapDB.certByFingerprint[k]
 		existing.cert = cert
@@ -127,6 +130,7 @@ func (s *Store) mapCert() error {
 
 	// Cache not full so the certificate can not be in the DB
 	if s.cache.certByFingerprint.Len() < s.cacheOpts.CertSize {
+		s.influxService.StoreHit("cache-insert", "cert", s.cache.certByFingerprint.Len())
 		return nil
 	}
 
@@ -144,10 +148,12 @@ func (s *Store) mapCert() error {
 		s.hashMapDB.certByFingerprint[c.Sha256Fingerprint] = existing
 		s.cache.certByFingerprint.Add(c.Sha256Fingerprint, c)
 	}
+	s.influxService.StoreHit("db-hit", "cert", len(certsFoundInDB))
 
 	return nil
 }
 
+// collect ids for all observed FQDNs in the batch, either from the cache or the database
 func (s *Store) mapFQDN() error {
 
 	var fqndNotFoundInCache []string
@@ -158,6 +164,7 @@ func (s *Store) mapFQDN() error {
 			fqndNotFoundInCache = append(fqndNotFoundInCache, k)
 			continue
 		}
+		s.influxService.StoreHit("cache-hit", "fqdn", 1)
 		fqdn := fqdnI.(*models.Fqdn)
 		existing := s.hashMapDB.fqdnByName[k]
 		existing.obj = fqdn
@@ -166,6 +173,7 @@ func (s *Store) mapFQDN() error {
 
 	// Cache not full so the certificate can not be in the DB
 	if s.cache.fqdnByName.Len() < s.cacheOpts.FQDNSize {
+		s.influxService.StoreHit("cache-insert", "fqdn", s.cache.fqdnByName.Len())
 		return nil
 	}
 
@@ -187,9 +195,11 @@ func (s *Store) mapFQDN() error {
 		s.hashMapDB.fqdnByName[f.Fqdn] = existing
 		s.cache.fqdnByName.Add(f.Fqdn, f)
 	}
+	s.influxService.StoreHit("db-hit", "fqdn", len(fqdnFoundInDB))
 	return nil
 }
 
+// collect ids for all observed apexes in the batch, either from the cache or the database
 func (s *Store) mapApex() error {
 
 	var apexNotFoundInCache []string
@@ -200,6 +210,7 @@ func (s *Store) mapApex() error {
 			apexNotFoundInCache = append(apexNotFoundInCache, k)
 			continue
 		}
+		s.influxService.StoreHit("cache-hit", "apex", 1)
 		apex := apexI.(*models.Apex)
 		existing := s.hashMapDB.apexByName[k]
 		existing.obj = apex
@@ -208,6 +219,7 @@ func (s *Store) mapApex() error {
 
 	// Cache not full so the certificate can not be in the DB
 	if s.cache.apexByName.Len() < s.cacheOpts.ApexSize {
+		s.influxService.StoreHit("cache-insert", "apex", s.cache.apexByName.Len())
 		return nil
 	}
 
@@ -229,9 +241,11 @@ func (s *Store) mapApex() error {
 		s.hashMapDB.apexByName[a.Apex] = existing
 		s.cache.apexByName.Add(a.Apex, a)
 	}
+	s.influxService.StoreHit("db-hit", "apex", len(apexFoundInDB))
 	return nil
 }
 
+// collect ids for all observed public suffixes in the batch, either from the cache or the database
 func (s *Store) mapPublicSuffix() error {
 
 	var psNotFoundInCache []string
@@ -242,6 +256,7 @@ func (s *Store) mapPublicSuffix() error {
 			psNotFoundInCache = append(psNotFoundInCache, k)
 			continue
 		}
+		s.influxService.StoreHit("cache-hit", "public-suffix", 1)
 		ps := psI.(*models.PublicSuffix)
 		existing := s.hashMapDB.publicSuffixByName[k]
 		existing.obj = ps
@@ -250,6 +265,7 @@ func (s *Store) mapPublicSuffix() error {
 
 	// Cache not full so the certificate can not be in the DB
 	if s.cache.publicSuffixByName.Len() < s.cacheOpts.PSuffSize {
+		s.influxService.StoreHit("cache-insert", "public-suffix", s.cache.publicSuffixByName.Len())
 		return nil
 	}
 
@@ -270,9 +286,11 @@ func (s *Store) mapPublicSuffix() error {
 		existing.obj = ps
 		s.hashMapDB.publicSuffixByName[ps.PublicSuffix] = existing
 	}
+	s.influxService.StoreHit("db-hit", "public-suffix", len(psFoundInDB))
 	return nil
 }
 
+// collect ids for all observed TLDs in the batch, either from the cache or the database
 func (s *Store) mapTLD() error {
 
 	var tldNotFoundInCache []string
@@ -283,6 +301,7 @@ func (s *Store) mapTLD() error {
 			tldNotFoundInCache = append(tldNotFoundInCache, k)
 			continue
 		}
+		s.influxService.StoreHit("cache-hit", "tld", 1)
 		tld := tldI.(*models.Tld)
 		existing := s.hashMapDB.tldByName[k]
 		existing.obj = tld
@@ -291,6 +310,7 @@ func (s *Store) mapTLD() error {
 
 	// Cache not full so the certificate can not be in the DB
 	if s.cache.tldByName.Len() < s.cacheOpts.TLDSize {
+		s.influxService.StoreHit("cache-insert", "tld", s.cache.tldByName.Len())
 		return nil
 	}
 
@@ -311,12 +331,13 @@ func (s *Store) mapTLD() error {
 		s.hashMapDB.tldByName[tld.Tld] = existing
 		s.cache.tldByName.Add(tld.Tld, tld)
 	}
+	s.influxService.StoreHit("db-hit", "apex", len(tldFoundInDB))
 	return nil
 }
 
-func (s *Store) StoreBatchPostHook() error {
+func (s *Store) fillInserts() error {
+	// tld
 	for k, str := range s.hashMapDB.tldByName {
-		//tld := str.obj.(*models.Tld)
 		if str.obj == nil {
 			res := &models.Tld{
 				ID:  s.ids.tlds,
@@ -330,6 +351,7 @@ func (s *Store) StoreBatchPostHook() error {
 		}
 	}
 
+	// public suffixes
 	for k, str := range s.hashMapDB.publicSuffixByName {
 		if str.obj == nil {
 			// get TLD name from public suffix object
@@ -351,6 +373,7 @@ func (s *Store) StoreBatchPostHook() error {
 	// apexes
 	for k, str := range s.hashMapDB.apexByName {
 		if str.obj == nil {
+
 			// get TLD name from domain object
 			tldstr := s.hashMapDB.tldByName[str.domain.tld.normal]
 			tld := tldstr.obj.(*models.Tld)
@@ -374,6 +397,7 @@ func (s *Store) StoreBatchPostHook() error {
 
 	// fqdns
 	for k, str := range s.hashMapDB.fqdnByName {
+
 		if str.obj == nil {
 			// get TLD name from domain object
 			tldstr := s.hashMapDB.tldByName[str.domain.tld.normal]
@@ -402,6 +426,7 @@ func (s *Store) StoreBatchPostHook() error {
 
 	// certificates
 	for k, certstr := range s.hashMapDB.certByFingerprint {
+
 		if certstr.cert == nil {
 			// get TLD name from domain object
 			cert := &models.Certificate{
@@ -449,6 +474,12 @@ func (s *Store) StoreBatchPostHook() error {
 
 		s.inserts.logEntries = append(s.inserts.logEntries, &le)
 	}
+
+	s.influxService.StoreHit("db-insert", "tld", len(s.inserts.tld))
+	s.influxService.StoreHit("db-insert", "public-suffix", len(s.inserts.publicSuffix))
+	s.influxService.StoreHit("db-insert", "apex", len(s.inserts.apexes))
+	s.influxService.StoreHit("db-insert", "fqdns", len(s.inserts.fqdns))
+	s.influxService.StoreHit("db-insert", "certs", len(s.inserts.certs))
 
 	return nil
 }

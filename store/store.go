@@ -48,12 +48,13 @@ func (err InvalidDomainErr) Error() string {
 }
 
 type Config struct {
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	DBName   string `yaml:"dbname"`
-	Debug    bool   `yaml:"debug"`
+	User       string     `yaml:"user"`
+	Password   string     `yaml:"password"`
+	Host       string     `yaml:"host"`
+	Port       int        `yaml:"port"`
+	DBName     string     `yaml:"dbname"`
+	Debug      bool       `yaml:"debug"`
+	InfluxOpts InfluxOpts `yaml:"influxdb"`
 
 	d *gorm.DB
 }
@@ -266,8 +267,8 @@ type Store struct {
 	ms              measurementState
 	anonymizer      *Anonymizer
 	Ready           *Ready
-	Counter         counter
 	hashMapDB       HashMapDB
+	influxService   InfluxService
 }
 
 type counter struct {
@@ -580,24 +581,6 @@ func (hook *debugHook) BeforeQuery(qe *pg.QueryEvent) {
 
 func (hook *debugHook) AfterQuery(qe *pg.QueryEvent) {}
 
-func (s *Store) ResetCounter() {
-	s.Counter.apexCacheHit = 0
-	s.Counter.apexDBHit = 0
-	s.Counter.apexNew = 0
-	s.Counter.fqdnCacheHit = 0
-	s.Counter.fqdnDBHit = 0
-	s.Counter.fqdnNew = 0
-	s.Counter.psCacheHit = 0
-	s.Counter.psDBHit = 0
-	s.Counter.psNew = 0
-	s.Counter.tldCacheHit = 0
-	s.Counter.tldDBHit = 0
-	s.Counter.tldNew = 0
-	s.Counter.certCacheHit = 0
-	s.Counter.certDBHit = 0
-	s.Counter.certNew = 0
-}
-
 func NewStore(conf Config, opts Opts) (*Store, error) {
 	pgOpts := pg.Options{
 		User:     conf.User,
@@ -611,7 +594,8 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		db.AddQueryHook(&debugHook{})
 	}
 
-	//todo remove the counter
+	ifs := NewInfluxService(conf.InfluxOpts)
+
 	s := Store{
 		conf:            conf,
 		db:              db,
@@ -627,24 +611,8 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		anonymizer:      &DefaultAnonymizer,
 		ms:              NewMeasurementState(),
 		Ready:           NewReady(),
-		hashMapDB:       NewBatchQueryDB(),
-		Counter: counter{
-			tldCacheHit:  0,
-			tldDBHit:     0,
-			tldNew:       0,
-			psCacheHit:   0,
-			psDBHit:      0,
-			psNew:        0,
-			apexCacheHit: 0,
-			apexDBHit:    0,
-			apexNew:      0,
-			fqdnCacheHit: 0,
-			fqdnDBHit:    0,
-			fqdnNew:      0,
-			certCacheHit: 0,
-			certDBHit:    0,
-			certNew:      0,
-		},
+		hashMapDB:       NewHashMapDB(),
+		influxService:   ifs,
 	}
 
 	postHook := storeCachedValuePosthook()
@@ -680,13 +648,14 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 
 func storeCachedValuePosthook() postHook {
 	return func(s *Store) error {
-		//todo change the response to the client
-		erorrs := s.MapBatchWithCacheAndDB()
-		if len(erorrs) != 0 {
-			//todo return err too
-			log.Print(erorrs)
+		errors := s.findIdsInCacheAndDb()
+		if len(errors) != 0 {
+			for _, err := range errors {
+				log.Debug().Msgf("%s", err)
+			}
 		}
-		err := s.StoreBatchPostHook()
+
+		err := s.fillInserts()
 		if err != nil {
 			return err
 		}
@@ -758,9 +727,6 @@ func storeCachedValuePosthook() postHook {
 		}
 		if len(s.inserts.certToFqdns) > 0 {
 			if err := tx.Insert(&s.inserts.certToFqdns); err != nil {
-				for _, v := range s.inserts.certToFqdns {
-					fmt.Printf("%s\n", v.ID)
-				}
 				return errs.Wrap(err, "insert cert-to-fqdns")
 			}
 		}
@@ -802,7 +768,7 @@ func storeCachedValuePosthook() postHook {
 			return errs.Wrap(err, "committing transaction")
 		}
 
-		s.hashMapDB = NewBatchQueryDB()
+		s.hashMapDB = NewHashMapDB()
 
 		return nil
 	}
