@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"net"
-	"os"
 	"time"
 
 	prt "github.com/aau-network-security/gollector/api/proto"
@@ -39,10 +38,9 @@ func timeFromUnix(ts int64) time.Time {
 }
 
 type Server struct {
-	Conf          Config
-	Store         *store.Store
-	Log           app.ErrLogger
-	BenchmarkFile *os.File
+	Conf  Config
+	Store *store.Store
+	Log   app.ErrLogger
 }
 
 func (s *Server) Run(lis net.Listener) error {

@@ -267,7 +267,7 @@ type Store struct {
 	ms              measurementState
 	anonymizer      *Anonymizer
 	Ready           *Ready
-	hashMapDB       HashMapDB
+	batchEntities   BatchEntities // datastructure with all entities in batch
 	influxService   InfluxService
 }
 
@@ -316,7 +316,8 @@ func (s *Store) runPostHooks() error {
 }
 
 func (s *Store) conditionalPostHooks() error {
-	if len(s.hashMapDB.certByFingerprint) >= s.batchSize {
+	if len(s.batchEntities.certByFingerprint) >= s.batchSize {
+		log.Debug().Msgf("batch is full (%d), writing to database..", len(s.batchEntities.certByFingerprint))
 		return s.runPostHooks()
 	}
 	return nil
@@ -611,7 +612,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		anonymizer:      &DefaultAnonymizer,
 		ms:              NewMeasurementState(),
 		Ready:           NewReady(),
-		hashMapDB:       NewHashMapDB(),
+		batchEntities:   NewBatchEntities(),
 		influxService:   ifs,
 	}
 
@@ -651,7 +652,7 @@ func storeCachedValuePosthook() postHook {
 		errors := s.findIdsInCacheAndDb()
 		if len(errors) != 0 {
 			for _, err := range errors {
-				log.Debug().Msgf("%s", err)
+				log.Debug().Msgf("error in finding ids from cache and database: %s", err)
 			}
 		}
 
@@ -768,7 +769,7 @@ func storeCachedValuePosthook() postHook {
 			return errs.Wrap(err, "committing transaction")
 		}
 
-		s.hashMapDB = NewHashMapDB()
+		s.batchEntities = NewBatchEntities()
 
 		return nil
 	}

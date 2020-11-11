@@ -82,23 +82,10 @@ func main() {
 		logger = app.NewZeroLogger(tags)
 	}
 
-	// open output file
-	fo, err := os.Create("output/mapentry_exec_time.txt")
-	if err != nil {
-		panic(err)
-	}
-	// close fo on exit and check for its returned error
-	defer func() {
-		if err := fo.Close(); err != nil {
-			panic(err)
-		}
-	}()
-
 	serv := api.Server{
-		Conf:          conf.Api,
-		Store:         s,
-		Log:           logger,
-		BenchmarkFile: fo,
+		Conf:  conf.Api,
+		Store: s,
+		Log:   logger,
 	}
 
 	addr := fmt.Sprintf(":%d", conf.Api.Api.Port)

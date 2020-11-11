@@ -4,6 +4,10 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"fmt"
+	testing2 "github.com/aau-network-security/gollector/testing"
+	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
+	influxapi "github.com/influxdata/influxdb-client-go/v2/api"
+	"github.com/influxdata/influxdb-client-go/v2/api/write"
 	"math/big"
 	"reflect"
 	"testing"
@@ -300,11 +304,12 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 
 func TestInit(t *testing.T) {
 	conf := Config{
-		User:     "postgres",
-		Password: "postgres",
-		DBName:   "domains",
-		Host:     "localhost",
-		Port:     10001,
+		User:       "postgres",
+		Password:   "postgres",
+		DBName:     "domains",
+		Host:       "localhost",
+		Port:       5432,
+		InfluxOpts: InfluxOpts{Enabled: false},
 	}
 
 	g, err := conf.Open()
@@ -497,4 +502,73 @@ func TestResetDB(t *testing.T) {
 	if err := tst.ResetDb(g); err != nil {
 		t.Fatalf("failed to reset database: %s", err)
 	}
+}
+
+type testInfluxdbClient struct {
+	influxdb2.Client
+}
+
+func (d testInfluxdbClient) Close() {}
+
+type testWriteApi struct {
+	influxapi.WriteAPI
+}
+
+func (d testWriteApi) WritePoint(point *write.Point) {
+}
+
+func TestInfluxDb(t *testing.T) {
+	testing2.SkipCI(t)
+
+	conf := Config{
+		User:     "postgres",
+		Password: "postgres",
+		DBName:   "domains",
+		Host:     "localhost",
+		Port:     5432,
+	}
+
+	s, _, muid, err := OpenStore(conf)
+	if err != nil {
+		t.Fatalf("failed to open store: %s", err)
+	}
+
+	client := testInfluxdbClient{}
+	api := testWriteApi{}
+	ifs := NewInfluxServiceWithClient(client, api, 1)
+
+	s.influxService = ifs
+
+	for _, domain := range []string{"www.domain1.com", "test.domain1.com"} {
+		now := time.Now()
+		raw, err := selfSignedCert(now, now, []string{domain})
+		if err != nil {
+			t.Fatalf("unexpected error while creating self-signed certificate: %s", err)
+		}
+
+		cert, err := x509.ParseCertificate(raw)
+		if err != nil {
+			t.Fatalf("unexpected error while parsing certificate: %s", err)
+		}
+
+		le := LogEntry{
+			Cert:  cert,
+			Index: 1,
+			Log: ct.Log{
+				Description: "test description",
+				Url:         "www://localhost:443/ct",
+			},
+			Ts: now,
+		}
+
+		if err := s.MapEntry(muid, le); err != nil {
+			t.Fatalf("unexpected error while storing log entry: %s", err)
+		}
+
+		s.RunPostHooks()
+	}
+
+	time.Sleep(1)
+
+	ifs.Close()
 }

@@ -7,7 +7,6 @@ import (
 
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/go-pg/pg"
-	"github.com/rs/zerolog/log"
 )
 
 type domainstruct struct {
@@ -23,7 +22,7 @@ type certstruct struct {
 
 var cacheNotFound = errors.New("not found in the cache")
 
-type HashMapDB struct {
+type BatchEntities struct {
 	tldByName              map[string]*domainstruct
 	tldAnonByName          map[string]*domainstruct
 	publicSuffixByName     map[string]*domainstruct
@@ -35,8 +34,8 @@ type HashMapDB struct {
 	certByFingerprint      map[string]*certstruct
 }
 
-func NewHashMapDB() HashMapDB {
-	return HashMapDB{
+func NewBatchEntities() BatchEntities {
+	return BatchEntities{
 		tldByName:              make(map[string]*domainstruct),
 		tldAnonByName:          make(map[string]*domainstruct),
 		publicSuffixByName:     make(map[string]*domainstruct),
@@ -63,7 +62,7 @@ func (s *Store) MapEntry(muid string, entry LogEntry) error {
 	}
 
 	fp := fmt.Sprintf("%x", sha256.Sum256(entry.Cert.Raw))
-	s.hashMapDB.certByFingerprint[fp] = &certstruct{
+	s.batchEntities.certByFingerprint[fp] = &certstruct{
 		cert:  nil,
 		entry: entry,
 		sid:   sid,
@@ -74,16 +73,16 @@ func (s *Store) MapEntry(muid string, entry LogEntry) error {
 		if err != nil {
 			continue
 		}
-		s.hashMapDB.fqdnByName[domain.fqdn.normal] = &domainstruct{
+		s.batchEntities.fqdnByName[domain.fqdn.normal] = &domainstruct{
 			domain: domain,
 		}
-		s.hashMapDB.apexByName[domain.apex.normal] = &domainstruct{
+		s.batchEntities.apexByName[domain.apex.normal] = &domainstruct{
 			domain: domain,
 		}
-		s.hashMapDB.publicSuffixByName[domain.publicSuffix.normal] = &domainstruct{
+		s.batchEntities.publicSuffixByName[domain.publicSuffix.normal] = &domainstruct{
 			domain: domain,
 		}
-		s.hashMapDB.tldByName[domain.tld.normal] = &domainstruct{
+		s.batchEntities.tldByName[domain.tld.normal] = &domainstruct{
 			domain: domain,
 		}
 	}
@@ -113,9 +112,9 @@ func (s *Store) findIdsInCacheAndDb() []error {
 // collect ids for all observed certificates in the batch, either from the cache or the database
 func (s *Store) mapCert() error {
 
+	// fetch ids from cache
 	var certsNotFoundInCache []string
-	//map from cache
-	for k := range s.hashMapDB.certByFingerprint {
+	for k := range s.batchEntities.certByFingerprint {
 		certI, ok := s.cache.certByFingerprint.Get(k)
 		if !ok {
 			certsNotFoundInCache = append(certsNotFoundInCache, k)
@@ -123,29 +122,26 @@ func (s *Store) mapCert() error {
 		}
 		s.influxService.StoreHit("cache-hit", "cert", 1)
 		cert := certI.(*models.Certificate)
-		existing := s.hashMapDB.certByFingerprint[k]
+		existing := s.batchEntities.certByFingerprint[k]
 		existing.cert = cert
-		s.hashMapDB.certByFingerprint[k] = existing
+		s.batchEntities.certByFingerprint[k] = existing
 	}
 
-	// Cache not full so the certificate can not be in the DB
+	// the cache is not full yet, so the remaining (cache-miss) certs cannot be in the database
 	if s.cache.certByFingerprint.Len() < s.cacheOpts.CertSize {
-		s.influxService.StoreHit("cache-insert", "cert", s.cache.certByFingerprint.Len())
 		return nil
 	}
 
-	//map with DB
+	// fetch ids from database
 	var certsFoundInDB []*models.Certificate
-
 	if err := s.db.Model(&certsFoundInDB).Where("sha256_fingerprint in (?)", pg.In(certsNotFoundInCache)).Select(); err != nil {
-		log.Error().Msgf("error retrieve Certificates from DB [mapCert]: %s", err)
 		return err
 	}
 
 	for _, c := range certsFoundInDB {
-		existing := s.hashMapDB.certByFingerprint[c.Sha256Fingerprint]
+		existing := s.batchEntities.certByFingerprint[c.Sha256Fingerprint]
 		existing.cert = c
-		s.hashMapDB.certByFingerprint[c.Sha256Fingerprint] = existing
+		s.batchEntities.certByFingerprint[c.Sha256Fingerprint] = existing
 		s.cache.certByFingerprint.Add(c.Sha256Fingerprint, c)
 	}
 	s.influxService.StoreHit("db-hit", "cert", len(certsFoundInDB))
@@ -156,9 +152,9 @@ func (s *Store) mapCert() error {
 // collect ids for all observed FQDNs in the batch, either from the cache or the database
 func (s *Store) mapFQDN() error {
 
+	// fetch ids from cache
 	var fqndNotFoundInCache []string
-
-	for k := range s.hashMapDB.fqdnByName {
+	for k := range s.batchEntities.fqdnByName {
 		fqdnI, ok := s.cache.fqdnByName.Get(k)
 		if !ok {
 			fqndNotFoundInCache = append(fqndNotFoundInCache, k)
@@ -166,33 +162,31 @@ func (s *Store) mapFQDN() error {
 		}
 		s.influxService.StoreHit("cache-hit", "fqdn", 1)
 		fqdn := fqdnI.(*models.Fqdn)
-		existing := s.hashMapDB.fqdnByName[k]
+		existing := s.batchEntities.fqdnByName[k]
 		existing.obj = fqdn
-		s.hashMapDB.fqdnByName[k] = existing
+		s.batchEntities.fqdnByName[k] = existing
 	}
 
-	// Cache not full so the certificate can not be in the DB
+	// the cache is not full yet, so the remaining (cache-miss) fqdns cannot be in the database
 	if s.cache.fqdnByName.Len() < s.cacheOpts.FQDNSize {
-		s.influxService.StoreHit("cache-insert", "fqdn", s.cache.fqdnByName.Len())
 		return nil
 	}
 
+	// all entities have been found in the cache, no need to perform a database queries
 	if len(fqndNotFoundInCache) == 0 {
 		return nil
 	}
 
-	//map with DB
+	// fetch ids from database
 	var fqdnFoundInDB []*models.Fqdn
-
 	if err := s.db.Model(&fqdnFoundInDB).Where("fqdn in (?)", pg.In(fqndNotFoundInCache)).Select(); err != nil {
-		log.Error().Msgf("error retrieve FQDN from DB [mapFQDN]: %s", err)
 		return err
 	}
 
 	for _, f := range fqdnFoundInDB {
-		existing := s.hashMapDB.fqdnByName[f.Fqdn]
+		existing := s.batchEntities.fqdnByName[f.Fqdn]
 		existing.obj = f
-		s.hashMapDB.fqdnByName[f.Fqdn] = existing
+		s.batchEntities.fqdnByName[f.Fqdn] = existing
 		s.cache.fqdnByName.Add(f.Fqdn, f)
 	}
 	s.influxService.StoreHit("db-hit", "fqdn", len(fqdnFoundInDB))
@@ -202,9 +196,9 @@ func (s *Store) mapFQDN() error {
 // collect ids for all observed apexes in the batch, either from the cache or the database
 func (s *Store) mapApex() error {
 
+	// fetch ids from cache
 	var apexNotFoundInCache []string
-
-	for k := range s.hashMapDB.apexByName {
+	for k := range s.batchEntities.apexByName {
 		apexI, ok := s.cache.apexByName.Get(k)
 		if !ok {
 			apexNotFoundInCache = append(apexNotFoundInCache, k)
@@ -212,33 +206,31 @@ func (s *Store) mapApex() error {
 		}
 		s.influxService.StoreHit("cache-hit", "apex", 1)
 		apex := apexI.(*models.Apex)
-		existing := s.hashMapDB.apexByName[k]
+		existing := s.batchEntities.apexByName[k]
 		existing.obj = apex
-		s.hashMapDB.apexByName[k] = existing
+		s.batchEntities.apexByName[k] = existing
 	}
 
-	// Cache not full so the certificate can not be in the DB
+	// the cache is not full yet, so the remaining (cache-miss) apexes cannot be in the database
 	if s.cache.apexByName.Len() < s.cacheOpts.ApexSize {
-		s.influxService.StoreHit("cache-insert", "apex", s.cache.apexByName.Len())
 		return nil
 	}
 
+	// all entities have been found in the cache, no need to perform a database queries
 	if len(apexNotFoundInCache) == 0 {
 		return nil
 	}
 
-	//map with DB
+	// fetch ids from database
 	var apexFoundInDB []*models.Apex
-
 	if err := s.db.Model(&apexFoundInDB).Where("apex in (?)", pg.In(apexNotFoundInCache)).Select(); err != nil {
-		log.Error().Msgf("error retrieve Apex from DB [mapApex]: %s", err)
 		return err
 	}
 
 	for _, a := range apexFoundInDB {
-		existing := s.hashMapDB.apexByName[a.Apex]
+		existing := s.batchEntities.apexByName[a.Apex]
 		existing.obj = a
-		s.hashMapDB.apexByName[a.Apex] = existing
+		s.batchEntities.apexByName[a.Apex] = existing
 		s.cache.apexByName.Add(a.Apex, a)
 	}
 	s.influxService.StoreHit("db-hit", "apex", len(apexFoundInDB))
@@ -248,9 +240,9 @@ func (s *Store) mapApex() error {
 // collect ids for all observed public suffixes in the batch, either from the cache or the database
 func (s *Store) mapPublicSuffix() error {
 
+	// fetch ids from cache
 	var psNotFoundInCache []string
-
-	for k := range s.hashMapDB.publicSuffixByName {
+	for k := range s.batchEntities.publicSuffixByName {
 		psI, ok := s.cache.publicSuffixByName.Get(k)
 		if !ok {
 			psNotFoundInCache = append(psNotFoundInCache, k)
@@ -258,33 +250,31 @@ func (s *Store) mapPublicSuffix() error {
 		}
 		s.influxService.StoreHit("cache-hit", "public-suffix", 1)
 		ps := psI.(*models.PublicSuffix)
-		existing := s.hashMapDB.publicSuffixByName[k]
+		existing := s.batchEntities.publicSuffixByName[k]
 		existing.obj = ps
-		s.hashMapDB.publicSuffixByName[k] = existing
+		s.batchEntities.publicSuffixByName[k] = existing
 	}
 
-	// Cache not full so the certificate can not be in the DB
+	// the cache is not full yet, so the remaining (cache-miss) public suffixes cannot be in the database
 	if s.cache.publicSuffixByName.Len() < s.cacheOpts.PSuffSize {
-		s.influxService.StoreHit("cache-insert", "public-suffix", s.cache.publicSuffixByName.Len())
 		return nil
 	}
 
+	// all entities have been found in the cache, no need to perform a database queries
 	if len(psNotFoundInCache) == 0 {
 		return nil
 	}
 
-	//map with DB
+	// fetch ids from database
 	var psFoundInDB []*models.PublicSuffix
-
 	if err := s.db.Model(&psFoundInDB).Where("public_suffix in (?)", pg.In(psNotFoundInCache)).Select(); err != nil {
-		log.Error().Msgf("error retrieve PS from DB [mapPublicSuffix]: %s", err)
 		return err
 	}
 
 	for _, ps := range psFoundInDB {
-		existing := s.hashMapDB.publicSuffixByName[ps.PublicSuffix]
+		existing := s.batchEntities.publicSuffixByName[ps.PublicSuffix]
 		existing.obj = ps
-		s.hashMapDB.publicSuffixByName[ps.PublicSuffix] = existing
+		s.batchEntities.publicSuffixByName[ps.PublicSuffix] = existing
 	}
 	s.influxService.StoreHit("db-hit", "public-suffix", len(psFoundInDB))
 	return nil
@@ -293,9 +283,9 @@ func (s *Store) mapPublicSuffix() error {
 // collect ids for all observed TLDs in the batch, either from the cache or the database
 func (s *Store) mapTLD() error {
 
+	// fetch ids from cache
 	var tldNotFoundInCache []string
-
-	for k := range s.hashMapDB.tldByName {
+	for k := range s.batchEntities.tldByName {
 		tldI, ok := s.cache.tldByName.Get(k)
 		if !ok {
 			tldNotFoundInCache = append(tldNotFoundInCache, k)
@@ -303,32 +293,31 @@ func (s *Store) mapTLD() error {
 		}
 		s.influxService.StoreHit("cache-hit", "tld", 1)
 		tld := tldI.(*models.Tld)
-		existing := s.hashMapDB.tldByName[k]
+		existing := s.batchEntities.tldByName[k]
 		existing.obj = tld
-		s.hashMapDB.tldByName[k] = existing
+		s.batchEntities.tldByName[k] = existing
 	}
 
-	// Cache not full so the certificate can not be in the DB
+	// the cache is not full yet, so the remaining (cache-miss) tlds cannot be in the database
 	if s.cache.tldByName.Len() < s.cacheOpts.TLDSize {
-		s.influxService.StoreHit("cache-insert", "tld", s.cache.tldByName.Len())
 		return nil
 	}
 
+	// all entities have been found in the cache, no need to perform a database queries
 	if len(tldNotFoundInCache) == 0 {
 		return nil
 	}
 
-	//map with DB
+	// fetch ids from database
 	var tldFoundInDB []*models.Tld
-
 	if err := s.db.Model(&tldFoundInDB).Where("tld in (?)", pg.In(tldNotFoundInCache)).Select(); err != nil {
 		return err
 	}
 
 	for _, tld := range tldFoundInDB {
-		existing := s.hashMapDB.tldByName[tld.Tld]
+		existing := s.batchEntities.tldByName[tld.Tld]
 		existing.obj = tld
-		s.hashMapDB.tldByName[tld.Tld] = existing
+		s.batchEntities.tldByName[tld.Tld] = existing
 		s.cache.tldByName.Add(tld.Tld, tld)
 	}
 	s.influxService.StoreHit("db-hit", "apex", len(tldFoundInDB))
@@ -337,7 +326,7 @@ func (s *Store) mapTLD() error {
 
 func (s *Store) fillInserts() error {
 	// tld
-	for k, str := range s.hashMapDB.tldByName {
+	for k, str := range s.batchEntities.tldByName {
 		if str.obj == nil {
 			res := &models.Tld{
 				ID:  s.ids.tlds,
@@ -345,17 +334,17 @@ func (s *Store) fillInserts() error {
 			}
 			s.inserts.tld = append(s.inserts.tld, res)
 			str.obj = res
-			s.hashMapDB.tldByName[k] = str
+			s.batchEntities.tldByName[k] = str
 			s.ids.tlds++
 			s.cache.tldByName.Add(k, res)
 		}
 	}
 
 	// public suffixes
-	for k, str := range s.hashMapDB.publicSuffixByName {
+	for k, str := range s.batchEntities.publicSuffixByName {
 		if str.obj == nil {
 			// get TLD name from public suffix object
-			tldstr := s.hashMapDB.tldByName[str.domain.tld.normal]
+			tldstr := s.batchEntities.tldByName[str.domain.tld.normal]
 			tld := tldstr.obj.(*models.Tld)
 			res := &models.PublicSuffix{
 				ID:           s.ids.suffixes,
@@ -364,21 +353,21 @@ func (s *Store) fillInserts() error {
 			}
 			str.obj = res
 			s.inserts.publicSuffix = append(s.inserts.publicSuffix, res)
-			s.hashMapDB.publicSuffixByName[k] = str
+			s.batchEntities.publicSuffixByName[k] = str
 			s.ids.suffixes++
 			s.cache.publicSuffixByName.Add(k, res)
 		}
 	}
 
 	// apexes
-	for k, str := range s.hashMapDB.apexByName {
+	for k, str := range s.batchEntities.apexByName {
 		if str.obj == nil {
 
 			// get TLD name from domain object
-			tldstr := s.hashMapDB.tldByName[str.domain.tld.normal]
+			tldstr := s.batchEntities.tldByName[str.domain.tld.normal]
 			tld := tldstr.obj.(*models.Tld)
 
-			suffixstr := s.hashMapDB.publicSuffixByName[str.domain.publicSuffix.normal]
+			suffixstr := s.batchEntities.publicSuffixByName[str.domain.publicSuffix.normal]
 			suffix := suffixstr.obj.(*models.PublicSuffix)
 
 			res := &models.Apex{
@@ -389,24 +378,24 @@ func (s *Store) fillInserts() error {
 			}
 			str.obj = res
 			s.inserts.apexes[res.ID] = res
-			s.hashMapDB.apexByName[k] = str
+			s.batchEntities.apexByName[k] = str
 			s.ids.apexes++
 			s.cache.apexByName.Add(k, res)
 		}
 	}
 
 	// fqdns
-	for k, str := range s.hashMapDB.fqdnByName {
+	for k, str := range s.batchEntities.fqdnByName {
 
 		if str.obj == nil {
 			// get TLD name from domain object
-			tldstr := s.hashMapDB.tldByName[str.domain.tld.normal]
+			tldstr := s.batchEntities.tldByName[str.domain.tld.normal]
 			tld := tldstr.obj.(*models.Tld)
 
-			suffixstr := s.hashMapDB.publicSuffixByName[str.domain.publicSuffix.normal]
+			suffixstr := s.batchEntities.publicSuffixByName[str.domain.publicSuffix.normal]
 			suffix := suffixstr.obj.(*models.PublicSuffix)
 
-			apexstr := s.hashMapDB.apexByName[str.domain.apex.normal]
+			apexstr := s.batchEntities.apexByName[str.domain.apex.normal]
 			apex := apexstr.obj.(*models.Apex)
 
 			res := &models.Fqdn{
@@ -418,14 +407,14 @@ func (s *Store) fillInserts() error {
 			}
 			str.obj = res
 			s.inserts.fqdns = append(s.inserts.fqdns, res)
-			s.hashMapDB.fqdnByName[k] = str
+			s.batchEntities.fqdnByName[k] = str
 			s.ids.fqdns++
 			s.cache.fqdnByName.Add(k, res)
 		}
 	}
 
 	// certificates
-	for k, certstr := range s.hashMapDB.certByFingerprint {
+	for k, certstr := range s.batchEntities.certByFingerprint {
 
 		if certstr.cert == nil {
 			// get TLD name from domain object
@@ -441,7 +430,7 @@ func (s *Store) fillInserts() error {
 				if err != nil {
 					continue
 				}
-				fqdnstr := s.hashMapDB.fqdnByName[domain.fqdn.normal]
+				fqdnstr := s.batchEntities.fqdnByName[domain.fqdn.normal]
 				fqdn := fqdnstr.obj.(*models.Fqdn)
 
 				ctof := models.CertificateToFqdn{

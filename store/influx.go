@@ -8,12 +8,6 @@ import (
 	"time"
 )
 
-type Message struct {
-	Measurement string
-	Tags        map[string]string
-	Fields      map[string]interface{}
-}
-
 type InfluxService interface {
 	StoreHit(status string, insertType string, count int)
 	LogCount(logName string)
@@ -106,6 +100,7 @@ func (ifs *influxService) write() {
 }
 
 type InfluxOpts struct {
+	Enabled      bool   `yaml:"enabled"`
 	ServUrl      string `yaml:"server-url"`
 	AuthToken    string `yaml:"auth-token"`
 	Organisation string `yaml:"organisation"`
@@ -113,11 +108,34 @@ type InfluxOpts struct {
 	Interval     int    `yaml:"interval"` // in seconds
 }
 
+// service that is being used when influxdb is disabled
+type disabledService struct{}
+
+func (ds *disabledService) StoreHit(status string, insertType string, count int) {
+	return
+}
+
+func (ds *disabledService) LogCount(logName string) {
+	return
+}
+
+func (ds *disabledService) Close() error {
+	return nil
+}
+
 func NewInfluxService(opts InfluxOpts) InfluxService {
+	if !opts.Enabled {
+		return &disabledService{}
+	}
+
 	client := influxdb2.NewClient(opts.ServUrl, opts.AuthToken)
 	api := client.WriteAPI(opts.Organisation, opts.Bucket)
 
-	ticker := time.NewTicker(time.Duration(opts.Interval) * time.Second)
+	return NewInfluxServiceWithClient(client, api, opts.Interval)
+}
+
+func NewInfluxServiceWithClient(client influxdb2.Client, api influxapi.WriteAPI, interval int) InfluxService {
+	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	done := make(chan bool)
 
 	is := influxService{
