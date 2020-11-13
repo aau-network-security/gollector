@@ -649,14 +649,16 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 
 func storeCachedValuePosthook() postHook {
 	return func(s *Store) error {
-		errors := s.findIdsInCacheAndDb()
+		log.Debug().Msgf("Propagating backwards..")
+		errors := s.backProp()
 		if len(errors) != 0 {
 			for _, err := range errors {
-				log.Debug().Msgf("error in finding ids from cache and database: %s", err)
+				log.Debug().Msgf("error in back propagation: %s", err)
 			}
 		}
 
-		err := s.fillInserts()
+		log.Debug().Msgf("Propagating forwards..")
+		err := s.forwardProp()
 		if err != nil {
 			return err
 		}
@@ -669,74 +671,88 @@ func storeCachedValuePosthook() postHook {
 
 		// inserts
 		if len(s.inserts.fqdns) > 0 {
+			log.Debug().Msgf("inserting FQDNs..")
 			if err := tx.Insert(&s.inserts.fqdns); err != nil {
 				return errs.Wrap(err, "insert fqdns")
 			}
 		}
 		if len(s.inserts.fqdnsAnon) > 0 {
+			log.Debug().Msgf("inserting anonymized FQDNs..")
 			if err := tx.Insert(&s.inserts.fqdnsAnon); err != nil {
 				return errs.Wrap(err, "insert anon fqdns")
 			}
 		}
 		if len(s.inserts.apexes) > 0 {
 			a := s.inserts.apexList()
+			log.Debug().Msgf("inserting apexes..")
 			if err := tx.Insert(&a); err != nil {
 				return errs.Wrap(err, "insert apexes")
 			}
 		}
 		if len(s.inserts.apexesAnon) > 0 {
 			a := s.inserts.apexAnonList()
+			log.Debug().Msgf("inserting anonymized apexes..")
 			if err := tx.Insert(&a); err != nil {
 				return errs.Wrap(err, "insert anon apexes")
 			}
 		}
 		if len(s.inserts.publicSuffix) > 0 {
+			log.Debug().Msgf("inserting public suffixes..")
 			if err := tx.Insert(&s.inserts.publicSuffix); err != nil {
 				return errs.Wrap(err, "insert public suffix")
 			}
 		}
 		if len(s.inserts.publicSuffixAnon) > 0 {
+			log.Debug().Msgf("inserting anonymized public suffixes..")
 			if err := tx.Insert(&s.inserts.publicSuffixAnon); err != nil {
 				return errs.Wrap(err, "insert anon public suffix")
 			}
 		}
 		if len(s.inserts.tld) > 0 {
+			log.Debug().Msgf("inserting TLDs..")
 			if err := tx.Insert(&s.inserts.tld); err != nil {
 				return errs.Wrap(err, "insert tld")
 			}
 		}
 		if len(s.inserts.tldAnon) > 0 {
+			log.Debug().Msgf("inserting anonymized TLDs..")
 			if err := tx.Insert(&s.inserts.tldAnon); err != nil {
 				return errs.Wrap(err, "insert tld")
 			}
 		}
 		if len(s.inserts.zoneEntries) > 0 {
 			z := s.inserts.zoneEntryList()
+			log.Debug().Msgf("inserting zone entries..")
 			if err := tx.Insert(&z); err != nil {
 				return errs.Wrap(err, "insert zone entries")
 			}
 		}
 		if len(s.inserts.logEntries) > 0 {
+			log.Debug().Msgf("inserting log entries..")
 			if err := tx.Insert(&s.inserts.logEntries); err != nil {
 				return errs.Wrap(err, "insert log entries")
 			}
 		}
 		if len(s.inserts.certs) > 0 {
+			log.Debug().Msgf("inserting certificates..")
 			if err := tx.Insert(&s.inserts.certs); err != nil {
 				return errs.Wrap(err, "insert certs")
 			}
 		}
 		if len(s.inserts.certToFqdns) > 0 {
+			log.Debug().Msgf("inserting certificate-to-FQDN mappings..")
 			if err := tx.Insert(&s.inserts.certToFqdns); err != nil {
 				return errs.Wrap(err, "insert cert-to-fqdns")
 			}
 		}
 		if len(s.inserts.passiveEntries) > 0 {
+			log.Debug().Msgf("inserting passive DNS entries..")
 			if err := tx.Insert(&s.inserts.passiveEntries); err != nil {
 				return errs.Wrap(err, "insert passive entries")
 			}
 		}
 		if len(s.inserts.entradaEntries) > 0 {
+			log.Debug().Msgf("inserting ENTRADA entries..")
 			if err := tx.Insert(&s.inserts.entradaEntries); err != nil {
 				return errs.Wrap(err, "insert entrada entries")
 			}
@@ -770,6 +786,16 @@ func storeCachedValuePosthook() postHook {
 		}
 
 		s.batchEntities = NewBatchEntities()
+
+		// TODO: add anonymized
+		// write size of cache to influx
+		s.influxService.CacheSize("cert", s.cache.certByFingerprint, s.cacheOpts.CertSize)
+		s.influxService.CacheSize("fqdn", s.cache.fqdnByName, s.cacheOpts.FQDNSize)
+		s.influxService.CacheSize("apex", s.cache.apexByName, s.cacheOpts.ApexSize)
+		s.influxService.CacheSize("public-suffix", s.cache.publicSuffixByName, s.cacheOpts.ApexSize)
+		s.influxService.CacheSize("tld", s.cache.tldByName, s.cacheOpts.TLDSize)
+
+		log.Debug().Msgf("Finished storing batch")
 
 		return nil
 	}

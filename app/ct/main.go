@@ -107,8 +107,8 @@ func main() {
 		log.Fatal().Msgf("error while retrieving list of existing logs: %s", err)
 	}
 
-	logs := logList.Logs
-	//logs := []ct.Log{logList.Logs[2]}
+	//logs := logList.Logs
+	logs := []ct.Log{logList.Logs[2]}
 	//logs := logList.Logs[0:3]
 
 	wg := sync.WaitGroup{}

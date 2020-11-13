@@ -1,6 +1,7 @@
 package store
 
 import (
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/influxdata/influxdb-client-go/v2"
 	influxapi "github.com/influxdata/influxdb-client-go/v2/api"
 	"io"
@@ -11,6 +12,7 @@ import (
 type InfluxService interface {
 	StoreHit(status string, insertType string, count int)
 	LogCount(logName string)
+	CacheSize(cacheName string, c *lru.Cache, total int)
 	io.Closer
 }
 
@@ -21,6 +23,7 @@ type influxService struct {
 	ticker    *time.Ticker
 	storeHits map[storeHitTuple]int
 	logCounts map[string]int
+	cacheSize map[string]cacheInfo
 	m         *sync.Mutex
 }
 
@@ -54,6 +57,18 @@ func (ifs *influxService) LogCount(logname string) {
 	k++
 
 	ifs.logCounts[logname] = k
+}
+
+type cacheInfo struct {
+	cur   int
+	total int
+}
+
+func (ifs *influxService) CacheSize(cacheName string, c *lru.Cache, total int) {
+	ifs.m.Lock()
+	defer ifs.m.Unlock()
+
+	ifs.cacheSize[cacheName] = cacheInfo{c.Len(), total}
 }
 
 func (ifs *influxService) Close() error {
@@ -95,8 +110,24 @@ func (ifs *influxService) write() {
 		ifs.api.WritePoint(p)
 	}
 
+	// write cache sizes
+	for cacheName, info := range ifs.cacheSize {
+		tags := map[string]string{
+			"cacheName": cacheName,
+		}
+		perc := float64(info.cur) / float64(info.total) * float64(100)
+		fields := map[string]interface{}{
+			"perc":  perc,
+			"cur":   info.cur,
+			"total": info.total,
+		}
+		p := influxdb2.NewPoint("cache", tags, fields, time.Now())
+		ifs.api.WritePoint(p)
+	}
+
 	ifs.storeHits = map[storeHitTuple]int{}
 	ifs.logCounts = map[string]int{}
+	ifs.cacheSize = map[string]cacheInfo{}
 }
 
 type InfluxOpts struct {
@@ -116,6 +147,10 @@ func (ds *disabledService) StoreHit(status string, insertType string, count int)
 }
 
 func (ds *disabledService) LogCount(logName string) {
+	return
+}
+
+func (ds *disabledService) CacheSize(cacheName string, cache2 *lru.Cache, total int) {
 	return
 }
 
@@ -144,6 +179,7 @@ func NewInfluxServiceWithClient(client influxdb2.Client, api influxapi.WriteAPI,
 		done:      done,
 		storeHits: map[storeHitTuple]int{},
 		logCounts: map[string]int{},
+		cacheSize: map[string]cacheInfo{},
 		ticker:    ticker,
 		m:         &sync.Mutex{},
 	}

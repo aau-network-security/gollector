@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
+	"github.com/rs/zerolog/log"
 
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/go-pg/pg"
@@ -89,20 +90,25 @@ func (s *Store) MapEntry(muid string, entry LogEntry) error {
 	return s.conditionalPostHooks()
 }
 
-func (s *Store) findIdsInCacheAndDb() []error {
+func (s *Store) backProp() []error {
 	var errs []error
+	log.Debug().Msgf("certs..")
 	if err := s.mapCert(); err != nil {
 		errs = append(errs, err)
 	}
+	log.Debug().Msgf("fqdns..")
 	if err := s.mapFQDN(); err != nil {
 		errs = append(errs, err)
 	}
+	log.Debug().Msgf("apexes..")
 	if err := s.mapApex(); err != nil {
 		errs = append(errs, err)
 	}
+	log.Debug().Msgf("public suffixes..")
 	if err := s.mapPublicSuffix(); err != nil {
 		errs = append(errs, err)
 	}
+	log.Debug().Msgf("tlds..")
 	if err := s.mapTLD(); err != nil {
 		errs = append(errs, err)
 	}
@@ -324,8 +330,10 @@ func (s *Store) mapTLD() error {
 	return nil
 }
 
-func (s *Store) fillInserts() error {
+// based on the given batch, fill in the `insert` modelset, ready for running the queries against the database
+func (s *Store) forwardProp() error {
 	// tld
+	log.Debug().Msgf("tlds..")
 	for k, str := range s.batchEntities.tldByName {
 		if str.obj == nil {
 			res := &models.Tld{
@@ -341,6 +349,7 @@ func (s *Store) fillInserts() error {
 	}
 
 	// public suffixes
+	log.Debug().Msgf("public suffixes..")
 	for k, str := range s.batchEntities.publicSuffixByName {
 		if str.obj == nil {
 			// get TLD name from public suffix object
@@ -360,6 +369,7 @@ func (s *Store) fillInserts() error {
 	}
 
 	// apexes
+	log.Debug().Msgf("apexes..")
 	for k, str := range s.batchEntities.apexByName {
 		if str.obj == nil {
 
@@ -385,6 +395,7 @@ func (s *Store) fillInserts() error {
 	}
 
 	// fqdns
+	log.Debug().Msgf("fqnds..")
 	for k, str := range s.batchEntities.fqdnByName {
 
 		if str.obj == nil {
@@ -414,6 +425,7 @@ func (s *Store) fillInserts() error {
 	}
 
 	// certificates
+	log.Debug().Msgf("certs..")
 	for k, certstr := range s.batchEntities.certByFingerprint {
 
 		if certstr.cert == nil {
@@ -467,8 +479,8 @@ func (s *Store) fillInserts() error {
 	s.influxService.StoreHit("db-insert", "tld", len(s.inserts.tld))
 	s.influxService.StoreHit("db-insert", "public-suffix", len(s.inserts.publicSuffix))
 	s.influxService.StoreHit("db-insert", "apex", len(s.inserts.apexes))
-	s.influxService.StoreHit("db-insert", "fqdns", len(s.inserts.fqdns))
-	s.influxService.StoreHit("db-insert", "certs", len(s.inserts.certs))
+	s.influxService.StoreHit("db-insert", "fqdn", len(s.inserts.fqdns))
+	s.influxService.StoreHit("db-insert", "cert", len(s.inserts.certs))
 
 	return nil
 }
