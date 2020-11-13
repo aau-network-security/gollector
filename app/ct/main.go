@@ -211,7 +211,6 @@ func main() {
 		}(l)
 	}
 	p.Wait()
-	fmt.Println(time.Since(startTime))
 	if err := bs.CloseSend(ctx); err != nil {
 		log.Fatal().Msgf("error while closing connection to server: %s", err)
 	}

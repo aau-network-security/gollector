@@ -4,10 +4,8 @@ import (
 	"flag"
 	"fmt"
 	"net"
-	"net/http"
 	_ "net/http/pprof"
 	"os"
-	"runtime"
 	"time"
 
 	"github.com/aau-network-security/gollector/api"
@@ -18,11 +16,6 @@ import (
 )
 
 func main() {
-	runtime.SetBlockProfileRate(1)
-
-	go func() {
-		http.ListenAndServe(":8881", nil)
-	}()
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
 	confFile := flag.String("config", "config/config.yml", "location of configuration file")
