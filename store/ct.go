@@ -1,8 +1,6 @@
 package store
 
 import (
-	"crypto/sha256"
-	"fmt"
 	"github.com/aau-network-security/gollector/collectors/ct"
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/google/certificate-transparency-go/x509"
@@ -10,58 +8,7 @@ import (
 	"time"
 )
 
-func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
-	l, ok := s.cache.logByUrl[log.Url]
-	if !ok {
-		l = &models.Log{
-			ID:          s.ids.logs,
-			Url:         log.Url,
-			Description: log.Description,
-		}
-		if err := s.db.Insert(l); err != nil {
-			return nil, errors.Wrap(err, "insert log")
-		}
-
-		s.cache.logByUrl[log.Url] = l
-		s.ids.logs++
-	}
-	return l, nil
-}
-
-func (s *Store) getOrCreateCertificate(c *x509.Certificate) (*models.Certificate, error) {
-	fp := fmt.Sprintf("%x", sha256.Sum256(c.Raw))
-
-	cert, ok := s.cache.certByFingerprint[fp]
-	if !ok {
-		cert = &models.Certificate{
-			ID:                s.ids.certs,
-			Sha256Fingerprint: fp,
-		}
-
-		// create an association between FQDNs in database and the newly created certificate
-		for _, d := range c.DNSNames {
-			domain, err := NewDomain(d)
-			if err != nil {
-				return nil, err
-			}
-
-			fqdn, err := s.getOrCreateFqdn(domain)
-			if err != nil {
-				return nil, err
-			}
-			ctof := models.CertificateToFqdn{
-				CertificateID: cert.ID,
-				FqdnID:        fqdn.ID,
-			}
-			s.inserts.certToFqdns = append(s.inserts.certToFqdns, &ctof)
-		}
-
-		s.inserts.certs = append(s.inserts.certs, cert)
-		s.cache.certByFingerprint[fp] = cert
-		s.ids.certs++
-	}
-	return cert, nil
-}
+var cacheNotFull = errors.New("skip query to the DB cause cache not full")
 
 type LogEntry struct {
 	Cert      *x509.Certificate
@@ -71,37 +18,43 @@ type LogEntry struct {
 	Log       ct.Log
 }
 
-func (s *Store) StoreLogEntry(muid string, entry LogEntry) error {
-	s.m.Lock()
-	defer s.m.Unlock()
-
-	s.ensureReady()
-
-	sid, ok := s.ms.SId(muid)
+func (s *Store) getLogFromCacheOrDB(log ct.Log) (*models.Log, error) {
+	//Check if it is in the cache
+	lI, ok := s.cache.logByUrl.Get(log.Url)
 	if !ok {
-		return NoActiveStageErr
+		if s.cache.logByUrl.Len() < s.cacheOpts.LogSize {
+			// to cache
+			s.influxService.StoreHit("cache-insert", "log", 1)
+			return nil, cacheNotFull
+		}
+		var log models.Log
+		if err := s.db.Model(&log).Where("url = ?", log.Url).First(); err != nil {
+			s.influxService.StoreHit("db-insert", "log", 1)
+			return nil, err
+		}
+		s.influxService.StoreHit("db-hit", "log", 1)
+		return &log, nil //It is in DB
 	}
+	res := lI.(*models.Log)
+	s.influxService.StoreHit("cache-hit", "log", 1)
+	return res, nil //It is in Cache
+}
 
-	l, err := s.getOrCreateLog(entry.Log)
-	if err != nil {
-		return err
+func (s *Store) getOrCreateLog(log ct.Log) (*models.Log, error) {
+	l, err := s.getLogFromCacheOrDB(log)
+	if err != nil { // It is not in cache or DB
+		l := &models.Log{
+			ID:          s.ids.logs,
+			Url:         log.Url,
+			Description: log.Description,
+		}
+		if err := s.db.Insert(l); err != nil {
+			return nil, errors.Wrap(err, "insert log")
+		}
+
+		s.cache.logByUrl.Add(log.Url, l)
+		s.ids.logs++
+		return l, nil
 	}
-
-	cert, err := s.getOrCreateCertificate(entry.Cert)
-	if err != nil {
-		return err
-	}
-
-	le := models.LogEntry{
-		LogID:         l.ID,
-		Index:         entry.Index,
-		CertificateID: cert.ID,
-		Timestamp:     entry.Ts,
-		StageID:       sid,
-		IsPrecert:     entry.IsPrecert,
-	}
-
-	s.inserts.logEntries = append(s.inserts.logEntries, &le)
-
-	return s.conditionalPostHooks()
+	return l, nil
 }

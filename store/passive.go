@@ -1,10 +1,11 @@
 package store
 
 import (
-	"github.com/aau-network-security/gollector/store/models"
-	"github.com/pkg/errors"
 	"strings"
 	"time"
+
+	"github.com/aau-network-security/gollector/store/models"
+	"github.com/pkg/errors"
 )
 
 type splunkEntryMap struct {
@@ -44,9 +45,10 @@ func newSplunkEntryMap() splunkEntryMap {
 }
 
 func (s *Store) getorCreateRecordType(rtype string) (*models.RecordType, error) {
-	rt, ok := s.cache.recordTypeByName[rtype]
+	rtI, ok := s.cache.recordTypeByName.Get(rtype)
+	//todo implement request to the DB here
 	if !ok {
-		rt = &models.RecordType{
+		rt := &models.RecordType{
 			ID:   s.ids.recordTypes,
 			Type: rtype,
 		}
@@ -54,9 +56,11 @@ func (s *Store) getorCreateRecordType(rtype string) (*models.RecordType, error) 
 			return nil, errors.Wrap(err, "insert record type")
 		}
 
-		s.cache.recordTypeByName[rtype] = rt
+		s.cache.recordTypeByName.Add(rtype, rt)
 		s.ids.recordTypes++
+		return rt, nil
 	}
+	rt := rtI.(*models.RecordType)
 	return rt, nil
 }
 
@@ -70,6 +74,7 @@ func (s *Store) StorePassiveEntry(muid string, query string, queryType string, t
 	queryType = strings.ToLower(queryType)
 
 	pe, ok := s.cache.passiveEntryByFqdn.get(query, queryType)
+	//todo implement request db
 	if !ok {
 		// create a new entry
 		sid, ok := s.ms.SId(muid)

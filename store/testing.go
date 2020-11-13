@@ -1,10 +1,11 @@
 package store
 
 import (
+	"time"
+
 	"github.com/aau-network-security/gollector/testing"
 	"github.com/jinzhu/gorm"
 	"github.com/pkg/errors"
-	"time"
 )
 
 func OpenStore(conf Config) (*Store, *gorm.DB, string, error) {
@@ -18,7 +19,15 @@ func OpenStore(conf Config) (*Store, *gorm.DB, string, error) {
 	}
 
 	opts := Opts{
-		BatchSize:       10,
+		BatchSize: 10,
+		CacheOpts: CacheOpts{
+			LogSize:   3,
+			TLDSize:   3,
+			PSuffSize: 3,
+			ApexSize:  5,
+			FQDNSize:  5,
+			CertSize:  5,
+		},
 		AllowedInterval: 10 * time.Millisecond,
 	}
 

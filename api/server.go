@@ -3,6 +3,9 @@ package api
 import (
 	"context"
 	"errors"
+	"net"
+	"time"
+
 	prt "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/app"
 	"github.com/aau-network-security/gollector/store"
@@ -12,8 +15,6 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
-	"net"
-	"time"
 )
 
 var (

@@ -5,14 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"time"
+
+	prt "github.com/aau-network-security/gollector/api/proto"
 	ct "github.com/google/certificate-transparency-go"
 	"github.com/google/certificate-transparency-go/client"
 	"github.com/google/certificate-transparency-go/jsonclient"
 	"github.com/google/certificate-transparency-go/scanner"
 	errors2 "github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
-	"net/http"
-	"time"
 )
 
 var (
@@ -102,6 +104,27 @@ func IndexByDate(ctx context.Context, l *Log, t time.Time) (int64, int64, error)
 	}
 
 	return start, int64(sth.TreeSize), nil
+}
+
+func IndexByLastEntryDB(ctx context.Context, l *Log, cc prt.CtApiClient) (int64, int64, error) {
+	lc, err := l.GetClient()
+	if err != nil {
+		return 0, 0, errors2.Wrap(err, "get log client")
+	}
+
+	sth, err := lc.GetSTH(ctx)
+	if err != nil {
+		return 0, 0, errors2.Wrap(err, "get CT STH")
+	}
+
+	index, err := cc.GetLastDBEntry(ctx, &prt.KnownLogURL{
+		LogURL: l.Url,
+	})
+	if err != nil {
+		return 0, 0, errors2.Wrap(err, "get Last LogEntry DB")
+	}
+
+	return index.Start, int64(sth.TreeSize), nil
 }
 
 type Log struct {
@@ -204,6 +227,7 @@ func Scan(ctx context.Context, l *Log, entryFn EntryFunc, opts Options) (int64, 
 		return 0, err
 	}
 
+	//todo continuos was false
 	scannerOpts := scanner.ScannerOptions{
 		FetcherOptions: scanner.FetcherOptions{
 			BatchSize:     1000,

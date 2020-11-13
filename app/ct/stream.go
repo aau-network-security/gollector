@@ -27,8 +27,13 @@ func (s *stream) CloseSend() error {
 	return s.str.CloseSend()
 }
 
-func newStream(ctx context.Context, cc *grpc.ClientConn) (api.Stream, error) {
-	str, err := prt.NewCtApiClient(cc).StoreLogEntries(ctx)
+func newCTApiClient(cc *grpc.ClientConn) prt.CtApiClient{
+	ctApiClient:= prt.NewCtApiClient(cc)
+	return ctApiClient
+}
+
+func newStream(ctx context.Context, cc prt.CtApiClient) (api.Stream, error) {
+	str, err := cc.StoreLogEntries(ctx)
 	if err != nil {
 		return nil, err
 	}

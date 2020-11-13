@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+
 	api "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/app"
 	"github.com/rs/zerolog/log"

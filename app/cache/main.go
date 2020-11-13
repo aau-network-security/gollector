@@ -3,14 +3,16 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net"
+	_ "net/http/pprof"
+	"os"
+	"time"
+
 	"github.com/aau-network-security/gollector/api"
 	"github.com/aau-network-security/gollector/app"
 	"github.com/aau-network-security/gollector/store"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"net"
-	"os"
-	"time"
 )
 
 func main() {
@@ -30,7 +32,15 @@ func main() {
 
 	opts := store.Opts{
 		AllowedInterval: 36 * time.Hour,
-		BatchSize:       50000,
+		BatchSize:       conf.StoreOpts.BatchSize,
+		CacheOpts: store.CacheOpts{
+			LogSize:   conf.StoreOpts.CacheSize.Log,
+			TLDSize:   conf.StoreOpts.CacheSize.TLD,
+			PSuffSize: conf.StoreOpts.CacheSize.PSuffix,
+			ApexSize:  conf.StoreOpts.CacheSize.Apex,
+			FQDNSize:  conf.StoreOpts.CacheSize.Fqdn,
+			CertSize:  conf.StoreOpts.CacheSize.Cert,
+		},
 	}
 
 	start := time.Now()

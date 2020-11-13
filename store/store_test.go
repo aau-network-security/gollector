@@ -4,14 +4,21 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"fmt"
-	"github.com/aau-network-security/gollector/store/models"
-	tst "github.com/aau-network-security/gollector/testing"
-	"github.com/google/certificate-transparency-go/x509"
-	"github.com/google/certificate-transparency-go/x509/pkix"
+	testing2 "github.com/aau-network-security/gollector/testing"
+	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
+	influxapi "github.com/influxdata/influxdb-client-go/v2/api"
+	"github.com/influxdata/influxdb-client-go/v2/api/write"
 	"math/big"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/aau-network-security/gollector/collectors/ct"
+
+	"github.com/aau-network-security/gollector/store/models"
+	tst "github.com/aau-network-security/gollector/testing"
+	"github.com/google/certificate-transparency-go/x509"
+	"github.com/google/certificate-transparency-go/x509/pkix"
 )
 
 func selfSignedCert(notBefore, notAfter time.Time, sans []string) ([]byte, error) {
@@ -240,7 +247,15 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 
 	// check initialization of new store
 	opts := Opts{
-		BatchSize:       10,
+		BatchSize: 10,
+		CacheOpts: CacheOpts{
+			LogSize:   3,
+			TLDSize:   3,
+			PSuffSize: 3,
+			ApexSize:  5,
+			FQDNSize:  5,
+			CertSize:  5,
+		},
 		AllowedInterval: 10 * time.Millisecond,
 	}
 
@@ -256,17 +271,17 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 	}{
 		{
 			"tldByName",
-			len(s.cache.tldByName),
+			s.cache.tldByName.Len(),
 			2,
 		},
 		{
 			"apexByName",
-			len(s.cache.apexByName),
+			s.cache.apexByName.Len(),
 			2,
 		},
 		{
 			"fqdnByName",
-			len(s.cache.fqdnByName),
+			s.cache.fqdnByName.Len(),
 			3,
 		},
 		{
@@ -276,7 +291,7 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 		},
 		{
 			"recordTypeByName",
-			len(s.cache.recordTypeByName),
+			s.cache.recordTypeByName.Len(),
 			2,
 		},
 	}
@@ -289,11 +304,12 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 
 func TestInit(t *testing.T) {
 	conf := Config{
-		User:     "postgres",
-		Password: "postgres",
-		DBName:   "domains",
-		Host:     "localhost",
-		Port:     10001,
+		User:       "postgres",
+		Password:   "postgres",
+		DBName:     "domains",
+		Host:       "localhost",
+		Port:       5432,
+		InfluxOpts: InfluxOpts{Enabled: false},
 	}
 
 	g, err := conf.Open()
@@ -312,7 +328,15 @@ func TestInit(t *testing.T) {
 	}
 
 	opts := Opts{
-		BatchSize:       10,
+		BatchSize: 10,
+		CacheOpts: CacheOpts{
+			LogSize:   3,
+			TLDSize:   3,
+			PSuffSize: 3,
+			ApexSize:  5,
+			FQDNSize:  5,
+			CertSize:  5,
+		},
 		AllowedInterval: 10 * time.Millisecond,
 	}
 
@@ -325,4 +349,226 @@ func TestInit(t *testing.T) {
 	if s.ids.apexes != 11 {
 		t.Fatalf("expected next id to be %d, but got %d", 11, s.ids.apexes)
 	}
+}
+
+func TestHashMap(t *testing.T) {
+	conf := Config{
+		User:     "postgres",
+		Password: "postgres",
+		DBName:   "domains",
+		Host:     "localhost",
+		Port:     10001,
+	}
+
+	// check initialization of new store
+	opts := Opts{
+		BatchSize: 10,
+		CacheOpts: CacheOpts{
+			LogSize:   1000,
+			TLDSize:   1,
+			PSuffSize: 5000,
+			ApexSize:  20000,
+			FQDNSize:  20000,
+			CertSize:  20,
+		},
+		AllowedInterval: 10 * time.Millisecond,
+	}
+
+	s, err := NewStore(conf, opts)
+	if err != nil {
+		t.Fatalf("failed to create store: %s", err)
+	}
+	s.Ready.Wait()
+
+}
+
+func TestDebug(t *testing.T) {
+
+	conf := Config{
+		User:     "postgres",
+		Password: "postgres",
+		DBName:   "domains",
+		Host:     "localhost",
+		Port:     10001,
+	}
+
+	s, g, muid, err := OpenStore(conf)
+
+	if err != nil {
+		t.Fatalf("failed to create store: %s", err)
+	}
+
+	sanLists := [][]string{
+		{
+			"www.a.com",
+			"www.b.org",
+		},
+		{
+			"www.b.org",
+			"www.c.com",
+			"test.c.com",
+		},
+	}
+	for _, sanList := range sanLists {
+		now := time.Now()
+		raw, err := selfSignedCert(now, now, sanList)
+		if err != nil {
+			t.Fatalf("unexpected error while creating self-signed certificate: %s", err)
+		}
+
+		cert, err := x509.ParseCertificate(raw)
+		if err != nil {
+			t.Fatalf("unexpected error while parsing certificate: %s", err)
+		}
+
+		le := LogEntry{
+			Cert:  cert,
+			Index: 1,
+			Log: ct.Log{
+				Description: "test description",
+				Url:         "www://localhost:443/ct",
+			},
+			Ts: now,
+		}
+
+		if err := s.MapEntry(muid, le); err != nil {
+			t.Fatalf("unexpected error while storing log entry: %s", err)
+		}
+	}
+
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("unexpected error while running post hooks: %s", err)
+	}
+
+	sanLists = [][]string{
+		{
+			"wWw.a.Com",
+			"www.b.org",
+		},
+		{
+			"www.b.Org",
+			"wWw.C.com",
+			"teSt.c.com",
+		},
+	}
+	for _, sanList := range sanLists {
+		now := time.Now()
+		raw, err := selfSignedCert(now, now, sanList)
+		if err != nil {
+			t.Fatalf("unexpected error while creating self-signed certificate: %s", err)
+		}
+
+		cert, err := x509.ParseCertificate(raw)
+		if err != nil {
+			t.Fatalf("unexpected error while parsing certificate: %s", err)
+		}
+
+		le := LogEntry{
+			Cert:  cert,
+			Index: 1,
+			Log: ct.Log{
+				Description: "test description",
+				Url:         "www://localhost:443/ct",
+			},
+			Ts: now,
+		}
+
+		if err := s.MapEntry(muid, le); err != nil {
+			t.Fatalf("unexpected error while storing log entry: %s", err)
+		}
+	}
+
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("unexpected error while running post hooks: %s", err)
+	}
+
+	_ = g
+}
+
+func TestResetDB(t *testing.T) {
+	conf := Config{
+		User:     "postgres",
+		Password: "postgres",
+		DBName:   "domains",
+		Host:     "localhost",
+		Port:     10001,
+	}
+
+	g, err := conf.Open()
+	if err != nil {
+		t.Fatalf("failed to open gorm database: %s", err)
+	}
+
+	if err := tst.ResetDb(g); err != nil {
+		t.Fatalf("failed to reset database: %s", err)
+	}
+}
+
+type testInfluxdbClient struct {
+	influxdb2.Client
+}
+
+func (d testInfluxdbClient) Close() {}
+
+type testWriteApi struct {
+	influxapi.WriteAPI
+}
+
+func (d testWriteApi) WritePoint(point *write.Point) {
+}
+
+func TestInfluxDb(t *testing.T) {
+	testing2.SkipCI(t)
+
+	conf := Config{
+		User:     "postgres",
+		Password: "postgres",
+		DBName:   "domains",
+		Host:     "localhost",
+		Port:     5432,
+	}
+
+	s, _, muid, err := OpenStore(conf)
+	if err != nil {
+		t.Fatalf("failed to open store: %s", err)
+	}
+
+	client := testInfluxdbClient{}
+	api := testWriteApi{}
+	ifs := NewInfluxServiceWithClient(client, api, 1)
+
+	s.influxService = ifs
+
+	for _, domain := range []string{"www.domain1.com", "test.domain1.com"} {
+		now := time.Now()
+		raw, err := selfSignedCert(now, now, []string{domain})
+		if err != nil {
+			t.Fatalf("unexpected error while creating self-signed certificate: %s", err)
+		}
+
+		cert, err := x509.ParseCertificate(raw)
+		if err != nil {
+			t.Fatalf("unexpected error while parsing certificate: %s", err)
+		}
+
+		le := LogEntry{
+			Cert:  cert,
+			Index: 1,
+			Log: ct.Log{
+				Description: "test description",
+				Url:         "www://localhost:443/ct",
+			},
+			Ts: now,
+		}
+
+		if err := s.MapEntry(muid, le); err != nil {
+			t.Fatalf("unexpected error while storing log entry: %s", err)
+		}
+
+		s.RunPostHooks()
+	}
+
+	time.Sleep(1)
+
+	ifs.Close()
 }

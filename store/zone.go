@@ -1,8 +1,9 @@
 package store
 
 import (
-	"github.com/aau-network-security/gollector/store/models"
 	"time"
+
+	"github.com/aau-network-security/gollector/store/models"
 )
 
 func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.ZonefileEntry, error) {
@@ -26,7 +27,8 @@ func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.Z
 		return nil, err
 	}
 
-	existingZE, ok := s.cache.zoneEntriesByApexName[apex.Apex]
+	existingZEI, ok := s.cache.zoneEntriesByApexName.Get(apex.Apex)
+	//todo implement request in the db here
 	if !ok {
 		// non-active domain, create a new zone entry
 		newZoneEntry := &models.ZonefileEntry{
@@ -38,7 +40,7 @@ func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.Z
 			StageID:   sid,
 		}
 
-		s.cache.zoneEntriesByApexName[apex.Apex] = newZoneEntry
+		s.cache.zoneEntriesByApexName.Add(apex.Apex, newZoneEntry)
 		s.inserts.zoneEntries[newZoneEntry.ID] = newZoneEntry
 		s.ids.zoneEntries++
 
@@ -48,7 +50,7 @@ func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.Z
 
 		return newZoneEntry, nil
 	}
-
+	existingZE := existingZEI.(*models.ZonefileEntry)
 	limit := existingZE.LastSeen.Add(s.allowedInterval)
 	if t.After(limit) {
 		// detected re-registration, set old entry inactive and create new
@@ -65,7 +67,7 @@ func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.Z
 			StageID:   sid,
 		}
 
-		s.cache.zoneEntriesByApexName[apex.Apex] = newZE
+		s.cache.zoneEntriesByApexName.Add(apex.Apex, newZE)
 		s.inserts.zoneEntries[newZE.ID] = newZE
 		s.ids.zoneEntries++
 

@@ -5,6 +5,7 @@
 .env
 _data
 .data
+store/out
 
 ### Go ###
 # Binaries for programs and plugins
@@ -24,5 +25,6 @@ _data
 # vendor/
 
 ### Go Patch ###
+output/
 /vendor/
 /Godeps/

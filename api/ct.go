@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	api "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/app"
 	"github.com/aau-network-security/gollector/collectors/ct"
@@ -73,9 +74,10 @@ func (s *Server) StoreLogEntries(str api.CtApi_StoreLogEntriesServer) error {
 					Ts:        timeFromUnix(le.Timestamp),
 					Log:       l,
 				}
-				if err := s.Store.StoreLogEntry(muid, entry); err != nil {
+
+				if err := s.Store.MapEntry(muid, entry); err != nil {
 					s.Log.Log(err, app.LogOptions{
-						Msg: "failed to store log entry",
+						Msg: "failed to map log entry with Cache",
 						Tags: map[string]string{
 							"log": le.Log.Url,
 						},
@@ -104,4 +106,12 @@ func (s *Server) StoreLogEntries(str api.CtApi_StoreLogEntriesServer) error {
 	wg.Wait()
 
 	return nil
+}
+
+func (s *Server) GetLastDBEntry(ctx context.Context, url *api.KnownLogURL) (*api.Index, error) {
+	logEntryIndex, err := s.Store.GetLastIndexLog(url.LogURL)
+	if err != nil {
+		return nil, err
+	}
+	return &api.Index{Start: logEntryIndex}, nil
 }

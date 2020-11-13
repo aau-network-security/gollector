@@ -88,7 +88,7 @@ func TestIndexByDate(t *testing.T) {
 				Url: s.URL,
 			}
 
-			startIndex, endIndex, err := IndexByDate(ctx, l, test.time)
+			startIndex, endIndex, err := IndexByDate(ctx, &l, test.time)
 			if (err == nil) == test.expectErr {
 				t.Fatalf("expected error: %t, but got: %t", test.expectErr, err == nil)
 			}

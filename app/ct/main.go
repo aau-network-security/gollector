@@ -4,6 +4,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"sync"
+	"time"
+
 	"github.com/aau-network-security/gollector/api"
 	prt "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/collectors/ct"
@@ -14,8 +17,6 @@ import (
 	"github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
 	"google.golang.org/grpc/metadata"
-	"sync"
-	"time"
 )
 
 var (
@@ -47,10 +48,10 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
-	t, err := time.Parse("2006-01-02", conf.Time)
-	if err != nil {
-		log.Fatal().Msgf("failed to parse time from config: %s", err)
-	}
+	//t, err := time.Parse("2006-01-02", conf.Time)
+	//if err != nil {
+	//	log.Fatal().Msgf("failed to parse time from config: %s", err)
+	//}
 
 	cc, err := conf.ApiAddr.Dial()
 	if err != nil {
@@ -58,6 +59,7 @@ func main() {
 	}
 
 	mClient := prt.NewMeasurementApiClient(cc)
+	ctApiClient := newCTApiClient(cc)
 
 	meta := prt.Meta{
 		Description: conf.Meta.Description,
@@ -81,7 +83,7 @@ func main() {
 	})
 	ctx = metadata.NewOutgoingContext(ctx, md)
 
-	str, err := newStream(ctx, cc)
+	str, err := newStream(ctx, ctApiClient)
 	if err != nil {
 		log.Fatal().Msgf("failed to create log entry stream: %s", err)
 	}
@@ -117,6 +119,8 @@ func main() {
 	m := sync.Mutex{}
 	progress := 0
 
+	startTime := time.Now()
+
 	for _, l := range logs {
 		go func(l ct.Log) {
 			var count int64
@@ -132,10 +136,18 @@ func main() {
 				wg.Done()
 			}()
 
-			start, end, err := ct.IndexByDate(ctx, &l, t)
+			//start, end, err := ct.IndexByDate(ctx, &l, t)
+			//if err != nil {
+			//	return
+			//}
+
+			start, end, err := ct.IndexByLastEntryDB(ctx, &l, ctApiClient)
 			if err != nil {
 				return
 			}
+			log.Info().
+				Str("log", l.Name()).
+				Msgf("start index %d", start)
 
 			bar := p.AddBar(end-start,
 				mpb.PrependDecorators(
@@ -186,9 +198,10 @@ func main() {
 
 			opts := ct.Options{
 				WorkerCount: conf.WorkerCount,
-				StartIndex:  start,
-				//EndIndex:    end,
-				EndIndex: start + 100,
+				StartIndex:  0,
+				EndIndex:    end,
+				//EndIndex: 1000,
+				//EndIndex: 10000,
 			}
 
 			count, err = ct.Scan(ctx, &l, entryFn, opts)
@@ -198,7 +211,6 @@ func main() {
 		}(l)
 	}
 	p.Wait()
-
 	if err := bs.CloseSend(ctx); err != nil {
 		log.Fatal().Msgf("error while closing connection to server: %s", err)
 	}

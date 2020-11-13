@@ -1,10 +1,11 @@
 package store
 
 import (
-	"github.com/aau-network-security/gollector/store/models"
-	tst "github.com/aau-network-security/gollector/testing"
 	"testing"
 	"time"
+
+	"github.com/aau-network-security/gollector/store/models"
+	tst "github.com/aau-network-security/gollector/testing"
 )
 
 func TestMeasurement(t *testing.T) {
@@ -27,7 +28,15 @@ func TestMeasurement(t *testing.T) {
 	}
 
 	opts := Opts{
-		BatchSize:       10,
+		BatchSize: 10,
+		CacheOpts: CacheOpts{
+			LogSize:   3,
+			TLDSize:   3,
+			PSuffSize: 3,
+			ApexSize:  5,
+			FQDNSize:  5,
+			CertSize:  5,
+		},
 		AllowedInterval: 10 * time.Millisecond,
 	}
 

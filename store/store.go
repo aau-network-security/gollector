@@ -2,19 +2,31 @@ package store
 
 import (
 	"fmt"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/go-pg/pg"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/jinzhu/gorm"
 	_ "github.com/lib/pq"
 	errs "github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
-	"sync"
-	"time"
 )
 
 var (
+	DefaultCacheOpts = CacheOpts{
+		LogSize:   1000,
+		TLDSize:   2000,
+		PSuffSize: 4000,
+		ApexSize:  10000,
+		FQDNSize:  20000,
+		CertSize:  50000,
+	}
 	DefaultOpts = Opts{
 		BatchSize:       20000,
+		CacheOpts:       DefaultCacheOpts,
 		AllowedInterval: 36 * time.Hour,
 	}
 )
@@ -36,12 +48,13 @@ func (err InvalidDomainErr) Error() string {
 }
 
 type Config struct {
-	User     string `yaml:"user"`
-	Password string `yaml:"password"`
-	Host     string `yaml:"host"`
-	Port     int    `yaml:"port"`
-	DBName   string `yaml:"dbname"`
-	Debug    bool   `yaml:"debug"`
+	User       string     `yaml:"user"`
+	Password   string     `yaml:"password"`
+	Host       string     `yaml:"host"`
+	Port       int        `yaml:"port"`
+	DBName     string     `yaml:"dbname"`
+	Debug      bool       `yaml:"debug"`
+	InfluxOpts InfluxOpts `yaml:"influxdb"`
 
 	d *gorm.DB
 }
@@ -60,16 +73,20 @@ func (c *Config) DSN() string {
 }
 
 type ModelSet struct {
-	zoneEntries    map[uint]*models.ZonefileEntry
-	fqdns          []*models.Fqdn
-	fqdnsAnon      []*models.FqdnAnon
-	apexes         map[uint]*models.Apex
-	apexesAnon     map[uint]*models.ApexAnon
-	certs          []*models.Certificate
-	logEntries     []*models.LogEntry
-	certToFqdns    []*models.CertificateToFqdn
-	passiveEntries []*models.PassiveEntry
-	entradaEntries []*models.EntradaEntry
+	zoneEntries      map[uint]*models.ZonefileEntry
+	fqdns            []*models.Fqdn
+	fqdnsAnon        []*models.FqdnAnon
+	apexes           map[uint]*models.Apex
+	apexesAnon       map[uint]*models.ApexAnon
+	certs            []*models.Certificate
+	logEntries       []*models.LogEntry
+	certToFqdns      []*models.CertificateToFqdn
+	passiveEntries   []*models.PassiveEntry
+	entradaEntries   []*models.EntradaEntry
+	tld              []*models.Tld
+	tldAnon          []*models.TldAnon
+	publicSuffix     []*models.PublicSuffix
+	publicSuffixAnon []*models.PublicSuffixAnon
 }
 
 func (ms *ModelSet) Len() int {
@@ -111,16 +128,20 @@ func (ms *ModelSet) apexAnonList() []*models.ApexAnon {
 
 func NewModelSet() ModelSet {
 	return ModelSet{
-		zoneEntries:    make(map[uint]*models.ZonefileEntry),
-		apexes:         make(map[uint]*models.Apex),
-		apexesAnon:     make(map[uint]*models.ApexAnon),
-		fqdns:          []*models.Fqdn{},
-		fqdnsAnon:      []*models.FqdnAnon{},
-		certToFqdns:    []*models.CertificateToFqdn{},
-		certs:          []*models.Certificate{},
-		logEntries:     []*models.LogEntry{},
-		passiveEntries: []*models.PassiveEntry{},
-		entradaEntries: []*models.EntradaEntry{},
+		zoneEntries:      make(map[uint]*models.ZonefileEntry),
+		apexes:           make(map[uint]*models.Apex),
+		apexesAnon:       make(map[uint]*models.ApexAnon),
+		fqdns:            []*models.Fqdn{},
+		fqdnsAnon:        []*models.FqdnAnon{},
+		certToFqdns:      []*models.CertificateToFqdn{},
+		certs:            []*models.Certificate{},
+		logEntries:       []*models.LogEntry{},
+		passiveEntries:   []*models.PassiveEntry{},
+		entradaEntries:   []*models.EntradaEntry{},
+		tld:              []*models.Tld{},
+		tldAnon:          []*models.TldAnon{},
+		publicSuffix:     []*models.PublicSuffix{},
+		publicSuffixAnon: []*models.PublicSuffixAnon{},
 	}
 }
 
@@ -137,62 +158,72 @@ type Ids struct {
 	fqdns        uint
 	fqdnsAnon    uint
 	certs        uint
+	certsToFqdn  uint
 	logs         uint
 	recordTypes  uint
 }
 
 type cache struct {
-	tldByName              map[string]*models.Tld
-	tldAnonByName          map[string]*models.TldAnon
-	publicSuffixByName     map[string]*models.PublicSuffix
-	publicSuffixAnonByName map[string]*models.PublicSuffixAnon
-	apexByName             map[string]*models.Apex
-	apexByNameAnon         map[string]*models.ApexAnon
-	apexById               map[uint]*models.Apex
-	fqdnByName             map[string]*models.Fqdn
-	fqdnByNameAnon         map[string]*models.FqdnAnon
-	zoneEntriesByApexName  map[string]*models.ZonefileEntry
-	certByFingerprint      map[string]*models.Certificate
-	logByUrl               map[string]*models.Log
-	recordTypeByName       map[string]*models.RecordType
+	tldByName              *lru.Cache //map[string]*models.Tld
+	tldAnonByName          *lru.Cache //map[string]*models.TldAnon
+	publicSuffixByName     *lru.Cache //map[string]*models.PublicSuffix
+	publicSuffixAnonByName *lru.Cache //map[string]*models.PublicSuffixAnon
+	apexByName             *lru.Cache //map[string]*models.Apex
+	apexByNameAnon         *lru.Cache //map[string]*models.ApexAnon
+	apexById               *lru.Cache //map[uint]*models.Apex
+	fqdnByName             *lru.Cache //map[string]*models.Fqdn
+	fqdnByNameAnon         *lru.Cache //map[string]*models.FqdnAnon
+	zoneEntriesByApexName  *lru.Cache //map[string]*models.ZonefileEntry
+	certByFingerprint      *lru.Cache //map[string]*models.Certificate
+	logByUrl               *lru.Cache //map[string]*models.Log
+	recordTypeByName       *lru.Cache //map[string]*models.RecordType
 	passiveEntryByFqdn     splunkEntryMap
-	entradaEntryByFqdn     map[string]*models.EntradaEntry
+	entradaEntryByFqdn     *lru.Cache //map[string]*models.EntradaEntry
 }
 
 // prints the current status to standard output
 func (c *cache) describe() {
-	log.Debug().Msgf("tlds:            %d", len(c.tldByName))
-	log.Debug().Msgf("tlds (anon):     %d", len(c.tldAnonByName))
-	log.Debug().Msgf("suffixes:        %d", len(c.publicSuffixByName))
-	log.Debug().Msgf("suffixes (anon): %d", len(c.publicSuffixAnonByName))
-	log.Debug().Msgf("apexes:          %d", len(c.apexByName))
-	log.Debug().Msgf("apexes (anon):   %d", len(c.apexByNameAnon))
-	log.Debug().Msgf("fqdns:           %d", len(c.fqdnByName))
-	log.Debug().Msgf("fqdns (anon):    %d", len(c.fqdnByNameAnon))
-	log.Debug().Msgf("zone entries:    %d", len(c.zoneEntriesByApexName))
-	log.Debug().Msgf("certificates:    %d", len(c.certByFingerprint))
-	log.Debug().Msgf("logs:            %d", len(c.logByUrl))
-	log.Debug().Msgf("record types:    %d", len(c.recordTypeByName))
+	log.Debug().Msgf("tlds:            %d", c.tldByName.Len())
+	log.Debug().Msgf("tlds (anon):     %d", c.tldAnonByName.Len())
+	log.Debug().Msgf("suffixes:        %d", c.publicSuffixByName.Len())
+	log.Debug().Msgf("suffixes (anon): %d", c.publicSuffixAnonByName.Len())
+	log.Debug().Msgf("apexes:          %d", c.apexByName.Len())
+	log.Debug().Msgf("apexes (anon):   %d", c.apexByNameAnon.Len())
+	log.Debug().Msgf("fqdns:           %d", c.fqdnByName.Len())
+	log.Debug().Msgf("fqdns (anon):    %d", c.fqdnByNameAnon.Len())
+	log.Debug().Msgf("zone entries:    %d", c.zoneEntriesByApexName.Len())
+	log.Debug().Msgf("certificates:    %d", c.certByFingerprint.Len())
+	log.Debug().Msgf("logs:            %d", c.logByUrl.Len())
+	log.Debug().Msgf("record types:    %d", c.recordTypeByName.Len())
 	log.Debug().Msgf("passive entries: %d", c.passiveEntryByFqdn.len())
-	log.Debug().Msgf("entrada entries: %d", len(c.entradaEntryByFqdn))
+	//log.Debug().Msgf("entrada entries: %d", c.entradaEntryByFqdn.Len())
 }
 
-func newCache() cache {
+func newLRUCache(cacheSize int) *lru.Cache {
+	c, err := lru.New(cacheSize)
+	if err != nil {
+		log.Error().Msg("Error Creating LRU Cache")
+		return &lru.Cache{}
+	}
+	return c
+}
+
+func newCache(opts CacheOpts) cache {
 	return cache{
-		tldByName:              make(map[string]*models.Tld),
-		tldAnonByName:          make(map[string]*models.TldAnon),
-		publicSuffixByName:     make(map[string]*models.PublicSuffix),
-		publicSuffixAnonByName: make(map[string]*models.PublicSuffixAnon),
-		apexByName:             make(map[string]*models.Apex),
-		apexByNameAnon:         make(map[string]*models.ApexAnon),
-		apexById:               make(map[uint]*models.Apex),
-		fqdnByName:             make(map[string]*models.Fqdn),
-		fqdnByNameAnon:         make(map[string]*models.FqdnAnon),
-		zoneEntriesByApexName:  make(map[string]*models.ZonefileEntry),
-		logByUrl:               make(map[string]*models.Log),
-		certByFingerprint:      make(map[string]*models.Certificate),
+		tldByName:              newLRUCache(opts.TLDSize),   //make(map[string]*models.Tld)
+		tldAnonByName:          newLRUCache(opts.TLDSize),   //make(map[string]*models.TldAnon),
+		publicSuffixByName:     newLRUCache(opts.PSuffSize), //make(map[string]*models.PublicSuffix),
+		publicSuffixAnonByName: newLRUCache(opts.PSuffSize), //make(map[string]*models.PublicSuffixAnon),
+		apexByName:             newLRUCache(opts.ApexSize),  //make(map[string]*models.Apex),
+		apexByNameAnon:         newLRUCache(opts.ApexSize),  //make(map[string]*models.ApexAnon),
+		apexById:               newLRUCache(opts.ApexSize),  //make(map[uint]*models.Apex),
+		fqdnByName:             newLRUCache(opts.FQDNSize),  //make(map[string]*models.Fqdn),
+		fqdnByNameAnon:         newLRUCache(opts.FQDNSize),  //make(map[string]*models.FqdnAnon),
+		zoneEntriesByApexName:  newLRUCache(opts.ApexSize),  //make(map[string]*models.ZonefileEntry),
+		logByUrl:               newLRUCache(opts.LogSize),   //make(map[string]*models.Log),
+		certByFingerprint:      newLRUCache(opts.CertSize),  //make(map[string]*models.Certificate),
 		passiveEntryByFqdn:     newSplunkEntryMap(),
-		recordTypeByName:       make(map[string]*models.RecordType),
+		recordTypeByName:       newLRUCache(opts.TLDSize), //make(map[string]*models.RecordType),
 	}
 }
 
@@ -225,6 +256,7 @@ type Store struct {
 	conf            Config
 	db              *pg.DB
 	cache           cache
+	cacheOpts       CacheOpts
 	m               *sync.Mutex
 	ids             Ids
 	allowedInterval time.Duration
@@ -235,6 +267,26 @@ type Store struct {
 	ms              measurementState
 	anonymizer      *Anonymizer
 	Ready           *Ready
+	batchEntities   BatchEntities // datastructure with all entities in batch
+	influxService   InfluxService
+}
+
+type counter struct {
+	tldCacheHit  int
+	tldDBHit     int
+	tldNew       int
+	psCacheHit   int
+	psDBHit      int
+	psNew        int
+	apexCacheHit int
+	apexDBHit    int
+	apexNew      int
+	fqdnCacheHit int
+	fqdnDBHit    int
+	fqdnNew      int
+	certCacheHit int
+	certDBHit    int
+	certNew      int
 }
 
 func (s *Store) WithAnonymizer(a *Anonymizer) *Store {
@@ -264,10 +316,31 @@ func (s *Store) runPostHooks() error {
 }
 
 func (s *Store) conditionalPostHooks() error {
-	if s.updates.Len()+s.inserts.Len() >= s.batchSize {
+	if len(s.batchEntities.certByFingerprint) >= s.batchSize {
+		log.Debug().Msgf("batch is full (%d), writing to database..", len(s.batchEntities.certByFingerprint))
 		return s.runPostHooks()
 	}
 	return nil
+}
+
+func (s *Store) GetLastIndexLog(knowLogURL string) (int64, error) {
+	var knowLog models.Log
+	if err := s.db.Model(&knowLog).Where("url = ?", knowLogURL).First(); err != nil {
+		if !strings.Contains(err.Error(), "no rows in result set") {
+			return 0, err
+		}
+		return 0, nil //know log in not present in DB (it's new)
+	}
+
+	var lastLogEntry models.LogEntry
+	if err := s.db.Model(&lastLogEntry).Where("log_id = ?", knowLog.ID).Last(); err != nil {
+		if !strings.Contains(err.Error(), "no rows in result set") {
+			return 0, err
+		}
+		return 0, nil
+	}
+
+	return int64(lastLogEntry.Index + 1), nil
 }
 
 // use Gorm's auto migrate functionality
@@ -305,13 +378,14 @@ func (s *Store) migrate() error {
 	return nil
 }
 
+//todo implement a limit
 func (s *Store) init() error {
 	var tlds []*models.Tld
 	if err := s.db.Model(&tlds).Order("id ASC").Select(); err != nil {
 		return err
 	}
 	for _, tld := range tlds {
-		s.cache.tldByName[tld.Tld] = tld
+		s.cache.tldByName.Add(tld.Tld, tld)
 	}
 
 	var tldsAnon []*models.TldAnon
@@ -319,7 +393,7 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, tld := range tldsAnon {
-		s.cache.tldAnonByName[tld.Tld.Tld] = tld
+		s.cache.tldAnonByName.Add(tld.Tld.Tld, tld)
 	}
 
 	var suffixes []*models.PublicSuffix
@@ -327,7 +401,7 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, suffix := range suffixes {
-		s.cache.publicSuffixByName[suffix.PublicSuffix] = suffix
+		s.cache.publicSuffixByName.Add(suffix.PublicSuffix, suffix)
 	}
 
 	var suffixesAnon []*models.PublicSuffixAnon
@@ -335,7 +409,7 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, suffix := range suffixesAnon {
-		s.cache.publicSuffixAnonByName[suffix.PublicSuffix.PublicSuffix] = suffix
+		s.cache.publicSuffixAnonByName.Add(suffix.PublicSuffix.PublicSuffix, suffix)
 	}
 
 	var apexes []*models.Apex
@@ -343,8 +417,8 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, apex := range apexes {
-		s.cache.apexByName[apex.Apex] = apex
-		s.cache.apexById[apex.ID] = apex
+		s.cache.apexByName.Add(apex.Apex, apex)
+		s.cache.apexById.Add(apex.ID, apex)
 	}
 
 	var apexesAnon []*models.ApexAnon
@@ -352,7 +426,7 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, apex := range apexesAnon {
-		s.cache.apexByNameAnon[apex.Apex.Apex] = apex
+		s.cache.apexByNameAnon.Add(apex.Apex.Apex, apex)
 	}
 
 	var fqdns []*models.Fqdn
@@ -361,7 +435,7 @@ func (s *Store) init() error {
 	}
 	fqdnsById := make(map[uint]*models.Fqdn)
 	for _, fqdn := range fqdns {
-		s.cache.fqdnByName[fqdn.Fqdn] = fqdn
+		s.cache.fqdnByName.Add(fqdn.Fqdn, fqdn)
 		fqdnsById[fqdn.ID] = fqdn
 	}
 
@@ -370,7 +444,7 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, fqdn := range fqdnsAnon {
-		s.cache.fqdnByNameAnon[fqdn.Fqdn.Fqdn] = fqdn
+		s.cache.fqdnByNameAnon.Add(fqdn.Fqdn.Fqdn, fqdn)
 	}
 
 	var entries []*models.ZonefileEntry
@@ -378,8 +452,9 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, entry := range entries {
-		apex := s.cache.apexById[entry.ApexID]
-		s.cache.zoneEntriesByApexName[apex.Apex] = entry
+		apexI, _ := s.cache.apexById.Get(entry.ApexID)
+		apex := apexI.(models.Apex)
+		s.cache.zoneEntriesByApexName.Add(apex.Apex, entry)
 	}
 
 	var logs []*models.Log
@@ -387,7 +462,7 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, l := range logs {
-		s.cache.logByUrl[l.Url] = l
+		s.cache.logByUrl.Add(l.Url, l)
 	}
 
 	var certs []*models.Certificate
@@ -395,7 +470,7 @@ func (s *Store) init() error {
 		return err
 	}
 	for _, c := range certs {
-		s.cache.certByFingerprint[c.Sha256Fingerprint] = c
+		s.cache.certByFingerprint.Add(c.Sha256Fingerprint, c)
 	}
 
 	var rtypes []*models.RecordType
@@ -404,7 +479,7 @@ func (s *Store) init() error {
 	}
 	rtypeById := make(map[uint]*models.RecordType)
 	for _, rtype := range rtypes {
-		s.cache.recordTypeByName[rtype.Type] = rtype
+		s.cache.recordTypeByName.Add(rtype.Type, rtype)
 		rtypeById[rtype.ID] = rtype
 	}
 
@@ -441,11 +516,11 @@ func (s *Store) init() error {
 		s.ids.tldsAnon = tldsAnon[len(tldsAnon)-1].ID + 1
 	}
 	s.ids.suffixes = 1
-	if len(suffixes) > 1 {
+	if len(suffixes) > 0 {
 		s.ids.suffixes = suffixes[len(suffixes)-1].ID + 1
 	}
 	s.ids.suffixesAnon = 1
-	if len(suffixesAnon) > 1 {
+	if len(suffixesAnon) > 0 {
 		s.ids.suffixesAnon = suffixesAnon[len(suffixesAnon)-1].ID + 1
 	}
 	s.ids.apexes = 1
@@ -480,8 +555,18 @@ func (s *Store) init() error {
 	return nil
 }
 
+type CacheOpts struct {
+	LogSize   int
+	TLDSize   int
+	PSuffSize int
+	ApexSize  int
+	FQDNSize  int
+	CertSize  int
+}
+
 type Opts struct {
 	BatchSize       int
+	CacheOpts       CacheOpts
 	AllowedInterval time.Duration
 }
 
@@ -510,10 +595,13 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		db.AddQueryHook(&debugHook{})
 	}
 
+	ifs := NewInfluxService(conf.InfluxOpts)
+
 	s := Store{
 		conf:            conf,
 		db:              db,
-		cache:           newCache(),
+		cache:           newCache(opts.CacheOpts),
+		cacheOpts:       opts.CacheOpts,
 		allowedInterval: opts.AllowedInterval,
 		batchSize:       opts.BatchSize,
 		m:               &sync.Mutex{},
@@ -524,6 +612,8 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		anonymizer:      &DefaultAnonymizer,
 		ms:              NewMeasurementState(),
 		Ready:           NewReady(),
+		batchEntities:   NewBatchEntities(),
+		influxService:   ifs,
 	}
 
 	postHook := storeCachedValuePosthook()
@@ -531,6 +621,17 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 
 	if err := s.migrate(); err != nil {
 		return nil, errs.Wrap(err, "migrate models")
+	}
+
+	//make the table unlogged to improve performance
+	tableList := []string{"apexes", "certificate_to_fqdns", "certificates", "fqdns", "log_entries", "public_suffixes", "tlds"}
+
+	for _, tl := range tableList {
+		line := fmt.Sprintf("ALTER TABLE %s SET UNLOGGED;", tl)
+		_, err := s.db.Exec(line)
+		if err != nil {
+			log.Debug().Msgf("error creating unlogged %s table: %s", tl, err.Error())
+		}
 	}
 
 	go func() {
@@ -548,6 +649,20 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 
 func storeCachedValuePosthook() postHook {
 	return func(s *Store) error {
+		log.Debug().Msgf("Propagating backwards..")
+		errors := s.backProp()
+		if len(errors) != 0 {
+			for _, err := range errors {
+				log.Debug().Msgf("error in back propagation: %s", err)
+			}
+		}
+
+		log.Debug().Msgf("Propagating forwards..")
+		err := s.forwardProp()
+		if err != nil {
+			return err
+		}
+
 		tx, err := s.db.Begin()
 		if err != nil {
 			return err
@@ -556,54 +671,88 @@ func storeCachedValuePosthook() postHook {
 
 		// inserts
 		if len(s.inserts.fqdns) > 0 {
+			log.Debug().Msgf("inserting FQDNs..")
 			if err := tx.Insert(&s.inserts.fqdns); err != nil {
 				return errs.Wrap(err, "insert fqdns")
 			}
 		}
 		if len(s.inserts.fqdnsAnon) > 0 {
+			log.Debug().Msgf("inserting anonymized FQDNs..")
 			if err := tx.Insert(&s.inserts.fqdnsAnon); err != nil {
 				return errs.Wrap(err, "insert anon fqdns")
 			}
 		}
 		if len(s.inserts.apexes) > 0 {
 			a := s.inserts.apexList()
+			log.Debug().Msgf("inserting apexes..")
 			if err := tx.Insert(&a); err != nil {
 				return errs.Wrap(err, "insert apexes")
 			}
 		}
 		if len(s.inserts.apexesAnon) > 0 {
 			a := s.inserts.apexAnonList()
+			log.Debug().Msgf("inserting anonymized apexes..")
 			if err := tx.Insert(&a); err != nil {
 				return errs.Wrap(err, "insert anon apexes")
 			}
 		}
+		if len(s.inserts.publicSuffix) > 0 {
+			log.Debug().Msgf("inserting public suffixes..")
+			if err := tx.Insert(&s.inserts.publicSuffix); err != nil {
+				return errs.Wrap(err, "insert public suffix")
+			}
+		}
+		if len(s.inserts.publicSuffixAnon) > 0 {
+			log.Debug().Msgf("inserting anonymized public suffixes..")
+			if err := tx.Insert(&s.inserts.publicSuffixAnon); err != nil {
+				return errs.Wrap(err, "insert anon public suffix")
+			}
+		}
+		if len(s.inserts.tld) > 0 {
+			log.Debug().Msgf("inserting TLDs..")
+			if err := tx.Insert(&s.inserts.tld); err != nil {
+				return errs.Wrap(err, "insert tld")
+			}
+		}
+		if len(s.inserts.tldAnon) > 0 {
+			log.Debug().Msgf("inserting anonymized TLDs..")
+			if err := tx.Insert(&s.inserts.tldAnon); err != nil {
+				return errs.Wrap(err, "insert tld")
+			}
+		}
 		if len(s.inserts.zoneEntries) > 0 {
 			z := s.inserts.zoneEntryList()
+			log.Debug().Msgf("inserting zone entries..")
 			if err := tx.Insert(&z); err != nil {
 				return errs.Wrap(err, "insert zone entries")
 			}
 		}
 		if len(s.inserts.logEntries) > 0 {
+			log.Debug().Msgf("inserting log entries..")
 			if err := tx.Insert(&s.inserts.logEntries); err != nil {
 				return errs.Wrap(err, "insert log entries")
 			}
 		}
 		if len(s.inserts.certs) > 0 {
+			log.Debug().Msgf("inserting certificates..")
 			if err := tx.Insert(&s.inserts.certs); err != nil {
 				return errs.Wrap(err, "insert certs")
 			}
 		}
 		if len(s.inserts.certToFqdns) > 0 {
+			log.Debug().Msgf("inserting certificate-to-FQDN mappings..")
 			if err := tx.Insert(&s.inserts.certToFqdns); err != nil {
 				return errs.Wrap(err, "insert cert-to-fqdns")
 			}
 		}
 		if len(s.inserts.passiveEntries) > 0 {
+			log.Debug().Msgf("inserting passive DNS entries..")
 			if err := tx.Insert(&s.inserts.passiveEntries); err != nil {
 				return errs.Wrap(err, "insert passive entries")
 			}
 		}
 		if len(s.inserts.entradaEntries) > 0 {
+			log.Debug().Msgf("inserting ENTRADA entries..")
 			if err := tx.Insert(&s.inserts.entradaEntries); err != nil {
 				return errs.Wrap(err, "insert entrada entries")
 			}
@@ -635,6 +784,18 @@ func storeCachedValuePosthook() postHook {
 		if err := tx.Commit(); err != nil {
 			return errs.Wrap(err, "committing transaction")
 		}
+
+		s.batchEntities = NewBatchEntities()
+
+		// TODO: add anonymized
+		// write size of cache to influx
+		s.influxService.CacheSize("cert", s.cache.certByFingerprint, s.cacheOpts.CertSize)
+		s.influxService.CacheSize("fqdn", s.cache.fqdnByName, s.cacheOpts.FQDNSize)
+		s.influxService.CacheSize("apex", s.cache.apexByName, s.cacheOpts.ApexSize)
+		s.influxService.CacheSize("public-suffix", s.cache.publicSuffixByName, s.cacheOpts.ApexSize)
+		s.influxService.CacheSize("tld", s.cache.tldByName, s.cacheOpts.TLDSize)
+
+		log.Debug().Msgf("Finished storing batch")
 
 		return nil
 	}

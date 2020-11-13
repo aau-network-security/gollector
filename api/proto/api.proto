@@ -24,6 +24,7 @@ message MeasurementId {
 
 service CtApi {
     rpc StoreLogEntries (stream LogEntryBatch) returns (stream Result) {}
+    rpc GetLastDBEntry (KnownLogURL) returns (Index) {}
 }
 
 message LogEntryBatch {
@@ -45,6 +46,14 @@ message Log { // as provided by https://www.certificate-transparency.org/known-l
     int64 MaximumMergeDelay = 4;
     repeated int64 OperatedBy = 5;
     string DnsApiEndpoint = 6;
+}
+
+message KnownLogURL {
+    string LogURL = 1;
+}
+
+message Index{
+    int64 Start = 1;
 }
 
 service ZoneFileApi {
