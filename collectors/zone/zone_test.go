@@ -93,6 +93,32 @@ func TestGetStartTime(t *testing.T) {
 	}
 }
 
+func TestStoreLogentry(t *testing.T) {
+	testing2.SkipCI(t)
+
+	conf := store.Config{
+		Host:     "localhost",
+		User:     "postgres",
+		Password: "postgres",
+		Port:     5432,
+		DBName:   "domains",
+	}
+	s, _, muid, err := store.OpenStore(conf)
+	if err != nil {
+		t.Fatalf("unexpected error while opening store: %s", err)
+	}
+
+	ts := time.Now()
+	fqdn := "example.org"
+
+	if _, err := s.StoreZoneEntry(muid, ts, fqdn); err != nil {
+		t.Fatalf("unexpected error while storing zone entry: %s", err)
+	}
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("unexpected error while running post hooks: %s", err)
+	}
+}
+
 func almostEqual(t1, t2 time.Time, space time.Duration) bool {
 	return t2.After(t1.Add(-space)) && t2.Before(t1.Add(space))
 }

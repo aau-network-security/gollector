@@ -167,14 +167,14 @@ func main() {
 	}()
 
 	interval := 24 * time.Hour
-	zfClient := prt.NewZoneFileApiClient(cc)
-	in := prt.Interval{
-		Interval: int64(interval.Nanoseconds() / 1e06),
-	}
-	stResp, err := zfClient.GetStartTime(ctx, &in)
-	if err != nil {
-		log.Fatal().Msgf("failed to acquire starting time: %s", err)
-	}
+	//zfClient := prt.NewZoneFileApiClient(cc)
+	//in := prt.Interval{
+	//	Interval: int64(interval.Nanoseconds() / 1e06),
+	//}
+	//stResp, err := zfClient.GetStartTime(ctx, &in)
+	//if err != nil {
+	//	log.Fatal().Msgf("failed to acquire starting time: %s", err)
+	//}
 
 	auth := czds2.NewAuthenticator(conf.Czds.Creds)
 	client := czds2.NewClient(auth)
@@ -295,7 +295,9 @@ func main() {
 		return nil
 	}
 
-	st := app.TimeFromUnix(stResp.Timestamp)
+	// TODO: Revert starting time
+	//st := app.TimeFromUnix(stResp.Timestamp)
+	st := time.Now().Add(-10 * time.Second)
 
 	// retrieve all zone files on a daily basis
 	if err := app.Repeat(fn, st, interval, -1); err != nil {

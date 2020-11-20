@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"github.com/cheggaaa/pb/v3"
 	"strings"
 	"sync"
 	"time"
@@ -271,24 +272,6 @@ type Store struct {
 	influxService   InfluxService
 }
 
-type counter struct {
-	tldCacheHit  int
-	tldDBHit     int
-	tldNew       int
-	psCacheHit   int
-	psDBHit      int
-	psNew        int
-	apexCacheHit int
-	apexDBHit    int
-	apexNew      int
-	fqdnCacheHit int
-	fqdnDBHit    int
-	fqdnNew      int
-	certCacheHit int
-	certDBHit    int
-	certNew      int
-}
-
 func (s *Store) WithAnonymizer(a *Anonymizer) *Store {
 	s.anonymizer = a
 	return s
@@ -556,12 +539,13 @@ func (s *Store) init() error {
 }
 
 type CacheOpts struct {
-	LogSize   int
-	TLDSize   int
-	PSuffSize int
-	ApexSize  int
-	FQDNSize  int
-	CertSize  int
+	LogSize       int
+	TLDSize       int
+	PSuffSize     int
+	ApexSize      int
+	FQDNSize      int
+	CertSize      int
+	ZoneEntrySize int
 }
 
 type Opts struct {
@@ -616,8 +600,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		influxService:   ifs,
 	}
 
-	postHook := storeCachedValuePosthook()
-	s.postHooks = append(s.postHooks, postHook)
+	s.postHooks = append(s.postHooks, propagationPosthook(), storeCachedValuePosthook())
 
 	if err := s.migrate(); err != nil {
 		return nil, errs.Wrap(err, "migrate models")
@@ -647,117 +630,188 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 	return &s, nil
 }
 
-func storeCachedValuePosthook() postHook {
+func propagationPosthook() postHook {
 	return func(s *Store) error {
+		// backprop all (but zone entries)
 		log.Debug().Msgf("Propagating backwards..")
-		errors := s.backProp()
-		if len(errors) != 0 {
-			for _, err := range errors {
-				log.Debug().Msgf("error in back propagation: %s", err)
-			}
-		}
+		bar := pb.New(5).SetMaxWidth(40).Start()
 
-		log.Debug().Msgf("Propagating forwards..")
-		err := s.forwardProp()
-		if err != nil {
+		if err := s.backpropCert(); err != nil {
+			return err
+		}
+		bar.Increment()
+
+		if err := s.backpropFqdn(); err != nil {
+			return err
+		}
+		bar.Increment()
+
+		if err := s.backpropApex(); err != nil {
+			return err
+		}
+		bar.Increment()
+
+		if err := s.backpropPublicSuffix(); err != nil {
+			return err
+		}
+		bar.Increment()
+
+		if err := s.backpropTld(); err != nil {
+			return err
+		}
+		bar.Increment()
+		bar.Finish()
+
+		// forward prop all (but zone entries)
+		bar = pb.New(5).SetMaxWidth(40).Start()
+
+		s.forpropTld()
+		bar.Increment()
+		s.forpropPublicSuffix()
+		bar.Increment()
+		s.forpropApex()
+		bar.Increment()
+		s.forpropFqdn()
+		bar.Increment()
+		if err := s.forpropCerts(); err != nil {
+			return err
+		}
+		bar.Increment()
+		bar.Finish()
+
+		// backprop zone entries
+		if err := s.backpropZoneEntries(); err != nil {
 			return err
 		}
 
+		// forward prop zone entries
+		s.forpropZoneEntries()
+
+		s.influxService.StoreHit("db-insert", "tld", len(s.inserts.tld))
+		s.influxService.StoreHit("db-insert", "public-suffix", len(s.inserts.publicSuffix))
+		s.influxService.StoreHit("db-insert", "apex", len(s.inserts.apexes))
+		s.influxService.StoreHit("db-insert", "fqdn", len(s.inserts.fqdns))
+		s.influxService.StoreHit("db-insert", "cert", len(s.inserts.certs))
+		s.influxService.StoreHit("db-insert", "zone-entry", len(s.inserts.zoneEntries))
+		s.influxService.StoreHit("db-update", "zone-entry", len(s.updates.zoneEntries))
+
+		return nil
+	}
+}
+
+func storeCachedValuePosthook() postHook {
+	return func(s *Store) error {
 		tx, err := s.db.Begin()
 		if err != nil {
 			return err
 		}
 		defer tx.Rollback()
 
+		bar := pb.New(14).SetMaxWidth(40).Start()
 		// inserts
 		if len(s.inserts.fqdns) > 0 {
-			log.Debug().Msgf("inserting FQDNs..")
 			if err := tx.Insert(&s.inserts.fqdns); err != nil {
 				return errs.Wrap(err, "insert fqdns")
 			}
 		}
+		bar.Increment()
+
 		if len(s.inserts.fqdnsAnon) > 0 {
-			log.Debug().Msgf("inserting anonymized FQDNs..")
 			if err := tx.Insert(&s.inserts.fqdnsAnon); err != nil {
 				return errs.Wrap(err, "insert anon fqdns")
 			}
 		}
+		bar.Increment()
+
 		if len(s.inserts.apexes) > 0 {
 			a := s.inserts.apexList()
-			log.Debug().Msgf("inserting apexes..")
 			if err := tx.Insert(&a); err != nil {
 				return errs.Wrap(err, "insert apexes")
 			}
 		}
+		bar.Increment()
+
 		if len(s.inserts.apexesAnon) > 0 {
 			a := s.inserts.apexAnonList()
-			log.Debug().Msgf("inserting anonymized apexes..")
 			if err := tx.Insert(&a); err != nil {
 				return errs.Wrap(err, "insert anon apexes")
 			}
 		}
+		bar.Increment()
+
 		if len(s.inserts.publicSuffix) > 0 {
-			log.Debug().Msgf("inserting public suffixes..")
 			if err := tx.Insert(&s.inserts.publicSuffix); err != nil {
 				return errs.Wrap(err, "insert public suffix")
 			}
 		}
+		bar.Increment()
+
 		if len(s.inserts.publicSuffixAnon) > 0 {
-			log.Debug().Msgf("inserting anonymized public suffixes..")
 			if err := tx.Insert(&s.inserts.publicSuffixAnon); err != nil {
 				return errs.Wrap(err, "insert anon public suffix")
 			}
 		}
+		bar.Increment()
+
 		if len(s.inserts.tld) > 0 {
-			log.Debug().Msgf("inserting TLDs..")
 			if err := tx.Insert(&s.inserts.tld); err != nil {
 				return errs.Wrap(err, "insert tld")
 			}
 		}
+		bar.Increment()
+
 		if len(s.inserts.tldAnon) > 0 {
-			log.Debug().Msgf("inserting anonymized TLDs..")
 			if err := tx.Insert(&s.inserts.tldAnon); err != nil {
 				return errs.Wrap(err, "insert tld")
 			}
 		}
+		bar.Increment()
+
 		if len(s.inserts.zoneEntries) > 0 {
 			z := s.inserts.zoneEntryList()
-			log.Debug().Msgf("inserting zone entries..")
 			if err := tx.Insert(&z); err != nil {
 				return errs.Wrap(err, "insert zone entries")
 			}
 		}
+		bar.Increment()
+
 		if len(s.inserts.logEntries) > 0 {
-			log.Debug().Msgf("inserting log entries..")
 			if err := tx.Insert(&s.inserts.logEntries); err != nil {
 				return errs.Wrap(err, "insert log entries")
 			}
 		}
+		bar.Increment()
+
 		if len(s.inserts.certs) > 0 {
-			log.Debug().Msgf("inserting certificates..")
 			if err := tx.Insert(&s.inserts.certs); err != nil {
 				return errs.Wrap(err, "insert certs")
 			}
 		}
+		bar.Increment()
+
 		if len(s.inserts.certToFqdns) > 0 {
-			log.Debug().Msgf("inserting certificate-to-FQDN mappings..")
 			if err := tx.Insert(&s.inserts.certToFqdns); err != nil {
 				return errs.Wrap(err, "insert cert-to-fqdns")
 			}
 		}
+		bar.Increment()
+
 		if len(s.inserts.passiveEntries) > 0 {
-			log.Debug().Msgf("inserting passive DNS entries..")
 			if err := tx.Insert(&s.inserts.passiveEntries); err != nil {
 				return errs.Wrap(err, "insert passive entries")
 			}
 		}
+		bar.Increment()
+
 		if len(s.inserts.entradaEntries) > 0 {
-			log.Debug().Msgf("inserting ENTRADA entries..")
 			if err := tx.Insert(&s.inserts.entradaEntries); err != nil {
 				return errs.Wrap(err, "insert entrada entries")
 			}
 		}
+		bar.Increment()
+		bar.Finish()
 
+		bar = pb.New(3).SetMaxWidth(40).Start()
 		// updates
 		if len(s.updates.apexes) > 0 {
 			a := s.updates.apexList()
@@ -765,6 +819,8 @@ func storeCachedValuePosthook() postHook {
 				return errs.Wrap(err, "update apexes")
 			}
 		}
+		bar.Increment()
+
 		if len(s.updates.zoneEntries) > 0 {
 			z := s.updates.zoneEntryList()
 			_, err := tx.Model(&z).Column("last_seen").Update()
@@ -772,11 +828,14 @@ func storeCachedValuePosthook() postHook {
 				return errs.Wrap(err, "update zone entries")
 			}
 		}
+		bar.Increment()
 		if len(s.updates.passiveEntries) > 0 {
 			if _, err := tx.Model(&s.updates.passiveEntries).Column("first_seen").Update(); err != nil {
 				return errs.Wrap(err, "update passive entries")
 			}
 		}
+		bar.Increment()
+		bar.Finish()
 
 		s.updates = NewModelSet()
 		s.inserts = NewModelSet()
@@ -794,6 +853,7 @@ func storeCachedValuePosthook() postHook {
 		s.influxService.CacheSize("apex", s.cache.apexByName, s.cacheOpts.ApexSize)
 		s.influxService.CacheSize("public-suffix", s.cache.publicSuffixByName, s.cacheOpts.ApexSize)
 		s.influxService.CacheSize("tld", s.cache.tldByName, s.cacheOpts.TLDSize)
+		s.influxService.CacheSize("zone-entry", s.cache.zoneEntriesByApexName, s.cacheOpts.ZoneEntrySize)
 
 		log.Debug().Msgf("Finished storing batch")
 

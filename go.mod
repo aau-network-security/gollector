@@ -5,6 +5,8 @@ go 1.13
 require (
 	github.com/bippio/go-impala v2.0.0+incompatible
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
+	github.com/cheggaaa/pb v2.0.7+incompatible
+	github.com/cheggaaa/pb/v3 v3.0.5
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/getsentry/sentry-go v0.3.0
 	github.com/go-acme/lego v2.7.2+incompatible
@@ -32,6 +34,8 @@ require (
 	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980 // indirect
 	golang.org/x/text v0.3.2
 	google.golang.org/grpc v1.24.0
+	gopkg.in/VividCortex/ewma.v1 v1.1.1 // indirect
+	gopkg.in/cheggaaa/pb.v2 v2.0.7 // indirect
 	gopkg.in/yaml.v2 v2.3.0
 	mellium.im/sasl v0.2.1 // indirect
 )

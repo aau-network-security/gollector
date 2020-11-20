@@ -431,7 +431,7 @@ func TestDebug(t *testing.T) {
 			Ts: now,
 		}
 
-		if err := s.MapEntry(muid, le); err != nil {
+		if err := s.StoreLogEntry(muid, le); err != nil {
 			t.Fatalf("unexpected error while storing log entry: %s", err)
 		}
 	}
@@ -473,7 +473,7 @@ func TestDebug(t *testing.T) {
 			Ts: now,
 		}
 
-		if err := s.MapEntry(muid, le); err != nil {
+		if err := s.StoreLogEntry(muid, le); err != nil {
 			t.Fatalf("unexpected error while storing log entry: %s", err)
 		}
 	}
@@ -561,7 +561,7 @@ func TestInfluxDb(t *testing.T) {
 			Ts: now,
 		}
 
-		if err := s.MapEntry(muid, le); err != nil {
+		if err := s.StoreLogEntry(muid, le); err != nil {
 			t.Fatalf("unexpected error while storing log entry: %s", err)
 		}
 
