@@ -5,6 +5,7 @@ import (
 	"github.com/influxdata/influxdb-client-go/v2"
 	influxapi "github.com/influxdata/influxdb-client-go/v2/api"
 	"io"
+	"os"
 	"sync"
 	"time"
 )
@@ -25,6 +26,7 @@ type influxService struct {
 	logCounts map[string]int
 	cacheSize map[string]cacheInfo
 	m         *sync.Mutex
+	hostname  string
 }
 
 type storeHitTuple struct {
@@ -90,6 +92,7 @@ func (ifs *influxService) write() {
 		tags := map[string]string{
 			"status": tuple.status,
 			"type":   tuple.insertType,
+			"host":   ifs.hostname,
 		}
 		fields := map[string]interface{}{
 			"count": count,
@@ -102,6 +105,7 @@ func (ifs *influxService) write() {
 	for logName, count := range ifs.logCounts {
 		tags := map[string]string{
 			"logName": logName,
+			"host":    ifs.hostname,
 		}
 		fields := map[string]interface{}{
 			"count": count,
@@ -114,6 +118,7 @@ func (ifs *influxService) write() {
 	for cacheName, info := range ifs.cacheSize {
 		tags := map[string]string{
 			"cacheName": cacheName,
+			"host":      ifs.hostname,
 		}
 		perc := float64(info.cur) / float64(info.total) * float64(100)
 		fields := map[string]interface{}{
@@ -158,9 +163,9 @@ func (ds *disabledService) Close() error {
 	return nil
 }
 
-func NewInfluxService(opts InfluxOpts) InfluxService {
+func NewInfluxService(opts InfluxOpts) (InfluxService, error) {
 	if !opts.Enabled {
-		return &disabledService{}
+		return &disabledService{}, nil
 	}
 
 	client := influxdb2.NewClient(opts.ServUrl, opts.AuthToken)
@@ -169,9 +174,14 @@ func NewInfluxService(opts InfluxOpts) InfluxService {
 	return NewInfluxServiceWithClient(client, api, opts.Interval)
 }
 
-func NewInfluxServiceWithClient(client influxdb2.Client, api influxapi.WriteAPI, interval int) InfluxService {
+func NewInfluxServiceWithClient(client influxdb2.Client, api influxapi.WriteAPI, interval int) (InfluxService, error) {
 	ticker := time.NewTicker(time.Duration(interval) * time.Second)
 	done := make(chan bool)
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		return nil, err
+	}
 
 	is := influxService{
 		client:    client,
@@ -182,6 +192,7 @@ func NewInfluxServiceWithClient(client influxdb2.Client, api influxapi.WriteAPI,
 		cacheSize: map[string]cacheInfo{},
 		ticker:    ticker,
 		m:         &sync.Mutex{},
+		hostname:  hostname,
 	}
 
 	go func() {
@@ -196,5 +207,5 @@ func NewInfluxServiceWithClient(client influxdb2.Client, api influxapi.WriteAPI,
 		}
 	}()
 
-	return &is
+	return &is, nil
 }

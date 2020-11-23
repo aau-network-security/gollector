@@ -579,7 +579,10 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		db.AddQueryHook(&debugHook{})
 	}
 
-	ifs := NewInfluxService(conf.InfluxOpts)
+	ifs, err := NewInfluxService(conf.InfluxOpts)
+	if err != nil {
+		return nil, err
+	}
 
 	s := Store{
 		conf:            conf,

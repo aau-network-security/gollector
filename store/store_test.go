@@ -535,7 +535,10 @@ func TestInfluxDb(t *testing.T) {
 
 	client := testInfluxdbClient{}
 	api := testWriteApi{}
-	ifs := NewInfluxServiceWithClient(client, api, 1)
+	ifs, err := NewInfluxServiceWithClient(client, api, 1)
+	if err != nil {
+		t.Fatalf("unexpected error while creating influxdb service: %s", err)
+	}
 
 	s.influxService = ifs
 
