@@ -211,18 +211,18 @@ func newLRUCache(cacheSize int) *lru.Cache {
 
 func newCache(opts CacheOpts) cache {
 	return cache{
-		tldByName:              newLRUCache(opts.TLDSize),   //make(map[string]*models.Tld)
-		tldAnonByName:          newLRUCache(opts.TLDSize),   //make(map[string]*models.TldAnon),
-		publicSuffixByName:     newLRUCache(opts.PSuffSize), //make(map[string]*models.PublicSuffix),
-		publicSuffixAnonByName: newLRUCache(opts.PSuffSize), //make(map[string]*models.PublicSuffixAnon),
-		apexByName:             newLRUCache(opts.ApexSize),  //make(map[string]*models.Apex),
-		apexByNameAnon:         newLRUCache(opts.ApexSize),  //make(map[string]*models.ApexAnon),
-		apexById:               newLRUCache(opts.ApexSize),  //make(map[uint]*models.Apex),
-		fqdnByName:             newLRUCache(opts.FQDNSize),  //make(map[string]*models.Fqdn),
-		fqdnByNameAnon:         newLRUCache(opts.FQDNSize),  //make(map[string]*models.FqdnAnon),
-		zoneEntriesByApexName:  newLRUCache(opts.ApexSize),  //make(map[string]*models.ZonefileEntry),
-		logByUrl:               newLRUCache(opts.LogSize),   //make(map[string]*models.Log),
-		certByFingerprint:      newLRUCache(opts.CertSize),  //make(map[string]*models.Certificate),
+		tldByName:              newLRUCache(opts.TLDSize),       //make(map[string]*models.Tld)
+		tldAnonByName:          newLRUCache(opts.TLDSize),       //make(map[string]*models.TldAnon),
+		publicSuffixByName:     newLRUCache(opts.PSuffSize),     //make(map[string]*models.PublicSuffix),
+		publicSuffixAnonByName: newLRUCache(opts.PSuffSize),     //make(map[string]*models.PublicSuffixAnon),
+		apexByName:             newLRUCache(opts.ApexSize),      //make(map[string]*models.Apex),
+		apexByNameAnon:         newLRUCache(opts.ApexSize),      //make(map[string]*models.ApexAnon),
+		apexById:               newLRUCache(opts.ApexSize),      //make(map[uint]*models.Apex),
+		fqdnByName:             newLRUCache(opts.FQDNSize),      //make(map[string]*models.Fqdn),
+		fqdnByNameAnon:         newLRUCache(opts.FQDNSize),      //make(map[string]*models.FqdnAnon),
+		zoneEntriesByApexName:  newLRUCache(opts.ZoneEntrySize), //make(map[string]*models.ZonefileEntry),
+		logByUrl:               newLRUCache(opts.LogSize),       //make(map[string]*models.Log),
+		certByFingerprint:      newLRUCache(opts.CertSize),      //make(map[string]*models.Certificate),
 		passiveEntryByFqdn:     newSplunkEntryMap(),
 		recordTypeByName:       newLRUCache(opts.TLDSize), //make(map[string]*models.RecordType),
 	}

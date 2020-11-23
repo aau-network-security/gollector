@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"flag"
 	"fmt"
@@ -20,7 +19,6 @@ import (
 	"golang.org/x/text/encoding/charmap"
 	"google.golang.org/grpc/metadata"
 	"net"
-	"os"
 	"sync"
 	"time"
 )

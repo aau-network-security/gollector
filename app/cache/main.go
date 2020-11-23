@@ -34,12 +34,13 @@ func main() {
 		AllowedInterval: 36 * time.Hour,
 		BatchSize:       conf.StoreOpts.BatchSize,
 		CacheOpts: store.CacheOpts{
-			LogSize:   conf.StoreOpts.CacheSize.Log,
-			TLDSize:   conf.StoreOpts.CacheSize.TLD,
-			PSuffSize: conf.StoreOpts.CacheSize.PSuffix,
-			ApexSize:  conf.StoreOpts.CacheSize.Apex,
-			FQDNSize:  conf.StoreOpts.CacheSize.Fqdn,
-			CertSize:  conf.StoreOpts.CacheSize.Cert,
+			LogSize:       conf.StoreOpts.CacheSize.Log,
+			TLDSize:       conf.StoreOpts.CacheSize.TLD,
+			PSuffSize:     conf.StoreOpts.CacheSize.PSuffix,
+			ApexSize:      conf.StoreOpts.CacheSize.Apex,
+			FQDNSize:      conf.StoreOpts.CacheSize.Fqdn,
+			CertSize:      conf.StoreOpts.CacheSize.Cert,
+			ZoneEntrySize: conf.StoreOpts.CacheSize.ZoneEntry,
 		},
 	}
 

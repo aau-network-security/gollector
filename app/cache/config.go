@@ -9,12 +9,13 @@ import (
 )
 
 type cacheSize struct {
-	Log     int `yaml:"log"`
-	TLD     int `yaml:"tld"`
-	PSuffix int `yaml:"public-suffix"`
-	Apex    int `yaml:"apex"`
-	Fqdn    int `yaml:"fqdn"`
-	Cert    int `yaml:"cert"`
+	Log       int `yaml:"log"`
+	TLD       int `yaml:"tld"`
+	PSuffix   int `yaml:"public-suffix"`
+	Apex      int `yaml:"apex"`
+	Fqdn      int `yaml:"fqdn"`
+	Cert      int `yaml:"cert"`
+	ZoneEntry int `yaml:"zone-entry"`
 }
 
 type storeOpts struct {
