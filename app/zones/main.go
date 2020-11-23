@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
@@ -19,6 +20,7 @@ import (
 	"golang.org/x/text/encoding/charmap"
 	"google.golang.org/grpc/metadata"
 	"net"
+	"os"
 	"sync"
 	"time"
 )
@@ -35,7 +37,7 @@ func getCzdsTlds(client czds2.Client, conf Czds) ([]string, error) {
 	tlds := make(map[string]bool)
 	if conf.All {
 		// add all accessible zones
-		all, err := client.AllZones()
+		all, err := client.DownloadableZones()
 		if err != nil {
 			return nil, err
 		}
@@ -167,17 +169,39 @@ func main() {
 	}()
 
 	interval := 24 * time.Hour
-	//zfClient := prt.NewZoneFileApiClient(cc)
-	//in := prt.Interval{
-	//	Interval: int64(interval.Nanoseconds() / 1e06),
-	//}
-	//stResp, err := zfClient.GetStartTime(ctx, &in)
-	//if err != nil {
-	//	log.Fatal().Msgf("failed to acquire starting time: %s", err)
-	//}
+	zfClient := prt.NewZoneFileApiClient(cc)
+	in := prt.Interval{
+		Interval: int64(interval.Nanoseconds() / 1e06),
+	}
+	stResp, err := zfClient.GetStartTime(ctx, &in)
+	if err != nil {
+		log.Fatal().Msgf("failed to acquire starting time: %s", err)
+	}
 
 	auth := czds2.NewAuthenticator(conf.Czds.Creds, conf.Czds.AuthBaseUrl)
 	client := czds2.NewClient(auth, conf.Czds.ZoneBaseUrl)
+
+	// request access on a daily basis
+	ticker := time.NewTicker(24 * time.Hour)
+	done := make(chan bool)
+	go func() {
+		f := func() error {
+			return client.RequestAccess(conf.Czds.Reason)
+		}
+		for {
+			if err := app.Retry(f, 2); err != nil {
+				log.Warn().Msgf("failed to request access to new zones: %s", err)
+			}
+			select {
+			case <-done:
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	defer func() {
+		done <- true
+	}()
 
 	c := 0
 	fn := func(t time.Time) error {
@@ -297,9 +321,8 @@ func main() {
 		return nil
 	}
 
-	// TODO: Revert starting time
-	//st := app.TimeFromUnix(stResp.Timestamp)
-	st := time.Now().Add(-10 * time.Second)
+	st := app.TimeFromUnix(stResp.Timestamp)
+	//st := time.Now().Add(-10 * time.Second)
 
 	// retrieve all zone files on a daily basis
 	if err := app.Repeat(fn, st, interval, -1); err != nil {

@@ -23,6 +23,8 @@ func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.Z
 		return nil, err
 	}
 
+	s.influxService.ZoneCount(domain.tld.normal)
+
 	s.batchEntities.apexByName[domain.apex.normal] = &domainstruct{
 		domain: domain,
 	}

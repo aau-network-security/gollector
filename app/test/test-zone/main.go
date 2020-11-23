@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/dgrijalva/jwt-go"
+	"github.com/rs/zerolog/log"
 	"net"
 	"net/http"
 )
@@ -64,6 +65,36 @@ func (s *zonefileServer) ServeZone(w http.ResponseWriter, req *http.Request) {
 	fmt.Fprintf(gz, s.zlp.Zone())
 }
 
+func (s *zonefileServer) TermsConditions(w http.ResponseWriter, req *http.Request) {
+	payload := map[string]string{
+		"version": "1.0",
+	}
+	b, err := json.Marshal(payload)
+	if err != nil {
+		w.WriteHeader(500)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(b)
+}
+
+func (s *zonefileServer) RequestAccess(w http.ResponseWriter, req *http.Request) {
+	if err := req.ParseForm(); err != nil {
+		w.WriteHeader(400)
+		return
+	}
+	reason := req.PostForm.Get("reason")
+	tcVersion := req.PostForm.Get("tcVersion")
+	allTlds := req.PostForm.Get("allTlds")
+
+	log.Debug().Msgf("request access with reason: %s", reason)
+	log.Debug().Msgf("request access with terms and condition version: %s", tcVersion)
+	log.Debug().Msgf("request access for all TLDs?: %s", allTlds)
+
+	w.WriteHeader(200)
+}
+
 func (s *zonefileServer) start(addr string) error {
 	listener, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -74,6 +105,8 @@ func (s *zonefileServer) start(addr string) error {
 	zonePath := fmt.Sprintf("/czds/downloads/%s.zone", s.tld)
 	http.HandleFunc(zonePath, s.ServeZone)
 	http.HandleFunc("/api/authenticate", s.Authenticate)
+	http.HandleFunc("/czds/terms/condition/", s.TermsConditions)
+	http.HandleFunc("/czds/requests/create", s.RequestAccess)
 
 	return http.Serve(listener, nil)
 }

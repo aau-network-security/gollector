@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 	"io"
 	"io/ioutil"
 	"net"
@@ -22,17 +21,6 @@ const (
 var (
 	MalformedZoneUrl = errors.New("malfored url structure")
 )
-
-// check if the given slice contains the given item
-// returns both the item and whether the slice contains the item or not
-func contains(slice []string, item string) (string, bool) {
-	for _, v := range slice {
-		if v == item {
-			return v, true
-		}
-	}
-	return "", false
-}
 
 type HttpErr struct {
 	code int
@@ -187,7 +175,6 @@ func (c *client) RequestAccess(reason string) error {
 	if err != nil {
 		return err
 	}
-	log.Debug().Msgf("terms and condition version: %s", tcVersion)
 
 	payload, err := json.Marshal(tldRequest{
 		AllTLDs: true,

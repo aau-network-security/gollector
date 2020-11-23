@@ -14,19 +14,21 @@ type InfluxService interface {
 	StoreHit(status string, insertType string, count int)
 	LogCount(logName string)
 	CacheSize(cacheName string, c *lru.Cache, total int)
+	ZoneCount(tld string)
 	io.Closer
 }
 
 type influxService struct {
-	client    influxdb2.Client
-	api       influxapi.WriteAPI
-	done      chan bool
-	ticker    *time.Ticker
-	storeHits map[storeHitTuple]int
-	logCounts map[string]int
-	cacheSize map[string]cacheInfo
-	m         *sync.Mutex
-	hostname  string
+	client     influxdb2.Client
+	api        influxapi.WriteAPI
+	done       chan bool
+	ticker     *time.Ticker
+	storeHits  map[storeHitTuple]int
+	logCounts  map[string]int
+	cacheSize  map[string]cacheInfo
+	zoneCounts map[string]int
+	m          *sync.Mutex
+	hostname   string
 }
 
 type storeHitTuple struct {
@@ -39,8 +41,8 @@ func (ifs *influxService) StoreHit(status string, insertType string, count int) 
 	defer ifs.m.Unlock()
 
 	t := storeHitTuple{status, insertType}
-	k, hit := ifs.storeHits[t]
-	if !hit {
+	k, ok := ifs.storeHits[t]
+	if !ok {
 		k = 0
 	}
 	k += count
@@ -52,13 +54,26 @@ func (ifs *influxService) LogCount(logname string) {
 	ifs.m.Lock()
 	defer ifs.m.Unlock()
 
-	k, hit := ifs.logCounts[logname]
-	if !hit {
+	k, ok := ifs.logCounts[logname]
+	if !ok {
 		k = 0
 	}
 	k++
 
 	ifs.logCounts[logname] = k
+}
+
+func (ifs *influxService) ZoneCount(tld string) {
+	ifs.m.Lock()
+	defer ifs.m.Unlock()
+
+	k, ok := ifs.zoneCounts[tld]
+	if !ok {
+		k = 0
+	}
+	k++
+
+	ifs.zoneCounts[tld] = k
 }
 
 type cacheInfo struct {
@@ -74,7 +89,6 @@ func (ifs *influxService) CacheSize(cacheName string, c *lru.Cache, total int) {
 }
 
 func (ifs *influxService) Close() error {
-
 	ifs.done <- true
 	ifs.ticker.Stop()
 
@@ -87,6 +101,8 @@ func (ifs *influxService) write() {
 	ifs.m.Lock()
 	defer ifs.m.Unlock()
 
+	t := time.Now()
+
 	// write store hits
 	for tuple, count := range ifs.storeHits {
 		tags := map[string]string{
@@ -97,7 +113,7 @@ func (ifs *influxService) write() {
 		fields := map[string]interface{}{
 			"count": count,
 		}
-		p := influxdb2.NewPoint("store-hits", tags, fields, time.Now())
+		p := influxdb2.NewPoint("store-hits", tags, fields, t)
 		ifs.api.WritePoint(p)
 	}
 
@@ -110,7 +126,20 @@ func (ifs *influxService) write() {
 		fields := map[string]interface{}{
 			"count": count,
 		}
-		p := influxdb2.NewPoint("log-entries", tags, fields, time.Now())
+		p := influxdb2.NewPoint("log-entries", tags, fields, t)
+		ifs.api.WritePoint(p)
+	}
+
+	// write zone counts
+	for tld, count := range ifs.zoneCounts {
+		tags := map[string]string{
+			"tld":  tld,
+			"host": ifs.hostname,
+		}
+		fields := map[string]interface{}{
+			"count": count,
+		}
+		p := influxdb2.NewPoint("zone-entries", tags, fields, t)
 		ifs.api.WritePoint(p)
 	}
 
@@ -126,13 +155,15 @@ func (ifs *influxService) write() {
 			"cur":   info.cur,
 			"total": info.total,
 		}
-		p := influxdb2.NewPoint("cache", tags, fields, time.Now())
+		p := influxdb2.NewPoint("cache", tags, fields, t)
 		ifs.api.WritePoint(p)
 	}
 
+	// reset the counters
 	ifs.storeHits = map[storeHitTuple]int{}
 	ifs.logCounts = map[string]int{}
 	ifs.cacheSize = map[string]cacheInfo{}
+	ifs.zoneCounts = map[string]int{}
 }
 
 type InfluxOpts struct {
@@ -156,6 +187,10 @@ func (ds *disabledService) LogCount(logName string) {
 }
 
 func (ds *disabledService) CacheSize(cacheName string, cache2 *lru.Cache, total int) {
+	return
+}
+
+func (ds *disabledService) ZoneCount(tld string) {
 	return
 }
 
@@ -184,15 +219,16 @@ func NewInfluxServiceWithClient(client influxdb2.Client, api influxapi.WriteAPI,
 	}
 
 	is := influxService{
-		client:    client,
-		api:       api,
-		done:      done,
-		storeHits: map[storeHitTuple]int{},
-		logCounts: map[string]int{},
-		cacheSize: map[string]cacheInfo{},
-		ticker:    ticker,
-		m:         &sync.Mutex{},
-		hostname:  hostname,
+		client:     client,
+		api:        api,
+		done:       done,
+		storeHits:  map[storeHitTuple]int{},
+		logCounts:  map[string]int{},
+		zoneCounts: map[string]int{},
+		cacheSize:  map[string]cacheInfo{},
+		ticker:     ticker,
+		m:          &sync.Mutex{},
+		hostname:   hostname,
 	}
 
 	go func() {
