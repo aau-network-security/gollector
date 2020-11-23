@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	singleZoneUrl = "https://czds-api.icann.org/czds/downloads/%s.zone"
-	allZonesUrl   = "https://czds-api.icann.org/czds/downloads/links"
+	singleZoneUrl = "%s/czds/downloads/%s.zone"
+	allZonesUrl   = "%s/czds/downloads/links"
 )
 
 var (
@@ -35,11 +35,12 @@ type Client interface {
 }
 
 type client struct {
+	baseUrl       string
 	authenticator *Authenticator
 	httpClient    *http.Client
 }
 
-func NewClient(authenticator *Authenticator) Client {
+func NewClient(authenticator *Authenticator, baseUrl string) Client {
 	httpClient := &http.Client{
 		//Timeout: time.Minute * 120, // this timeout also included reading resp body,
 		Transport: &http.Transport{
@@ -57,6 +58,7 @@ func NewClient(authenticator *Authenticator) Client {
 		},
 	}
 	c := client{
+		baseUrl:       baseUrl,
 		authenticator: authenticator,
 		httpClient:    httpClient,
 	}
@@ -64,7 +66,7 @@ func NewClient(authenticator *Authenticator) Client {
 }
 
 func (c *client) GetZone(tld string) (io.ReadCloser, error) {
-	url := fmt.Sprintf(singleZoneUrl, tld)
+	url := fmt.Sprintf(singleZoneUrl, c.baseUrl, tld)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -92,7 +94,8 @@ func (c *client) GetZone(tld string) (io.ReadCloser, error) {
 
 // returns a list of all zones that can be retrieved from the authenticated client, using the czds api
 func (c *client) AllZones() ([]string, error) {
-	req, err := http.NewRequest("GET", allZonesUrl, nil)
+	url := fmt.Sprintf(allZonesUrl, c.baseUrl)
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
 	}

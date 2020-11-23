@@ -48,12 +48,13 @@ func (opts *ProcessOpts) isValid() bool {
 // this handler reads files that fulfill the zone file standard
 func ZoneFileHandler(str io.Reader, f DomainFunc) error {
 	seen := make(map[string]interface{})
+
 	for t := range dns.ParseZone(str, "", "") {
 		if t.Error != nil {
 			return t.Error
 		}
 		switch v := t.RR.(type) {
-		case *dns.NS:
+		case *dns.NS, *dns.A, *dns.AAAA:
 			domain := strings.TrimSuffix(strings.ToLower(v.Header().Name), ".")
 
 			// silently ignore tld domains (e.g. `com` or `net`)

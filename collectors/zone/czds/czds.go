@@ -5,6 +5,10 @@ import (
 	"io"
 )
 
+var (
+	DefaultCzdsBaseUrl = "https://czds-api.icann.org/"
+)
+
 type Credentials struct {
 	Username string `yaml:"username"`
 	Password string
@@ -23,8 +27,8 @@ func (z *czdsZone) Stream() (io.ReadCloser, error) {
 	return z.client.GetZone(z.tld)
 }
 
-func New(authenticator *Authenticator, tld string) zone2.Zone {
-	client := NewClient(authenticator)
+func New(authenticator *Authenticator, baseUrl string, tld string) zone2.Zone {
+	client := NewClient(authenticator, baseUrl)
 
 	zone := czdsZone{
 		tld:    tld,

@@ -176,8 +176,8 @@ func main() {
 	//	log.Fatal().Msgf("failed to acquire starting time: %s", err)
 	//}
 
-	auth := czds2.NewAuthenticator(conf.Czds.Creds)
-	client := czds2.NewClient(auth)
+	auth := czds2.NewAuthenticator(conf.Czds.Creds, conf.Czds.AuthBaseUrl)
+	client := czds2.NewClient(auth, conf.Czds.ZoneBaseUrl)
 
 	c := 0
 	fn := func(t time.Time) error {
@@ -256,7 +256,6 @@ func main() {
 					if err := bs.Send(ctx, &ze); err != nil {
 						log.Error().Msgf("failed to store domain: %s", err)
 					}
-					c++
 					return nil
 				}
 
