@@ -10,8 +10,24 @@ import (
 )
 
 type zonefileServer struct {
-	tld     string
-	content string
+	tld string
+	zlp ZoneListProvider
+}
+
+// interface for obtaining zone information
+type ZoneListProvider interface {
+	Zone() string
+}
+
+type roundRobinZoneLlistProvider struct {
+	i        int
+	contents []string
+}
+
+func (r *roundRobinZoneLlistProvider) Zone() string {
+	content := r.contents[r.i]
+	r.i = (r.i + 1) % len(r.contents)
+	return content
 }
 
 // generate a valid JWT
@@ -45,7 +61,7 @@ func (s *zonefileServer) ServeZone(w http.ResponseWriter, req *http.Request) {
 	w.Header().Set("Content-Type", "text/dns")
 	gz := gzip.NewWriter(w)
 	defer gz.Close()
-	fmt.Fprintf(gz, s.content)
+	fmt.Fprintf(gz, s.zlp.Zone())
 }
 
 func (s *zonefileServer) start(addr string) error {
@@ -62,25 +78,36 @@ func (s *zonefileServer) start(addr string) error {
 	return http.Serve(listener, nil)
 }
 
-func newZonefileServer(content string, tld string) *zonefileServer {
+func newZonefileServer(zlp ZoneListProvider, tld string) *zonefileServer {
 	return &zonefileServer{
-		tld:     tld,
-		content: content,
+		tld: tld,
+		zlp: zlp,
 	}
 }
 
 func main() {
 	tld := "test"
 
-	content := `first.org. IN NS ns1.dns.com.
-first.com. IN NS ns2.dns.com.
-second.com. IN NS ns3.dns.com.
-second.dk. IN NS ns3.dns.com.
-test.co.uk. IN NS ns4.dns.com.
+	contents := []string{
+		`first.org. IN NS ns1.dns.com.
+second.co.uk. IN NS ns2.dns.com.
 third.net. IN A 10.0.0.1
 fourth.net. IN AAAA ::1
-`
-	s := newZonefileServer(content, tld)
+`,
+		`first.org. IN NS ns1.dns.com.
+third.net. IN A 10.0.0.1
+fourth.net. IN AAAA ::1
+`,
+		`first.org. IN NS ns1.dns.com.
+second.co.uk. IN NS ns2.dns.com.
+fourth.net. IN AAAA ::1
+`,
+	}
+	zlp := roundRobinZoneLlistProvider{
+		contents: contents,
+	}
+
+	s := newZonefileServer(&zlp, tld)
 
 	s.start(":57962")
 }

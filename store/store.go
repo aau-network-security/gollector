@@ -819,7 +819,7 @@ func storeCachedValuePosthook() postHook {
 
 		if len(s.updates.zoneEntries) > 0 {
 			z := s.updates.zoneEntryList()
-			_, err := tx.Model(&z).Column("last_seen").Update()
+			_, err := tx.Model(&z).Column("last_seen", "active").Update()
 			if err != nil {
 				return errs.Wrap(err, "update zone entries")
 			}
