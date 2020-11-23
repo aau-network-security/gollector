@@ -17,9 +17,9 @@ func TestClient(t *testing.T) {
 		Username: user,
 		Password: pass,
 	}
-	auth := NewAuthenticator(creds)
+	auth := NewAuthenticator(creds, DefaultAuthBaseUrl)
 
-	c := NewClient(auth)
+	c := NewClient(auth, DefaultCzdsBaseUrl)
 
 	resp, err := c.GetZone("net")
 	if err != nil {
@@ -41,11 +41,11 @@ func TestAllZones(t *testing.T) {
 		Username: user,
 		Password: pass,
 	}
-	auth := NewAuthenticator(cred)
+	auth := NewAuthenticator(cred, DefaultAuthBaseUrl)
 
-	c := NewClient(auth)
+	c := NewClient(auth, DefaultCzdsBaseUrl)
 
-	zones, err := c.AllZones()
+	zones, err := c.DownloadableZones()
 	if err != nil {
 		t.Fatalf("failed to retrieve all zones: %s", err)
 	}

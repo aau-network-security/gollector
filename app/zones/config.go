@@ -71,6 +71,7 @@ type Czds struct {
 	Enabled     bool              `yaml:"enabled"`
 	ZoneBaseUrl string            `yaml:"zone-base-url"`
 	AuthBaseUrl string            `yaml:"auth-base-url"`
+	Reason      string            `yaml:"reason"`
 	All         bool              `yaml:"all"`
 	Included    []string          `yaml:"included"`
 	Excluded    []string          `yaml:"excluded"`
