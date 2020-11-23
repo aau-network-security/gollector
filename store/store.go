@@ -367,7 +367,7 @@ func (s *Store) migrate() error {
 //todo implement a limit
 func (s *Store) init() error {
 	var tlds []*models.Tld
-	if err := s.db.Model(&tlds).Order("id ASC").Select(); err != nil {
+	if err := s.db.Model(&tlds).Order("id ASC").Limit(s.cacheOpts.TLDSize).Select(); err != nil {
 		return err
 	}
 	for _, tld := range tlds {
@@ -375,7 +375,7 @@ func (s *Store) init() error {
 	}
 
 	var tldsAnon []*models.TldAnon
-	if err := s.db.Model(&tldsAnon).Order("id ASC").Select(); err != nil {
+	if err := s.db.Model(&tldsAnon).Order("id ASC").Limit(s.cacheOpts.TLDSize).Select(); err != nil {
 		return err
 	}
 	for _, tld := range tldsAnon {
@@ -383,7 +383,7 @@ func (s *Store) init() error {
 	}
 
 	var suffixes []*models.PublicSuffix
-	if err := s.db.Model(&suffixes).Order("id ASC").Select(); err != nil {
+	if err := s.db.Model(&suffixes).Order("id ASC").Limit(s.cacheOpts.PSuffSize).Select(); err != nil {
 		return err
 	}
 	for _, suffix := range suffixes {
@@ -391,7 +391,7 @@ func (s *Store) init() error {
 	}
 
 	var suffixesAnon []*models.PublicSuffixAnon
-	if err := s.db.Model(&suffixesAnon).Order("id ASC").Select(); err != nil {
+	if err := s.db.Model(&suffixesAnon).Order("id ASC").Limit(s.cacheOpts.PSuffSize).Select(); err != nil {
 		return err
 	}
 	for _, suffix := range suffixesAnon {
@@ -399,7 +399,7 @@ func (s *Store) init() error {
 	}
 
 	var apexes []*models.Apex
-	if err := s.db.Model(&apexes).Order("id ASC").Select(); err != nil {
+	if err := s.db.Model(&apexes).Order("id ASC").Limit(s.cacheOpts.ApexSize).Select(); err != nil {
 		return err
 	}
 	for _, apex := range apexes {
@@ -408,7 +408,7 @@ func (s *Store) init() error {
 	}
 
 	var apexesAnon []*models.ApexAnon
-	if err := s.db.Model(&apexesAnon).Order("id ASC").Select(); err != nil {
+	if err := s.db.Model(&apexesAnon).Order("id ASC").Limit(s.cacheOpts.ApexSize).Select(); err != nil {
 		return err
 	}
 	for _, apex := range apexesAnon {
@@ -416,7 +416,7 @@ func (s *Store) init() error {
 	}
 
 	var fqdns []*models.Fqdn
-	if err := s.db.Model(&fqdns).Order("id ASC").Select(); err != nil {
+	if err := s.db.Model(&fqdns).Order("id ASC").Limit(s.cacheOpts.FQDNSize).Select(); err != nil {
 		return err
 	}
 	fqdnsById := make(map[uint]*models.Fqdn)
@@ -426,7 +426,7 @@ func (s *Store) init() error {
 	}
 
 	var fqdnsAnon []*models.FqdnAnon
-	if err := s.db.Model(&fqdnsAnon).Order("id ASC").Select(); err != nil {
+	if err := s.db.Model(&fqdnsAnon).Order("id ASC").Limit(s.cacheOpts.FQDNSize).Select(); err != nil {
 		return err
 	}
 	for _, fqdn := range fqdnsAnon {
@@ -434,7 +434,7 @@ func (s *Store) init() error {
 	}
 
 	var entries []*models.ZonefileEntry
-	if err := s.db.Model(&entries).Order("id ASC").Select(); err != nil {
+	if err := s.db.Model(&entries).Order("id ASC").Limit(s.cacheOpts.ZoneEntrySize).Select(); err != nil {
 		return err
 	}
 	for _, entry := range entries {
@@ -444,7 +444,7 @@ func (s *Store) init() error {
 	}
 
 	var logs []*models.Log
-	if err := s.db.Model(&logs).Order("id ASC").Select(); err != nil {
+	if err := s.db.Model(&logs).Order("id ASC").Limit(s.cacheOpts.LogSize).Select(); err != nil {
 		return err
 	}
 	for _, l := range logs {
@@ -452,7 +452,7 @@ func (s *Store) init() error {
 	}
 
 	var certs []*models.Certificate
-	if err := s.db.Model(&certs).Order("id ASC").Select(); err != nil {
+	if err := s.db.Model(&certs).Order("id ASC").Limit(s.cacheOpts.CertSize).Select(); err != nil {
 		return err
 	}
 	for _, c := range certs {
@@ -477,16 +477,6 @@ func (s *Store) init() error {
 		fqdn := fqdnsById[entry.FqdnID]
 		rtype := rtypeById[entry.RecordTypeID]
 		s.cache.passiveEntryByFqdn.add(fqdn.Fqdn, rtype.Type, entry)
-	}
-
-	var measurements []*models.Measurement
-	if err := s.db.Model(&measurements).Order("id ASC").Select(); err != nil {
-		return err
-	}
-
-	var stages []*models.Stage
-	if err := s.db.Model(&stages).Order("id ASC").Select(); err != nil {
-		return err
 	}
 
 	s.ids.zoneEntries = 1
