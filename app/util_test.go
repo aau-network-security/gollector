@@ -1,6 +1,7 @@
 package app
 
 import (
+	"errors"
 	"testing"
 	"time"
 )
@@ -28,5 +29,37 @@ func TestRepeat(t *testing.T) {
 		if count != tc.expectedCount {
 			t.Fatalf("Expected %d function calls, but got %d", tc.expectedCount, count)
 		}
+	}
+}
+
+func TestRetry(t *testing.T) {
+	calls := 0
+	f := func() error {
+		calls++
+		if calls == 4 {
+			return nil
+		}
+		return errors.New("error")
+	}
+
+	// retry only twice, and we expect an error as a result
+	err := Retry(f, 2)
+	if err == nil {
+		t.Fatalf("expected an error, but got none")
+	}
+	// two retries = three function call
+	if calls != 3 {
+		t.Fatalf("expected %d calls, but got %d", 2, calls)
+	}
+
+	// retry six times, and we expect a success (after four calls)
+	calls = 0
+	err = Retry(f, 6)
+	if err != nil {
+		t.Fatalf("expected no error, but got one")
+	}
+	// when success, do NOT retry again
+	if calls != 4 {
+		t.Fatalf("expected %d calls, but got %d", 3, calls)
 	}
 }

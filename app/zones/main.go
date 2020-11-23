@@ -266,8 +266,11 @@ func main() {
 					StreamHandler:  zc.streamHandler,
 				}
 
+				retryFn := func() error {
+					return zone.Process(zc.zone, opts)
+				}
 				resultStatus := "ok"
-				if err := zone.Process(zc.zone, opts); err != nil {
+				if err := app.Retry(retryFn, 3); err != nil {
 					log.Error().Msgf("error while processing zone file: %s", err)
 					resultStatus = "failed"
 				}
