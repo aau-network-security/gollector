@@ -238,6 +238,9 @@ func (r *Ready) IsReady() bool {
 }
 
 func (r *Ready) Wait() {
+	if r.isReady {
+		return
+	}
 	<-r.c
 	r.isReady = true
 }
@@ -436,7 +439,7 @@ func (s *Store) init() error {
 	}
 	for _, entry := range entries {
 		apexI, _ := s.cache.apexById.Get(entry.ApexID)
-		apex := apexI.(models.Apex)
+		apex := apexI.(*models.Apex)
 		s.cache.zoneEntriesByApexName.Add(apex.Apex, entry)
 	}
 
