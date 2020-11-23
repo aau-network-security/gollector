@@ -60,3 +60,14 @@ func Repeat(f RepeatFunc, startTime time.Time, interval time.Duration, n int) er
 func TimeFromUnix(ts int64) time.Time {
 	return time.Unix(int64(ts/1000), int64(ts%1000))
 }
+
+// retries the given function up to "retries" times in case the function returns an error
+func Retry(f func() error, retries int) error {
+	if err := f(); err != nil {
+		if retries == 0 {
+			return err
+		}
+		return Retry(f, retries-1)
+	}
+	return nil
+}

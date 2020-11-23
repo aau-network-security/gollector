@@ -4,7 +4,7 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog/log"
+	"time"
 
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/go-pg/pg"
@@ -23,6 +23,12 @@ type certstruct struct {
 
 var cacheNotFound = errors.New("not found in the cache")
 
+type zoneentrystruct struct {
+	ze  *models.ZonefileEntry
+	t   time.Time
+	sid uint
+}
+
 type BatchEntities struct {
 	tldByName              map[string]*domainstruct
 	tldAnonByName          map[string]*domainstruct
@@ -33,6 +39,7 @@ type BatchEntities struct {
 	fqdnByName             map[string]*domainstruct
 	fqdnByNameAnon         map[string]*domainstruct
 	certByFingerprint      map[string]*certstruct
+	zoneEntryByApex        map[string]*zoneentrystruct
 }
 
 func NewBatchEntities() BatchEntities {
@@ -46,10 +53,11 @@ func NewBatchEntities() BatchEntities {
 		fqdnByName:             make(map[string]*domainstruct),
 		fqdnByNameAnon:         make(map[string]*domainstruct),
 		certByFingerprint:      make(map[string]*certstruct),
+		zoneEntryByApex:        map[string]*zoneentrystruct{},
 	}
 }
 
-func (s *Store) MapEntry(muid string, entry LogEntry) error {
+func (s *Store) StoreLogEntry(muid string, entry LogEntry) error {
 	s.m.Lock()
 	defer s.m.Unlock()
 
@@ -90,33 +98,8 @@ func (s *Store) MapEntry(muid string, entry LogEntry) error {
 	return s.conditionalPostHooks()
 }
 
-func (s *Store) backProp() []error {
-	var errs []error
-	log.Debug().Msgf("certs..")
-	if err := s.mapCert(); err != nil {
-		errs = append(errs, err)
-	}
-	log.Debug().Msgf("fqdns..")
-	if err := s.mapFQDN(); err != nil {
-		errs = append(errs, err)
-	}
-	log.Debug().Msgf("apexes..")
-	if err := s.mapApex(); err != nil {
-		errs = append(errs, err)
-	}
-	log.Debug().Msgf("public suffixes..")
-	if err := s.mapPublicSuffix(); err != nil {
-		errs = append(errs, err)
-	}
-	log.Debug().Msgf("tlds..")
-	if err := s.mapTLD(); err != nil {
-		errs = append(errs, err)
-	}
-	return errs
-}
-
 // collect ids for all observed certificates in the batch, either from the cache or the database
-func (s *Store) mapCert() error {
+func (s *Store) backpropCert() error {
 
 	// fetch ids from cache
 	var certsNotFoundInCache []string
@@ -156,7 +139,7 @@ func (s *Store) mapCert() error {
 }
 
 // collect ids for all observed FQDNs in the batch, either from the cache or the database
-func (s *Store) mapFQDN() error {
+func (s *Store) backpropFqdn() error {
 
 	// fetch ids from cache
 	var fqndNotFoundInCache []string
@@ -200,7 +183,7 @@ func (s *Store) mapFQDN() error {
 }
 
 // collect ids for all observed apexes in the batch, either from the cache or the database
-func (s *Store) mapApex() error {
+func (s *Store) backpropApex() error {
 
 	// fetch ids from cache
 	var apexNotFoundInCache []string
@@ -244,7 +227,7 @@ func (s *Store) mapApex() error {
 }
 
 // collect ids for all observed public suffixes in the batch, either from the cache or the database
-func (s *Store) mapPublicSuffix() error {
+func (s *Store) backpropPublicSuffix() error {
 
 	// fetch ids from cache
 	var psNotFoundInCache []string
@@ -287,7 +270,7 @@ func (s *Store) mapPublicSuffix() error {
 }
 
 // collect ids for all observed TLDs in the batch, either from the cache or the database
-func (s *Store) mapTLD() error {
+func (s *Store) backpropTld() error {
 
 	// fetch ids from cache
 	var tldNotFoundInCache []string
@@ -330,10 +313,7 @@ func (s *Store) mapTLD() error {
 	return nil
 }
 
-// based on the given batch, fill in the `insert` modelset, ready for running the queries against the database
-func (s *Store) forwardProp() error {
-	// tld
-	log.Debug().Msgf("tlds..")
+func (s *Store) forpropTld() {
 	for k, str := range s.batchEntities.tldByName {
 		if str.obj == nil {
 			res := &models.Tld{
@@ -347,9 +327,9 @@ func (s *Store) forwardProp() error {
 			s.cache.tldByName.Add(k, res)
 		}
 	}
+}
 
-	// public suffixes
-	log.Debug().Msgf("public suffixes..")
+func (s *Store) forpropPublicSuffix() {
 	for k, str := range s.batchEntities.publicSuffixByName {
 		if str.obj == nil {
 			// get TLD name from public suffix object
@@ -367,9 +347,9 @@ func (s *Store) forwardProp() error {
 			s.cache.publicSuffixByName.Add(k, res)
 		}
 	}
+}
 
-	// apexes
-	log.Debug().Msgf("apexes..")
+func (s *Store) forpropApex() {
 	for k, str := range s.batchEntities.apexByName {
 		if str.obj == nil {
 
@@ -393,9 +373,9 @@ func (s *Store) forwardProp() error {
 			s.cache.apexByName.Add(k, res)
 		}
 	}
+}
 
-	// fqdns
-	log.Debug().Msgf("fqnds..")
+func (s *Store) forpropFqdn() {
 	for k, str := range s.batchEntities.fqdnByName {
 
 		if str.obj == nil {
@@ -423,9 +403,9 @@ func (s *Store) forwardProp() error {
 			s.cache.fqdnByName.Add(k, res)
 		}
 	}
+}
 
-	// certificates
-	log.Debug().Msgf("certs..")
+func (s *Store) forpropCerts() error {
 	for k, certstr := range s.batchEntities.certByFingerprint {
 
 		if certstr.cert == nil {
@@ -475,12 +455,5 @@ func (s *Store) forwardProp() error {
 
 		s.inserts.logEntries = append(s.inserts.logEntries, &le)
 	}
-
-	s.influxService.StoreHit("db-insert", "tld", len(s.inserts.tld))
-	s.influxService.StoreHit("db-insert", "public-suffix", len(s.inserts.publicSuffix))
-	s.influxService.StoreHit("db-insert", "apex", len(s.inserts.apexes))
-	s.influxService.StoreHit("db-insert", "fqdn", len(s.inserts.fqdns))
-	s.influxService.StoreHit("db-insert", "cert", len(s.inserts.certs))
-
 	return nil
 }

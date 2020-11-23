@@ -5,6 +5,8 @@ go 1.13
 require (
 	github.com/bippio/go-impala v2.0.0+incompatible
 	github.com/cenkalti/backoff v2.2.1+incompatible // indirect
+	github.com/cheggaaa/pb v2.0.7+incompatible
+	github.com/cheggaaa/pb/v3 v3.0.5
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
 	github.com/getsentry/sentry-go v0.3.0
 	github.com/go-acme/lego v2.7.2+incompatible
@@ -32,6 +34,12 @@ require (
 	golang.org/x/sys v0.0.0-20200602225109-6fdc65e7d980 // indirect
 	golang.org/x/text v0.3.2
 	google.golang.org/grpc v1.24.0
+	gopkg.in/VividCortex/ewma.v1 v1.1.1 // indirect
+	gopkg.in/cheggaaa/pb.v2 v2.0.7 // indirect
+	gopkg.in/fatih/color.v1 v1.0.0-00010101000000-000000000000 // indirect
+	gopkg.in/mattn/go-colorable.v0 v0.0.0-00010101000000-000000000000 // indirect
+	gopkg.in/mattn/go-isatty.v0 v0.0.0-00010101000000-000000000000 // indirect
+	gopkg.in/mattn/go-runewidth.v0 v0.0.0-00010101000000-000000000000 // indirect
 	gopkg.in/yaml.v2 v2.3.0
 	mellium.im/sasl v0.2.1 // indirect
 )
@@ -57,3 +65,11 @@ replace github.com/golangci/ineffassign v0.0.0-20180808204949-42439a7714cc => gi
 replace github.com/golangci/lint-1 v0.0.0-20180610141402-ee948d087217 => github.com/golangci/lint-1 v0.0.0-20181222135242-d2cdd8c08219
 
 replace mvdan.cc/unparam v0.0.0-20190124213536-fbb59629db34 => github.com/mvdan/unparam v0.0.0-20190917161559-b83a221c10a2
+
+replace gopkg.in/mattn/go-colorable.v0 => github.com/mattn/go-colorable v0.1.2
+
+replace gopkg.in/mattn/go-isatty.v0 => github.com/mattn/go-isatty v0.0.7
+
+replace gopkg.in/mattn/go-runewidth.v0 => github.com/mattn/go-runewidth v0.0.9
+
+replace gopkg.in/fatih/color.v1 => github.com/fatih/color v1.10.0

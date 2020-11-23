@@ -18,8 +18,8 @@ func TestProcess(t *testing.T) {
 		Username: user,
 		Password: pass,
 	}
-	auth := NewAuthenticator(cred)
-	z := New(auth, "net")
+	auth := NewAuthenticator(cred, DefaultAuthBaseUrl)
+	z := New(auth, DefaultCzdsBaseUrl, "net")
 
 	count := 0
 	f := func(domain []byte) error {
@@ -37,5 +37,4 @@ func TestProcess(t *testing.T) {
 	if err := zone2.Process(z, opts); err != nil && count != 1 {
 		t.Fatalf("error while processing zone: %s", err)
 	}
-
 }

@@ -28,7 +28,10 @@ func TestNewInfluxService(t *testing.T) {
 				Interval:     1,
 			}
 
-			ifs := NewInfluxService(opts)
+			ifs, err := NewInfluxService(opts)
+			if err != nil {
+				t.Fatalf("error while creating influxdb service: %s", err)
+			}
 			ifs.StoreHit("cache-hit", "log", 1)
 			ifs.StoreHit("cache-hit", "cert", 1)
 			ifs.StoreHit("cache-insert", "cert", 1)

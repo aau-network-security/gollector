@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"fmt"
 	testing2 "github.com/aau-network-security/gollector/testing"
+	lru "github.com/hashicorp/golang-lru"
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	influxapi "github.com/influxdata/influxdb-client-go/v2/api"
 	"github.com/influxdata/influxdb-client-go/v2/api/write"
@@ -431,7 +432,7 @@ func TestDebug(t *testing.T) {
 			Ts: now,
 		}
 
-		if err := s.MapEntry(muid, le); err != nil {
+		if err := s.StoreLogEntry(muid, le); err != nil {
 			t.Fatalf("unexpected error while storing log entry: %s", err)
 		}
 	}
@@ -473,7 +474,7 @@ func TestDebug(t *testing.T) {
 			Ts: now,
 		}
 
-		if err := s.MapEntry(muid, le); err != nil {
+		if err := s.StoreLogEntry(muid, le); err != nil {
 			t.Fatalf("unexpected error while storing log entry: %s", err)
 		}
 	}
@@ -535,7 +536,10 @@ func TestInfluxDb(t *testing.T) {
 
 	client := testInfluxdbClient{}
 	api := testWriteApi{}
-	ifs := NewInfluxServiceWithClient(client, api, 1)
+	ifs, err := NewInfluxServiceWithClient(client, api, 1)
+	if err != nil {
+		t.Fatalf("unexpected error while creating influxdb service: %s", err)
+	}
 
 	s.influxService = ifs
 
@@ -561,7 +565,7 @@ func TestInfluxDb(t *testing.T) {
 			Ts: now,
 		}
 
-		if err := s.MapEntry(muid, le); err != nil {
+		if err := s.StoreLogEntry(muid, le); err != nil {
 			t.Fatalf("unexpected error while storing log entry: %s", err)
 		}
 
@@ -571,4 +575,41 @@ func TestInfluxDb(t *testing.T) {
 	time.Sleep(1)
 
 	ifs.Close()
+}
+
+func TestInitWithExistingDb(t *testing.T) {
+	conf := Config{
+		User:     "postgres",
+		Password: "postgres",
+		DBName:   "domains",
+		Host:     "localhost",
+		Port:     5432,
+	}
+	s, _, muid, err := OpenStore(conf)
+	if err != nil {
+		t.Fatalf("failed to create store: %s", err)
+	}
+
+	now := time.Now()
+	if _, err := s.StoreZoneEntry(muid, now, "example.org"); err != nil {
+		t.Fatalf("failed to store zone entry: %s", err)
+	}
+
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("failed to run post hooks: %s", err)
+	}
+
+	// test initialization
+	s, err = NewStore(conf, TestOpts)
+	if err != nil {
+		t.Fatalf("failed to create store: %s", err)
+	}
+	s.Ready.Wait()
+
+	for _, cache := range []*lru.Cache{s.cache.zoneEntriesByApexName, s.cache.apexByName, s.cache.tldByName, s.cache.publicSuffixByName} {
+		l := cache.Len()
+		if l != 1 {
+			t.Fatalf("unexpected amount of entries in the cache: got %d, but expected %d", l, 1)
+		}
+	}
 }

@@ -1,8 +1,12 @@
 package zone
 
 import (
+	"errors"
+	"github.com/aau-network-security/gollector/app"
 	"github.com/aau-network-security/gollector/store"
 	testing2 "github.com/aau-network-security/gollector/testing"
+	"io"
+	"strings"
 	"testing"
 	"time"
 )
@@ -93,6 +97,95 @@ func TestGetStartTime(t *testing.T) {
 	}
 }
 
+func TestStoreLogentry(t *testing.T) {
+	testing2.SkipCI(t)
+
+	conf := store.Config{
+		Host:     "localhost",
+		User:     "postgres",
+		Password: "postgres",
+		Port:     5432,
+		DBName:   "domains",
+	}
+	s, _, muid, err := store.OpenStore(conf)
+	if err != nil {
+		t.Fatalf("unexpected error while opening store: %s", err)
+	}
+
+	ts := time.Now()
+	fqdn := "example.org"
+
+	if _, err := s.StoreZoneEntry(muid, ts, fqdn); err != nil {
+		t.Fatalf("unexpected error while storing zone entry: %s", err)
+	}
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("unexpected error while running post hooks: %s", err)
+	}
+}
+
 func almostEqual(t1, t2 time.Time, space time.Duration) bool {
 	return t2.After(t1.Add(-space)) && t2.Before(t1.Add(space))
+}
+
+type testReadCloser struct {
+	reader *strings.Reader
+	count  int
+}
+
+func (rc *testReadCloser) Read(p []byte) (n int, err error) {
+	if rc.count == 0 {
+		// first call fails
+		rc.count++
+		return 0, errors.New("read error")
+	}
+	// return content
+	return rc.reader.Read(p)
+}
+
+func (rc *testReadCloser) Close() error {
+	return nil
+}
+
+func NewTestReadCloser(content string) io.ReadCloser {
+	reader := strings.NewReader(content)
+	rc := testReadCloser{
+		reader: reader,
+	}
+	return &rc
+}
+
+type testZone struct {
+	rc io.ReadCloser
+}
+
+func (z testZone) Stream() (io.ReadCloser, error) {
+	return z.rc, nil
+}
+
+func (z testZone) Tld() string {
+	return "test"
+}
+
+func TestRetryProcess(t *testing.T) {
+	z := testZone{
+		rc: NewTestReadCloser("\n"),
+	}
+
+	df := func([]byte) error {
+		return nil
+	}
+
+	po := ProcessOpts{
+		DomainFn:       df,
+		StreamWrappers: []StreamWrapper{},
+		StreamHandler:  ZoneFileHandler,
+	}
+
+	retryFn := func() error {
+		return Process(z, po)
+	}
+
+	if err := app.Retry(retryFn, 2); err != nil {
+		t.Fatalf("unexpected error while processing zone: %s", err)
+	}
 }

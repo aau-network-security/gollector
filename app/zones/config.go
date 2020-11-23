@@ -68,11 +68,14 @@ func (d *dk) IsValid() error {
 }
 
 type Czds struct {
-	Enabled  bool              `yaml:"enabled"`
-	All      bool              `yaml:"all"`
-	Included []string          `yaml:"included"`
-	Excluded []string          `yaml:"excluded"`
-	Creds    czds2.Credentials `yaml:"credentials"`
+	Enabled     bool              `yaml:"enabled"`
+	ZoneBaseUrl string            `yaml:"zone-base-url"`
+	AuthBaseUrl string            `yaml:"auth-base-url"`
+	Reason      string            `yaml:"reason"`
+	All         bool              `yaml:"all"`
+	Included    []string          `yaml:"included"`
+	Excluded    []string          `yaml:"excluded"`
+	Creds       czds2.Credentials `yaml:"credentials"`
 }
 
 func (c *Czds) IsValid() error {

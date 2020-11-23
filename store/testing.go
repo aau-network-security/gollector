@@ -8,6 +8,20 @@ import (
 	"github.com/pkg/errors"
 )
 
+var TestOpts = Opts{
+	BatchSize: 10,
+	CacheOpts: CacheOpts{
+		LogSize:       3,
+		TLDSize:       3,
+		PSuffSize:     3,
+		ApexSize:      5,
+		FQDNSize:      5,
+		CertSize:      5,
+		ZoneEntrySize: 10,
+	},
+	AllowedInterval: 10 * time.Millisecond,
+}
+
 func OpenStore(conf Config) (*Store, *gorm.DB, string, error) {
 	g, err := conf.Open()
 	if err != nil {
@@ -18,20 +32,7 @@ func OpenStore(conf Config) (*Store, *gorm.DB, string, error) {
 		return nil, nil, "", errors.Wrap(err, "failed to reset database")
 	}
 
-	opts := Opts{
-		BatchSize: 10,
-		CacheOpts: CacheOpts{
-			LogSize:   3,
-			TLDSize:   3,
-			PSuffSize: 3,
-			ApexSize:  5,
-			FQDNSize:  5,
-			CertSize:  5,
-		},
-		AllowedInterval: 10 * time.Millisecond,
-	}
-
-	s, err := NewStore(conf, opts)
+	s, err := NewStore(conf, TestOpts)
 	if err != nil {
 		return nil, nil, "", errors.Wrap(err, "failed to open store")
 	}

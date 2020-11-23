@@ -75,7 +75,7 @@ func (s *Server) StoreLogEntries(str api.CtApi_StoreLogEntriesServer) error {
 					Log:       l,
 				}
 
-				if err := s.Store.MapEntry(muid, entry); err != nil {
+				if err := s.Store.StoreLogEntry(muid, entry); err != nil {
 					s.Log.Log(err, app.LogOptions{
 						Msg: "failed to map log entry with Cache",
 						Tags: map[string]string{

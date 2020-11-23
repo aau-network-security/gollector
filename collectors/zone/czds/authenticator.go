@@ -3,6 +3,7 @@ package czds
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"github.com/dgrijalva/jwt-go"
 	"github.com/pkg/errors"
 	"net/http"
@@ -11,11 +12,12 @@ import (
 )
 
 const (
-	authUrl = "https://account-api.icann.org/api/authenticate"
+	authUrl = "%s/api/authenticate"
 )
 
 var (
-	JwtTokenErr = errors.New("error while parsing JWT token")
+	DefaultAuthBaseUrl = "https://account-api.icann.org"
+	JwtTokenErr        = errors.New("error while parsing JWT token")
 )
 
 type authRequest struct {
@@ -57,6 +59,7 @@ func (at accessToken) isExpired() (bool, error) {
 }
 
 type Authenticator struct {
+	baseUrl     string
 	client      *http.Client
 	accessToken accessToken
 	cred        Credentials
@@ -73,7 +76,8 @@ func (a *Authenticator) authenticate() error {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", authUrl, bytes.NewBuffer(marshalled))
+	url := fmt.Sprintf(authUrl, a.baseUrl)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(marshalled))
 	if err != nil {
 		return err
 	}
@@ -123,9 +127,10 @@ func (a *Authenticator) Token() (string, error) {
 	return string(a.accessToken), nil
 }
 
-func NewAuthenticator(cred Credentials) *Authenticator {
+func NewAuthenticator(cred Credentials, baseUrl string) *Authenticator {
 	httpClient := &http.Client{}
 	return &Authenticator{
+		baseUrl:     baseUrl,
 		cred:        cred,
 		client:      httpClient,
 		accessToken: "",
