@@ -22,6 +22,14 @@ var TestOpts = Opts{
 	AllowedInterval: 10 * time.Millisecond,
 }
 
+var TestConfig = Config{
+	User:     "postgres",
+	Password: "postgres",
+	DBName:   "domains",
+	Host:     "localhost",
+	Port:     5432,
+}
+
 func OpenStore(conf Config) (*Store, *gorm.DB, string, error) {
 	g, err := conf.Open()
 	if err != nil {

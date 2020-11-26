@@ -5,10 +5,12 @@ import (
 	"crypto/rsa"
 	"fmt"
 	testing2 "github.com/aau-network-security/gollector/testing"
+	"github.com/go-pg/pg"
 	lru "github.com/hashicorp/golang-lru"
 	influxdb2 "github.com/influxdata/influxdb-client-go/v2"
 	influxapi "github.com/influxdata/influxdb-client-go/v2/api"
 	"github.com/influxdata/influxdb-client-go/v2/api/write"
+	"github.com/rs/zerolog/log"
 	"math/big"
 	"reflect"
 	"testing"
@@ -611,5 +613,71 @@ func TestInitWithExistingDb(t *testing.T) {
 		if l != 1 {
 			t.Fatalf("unexpected amount of entries in the cache: got %d, but expected %d", l, 1)
 		}
+	}
+}
+
+type qh struct{}
+
+func (h *qh) BeforeQuery(event *pg.QueryEvent) {}
+
+func (h *qh) AfterQuery(event *pg.QueryEvent) {
+	query, err := event.FormattedQuery()
+	if err != nil {
+		log.Warn().Msgf("failed to format query: %s", err)
+	} else if event.Error != nil {
+		log.Warn().Msgf("query failed [%s]: %s", query, event.Error)
+	} else {
+		log.Debug().Msgf("query successful [%s]", query)
+	}
+}
+
+func TestMaxValForColumn(t *testing.T) {
+	s, _, _, err := OpenStore(TestConfig)
+	if err != nil {
+		t.Fatalf("failed to create store: %s", err)
+	}
+	s.db.AddQueryHook(&qh{})
+
+	qry := "INSERT INTO apexes VALUES (?, ?, ?, ?)"
+
+	// insert 10 apexes in database
+	for i := 1; i < 11; i++ {
+		domain := fmt.Sprintf("%d.google.com", i)
+		id := i
+		if _, err := s.db.Exec(qry, id, domain, 1, 1); err != nil {
+			t.Fatalf("failed to insert test data in database: %s", err)
+		}
+	}
+
+	maxId, err := s.maxValForColumn("apexes", "id")
+	if err != nil {
+		t.Fatalf("failed to retrieve max id: %s", err)
+	}
+	if maxId != 10 {
+		t.Fatalf("unexpected max id: expected %d, but got %d", 10, maxId)
+	}
+
+	maxTldId, err := s.maxValForColumn("apexes", "tld_id")
+	if err != nil {
+		t.Fatalf("failed to retrieve max id: %s", err)
+	}
+
+	if maxTldId != 1 {
+		t.Fatalf("unexpected max tld id: expected %d, but got %d", 1, maxTldId)
+	}
+
+	// without any rows in the db
+	s, _, _, err = OpenStore(TestConfig)
+	if err != nil {
+		t.Fatalf("failed to create store: %s", err)
+	}
+	s.db.AddQueryHook(&qh{})
+	maxId, err = s.maxValForColumn("apexes", "id")
+	if err != nil {
+		t.Fatalf("failed to retrieve max id: %s", err)
+	}
+
+	if maxId != 0 {
+		t.Fatalf("unexpected max id: expected %d, but got %d", 0, maxTldId)
 	}
 }

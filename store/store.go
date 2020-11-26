@@ -365,6 +365,15 @@ func (s *Store) migrate() error {
 	return nil
 }
 
+func (s *Store) maxValForColumn(table string, column string) (uint, error) {
+	var res uint
+	qry := fmt.Sprintf("SELECT max(%s) FROM %s", column, table)
+	if _, err := s.db.Query(&res, qry); err != nil {
+		return 0, err
+	}
+	return res, nil
+}
+
 func (s *Store) init() error {
 	var tlds []*models.Tld
 	if err := s.db.Model(&tlds).Order("id ASC").Limit(s.cacheOpts.TLDSize).Select(); err != nil {
@@ -480,54 +489,78 @@ func (s *Store) init() error {
 		s.cache.passiveEntryByFqdn.add(fqdn.Fqdn, rtype.Type, entry)
 	}
 
-	s.ids.zoneEntries = 1
-	if len(entries) > 0 {
-		s.ids.zoneEntries = entries[len(entries)-1].ID + 1
+	// initialize counters
+	maxId, err := s.maxValForColumn("zonefile_entries", "id")
+	if err != nil {
+		return err
 	}
-	s.ids.tlds = 1
-	if len(tlds) > 0 {
-		s.ids.tlds = tlds[len(tlds)-1].ID + 1
+	s.ids.zoneEntries = maxId + 1
+
+	maxId, err = s.maxValForColumn("tlds", "id")
+	if err != nil {
+		return err
 	}
-	s.ids.tldsAnon = 1
-	if len(tldsAnon) > 0 {
-		s.ids.tldsAnon = tldsAnon[len(tldsAnon)-1].ID + 1
+	s.ids.tlds = maxId + 1
+
+	maxId, err = s.maxValForColumn("tlds_anon", "id")
+	if err != nil {
+		return err
 	}
-	s.ids.suffixes = 1
-	if len(suffixes) > 0 {
-		s.ids.suffixes = suffixes[len(suffixes)-1].ID + 1
+	s.ids.tldsAnon = maxId + 1
+
+	maxId, err = s.maxValForColumn("public_suffixes", "id")
+	if err != nil {
+		return err
 	}
-	s.ids.suffixesAnon = 1
-	if len(suffixesAnon) > 0 {
-		s.ids.suffixesAnon = suffixesAnon[len(suffixesAnon)-1].ID + 1
+	s.ids.suffixes = maxId + 1
+
+	maxId, err = s.maxValForColumn("public_suffixes_anon", "id")
+	if err != nil {
+		return err
 	}
-	s.ids.apexes = 1
-	if len(apexes) > 0 {
-		s.ids.apexes = apexes[len(apexes)-1].ID + 1
+	s.ids.suffixesAnon = maxId + 1
+
+	maxId, err = s.maxValForColumn("apexes", "id")
+	if err != nil {
+		return err
 	}
-	s.ids.apexesAnon = 1
-	if len(apexesAnon) > 0 {
-		s.ids.apexesAnon = apexesAnon[len(apexesAnon)-1].ID + 1
+	s.ids.apexes = maxId + 1
+
+	maxId, err = s.maxValForColumn("apexes_anon", "id")
+	if err != nil {
+		return err
 	}
-	s.ids.fqdns = 1
-	if len(fqdns) > 0 {
-		s.ids.fqdns = fqdns[len(fqdns)-1].ID + 1
+	s.ids.apexesAnon = maxId + 1
+
+	maxId, err = s.maxValForColumn("fqdns", "id")
+	if err != nil {
+		return err
 	}
-	s.ids.fqdnsAnon = 1
-	if len(fqdnsAnon) > 0 {
-		s.ids.fqdnsAnon = fqdnsAnon[len(fqdnsAnon)-1].ID + 1
+	s.ids.fqdns = maxId + 1
+
+	maxId, err = s.maxValForColumn("fqdns_anon", "id")
+	if err != nil {
+		return err
 	}
-	s.ids.logs = 1
-	if len(logs) > 0 {
-		s.ids.logs = logs[len(logs)-1].ID + 1
+	s.ids.fqdnsAnon = maxId + 1
+
+	maxId, err = s.maxValForColumn("logs", "id")
+	if err != nil {
+		return err
 	}
-	s.ids.certs = 1
-	if len(certs) > 0 {
-		s.ids.certs = certs[len(certs)-1].ID + 1
+	s.ids.logs = maxId + 1
+
+	maxId, err = s.maxValForColumn("certificates", "id")
+	if err != nil {
+		return err
 	}
-	s.ids.recordTypes = 1
-	if len(rtypes) > 0 {
-		s.ids.recordTypes = rtypes[len(rtypes)-1].ID + 1
+	s.ids.certs = maxId + 1
+
+	maxId, err = s.maxValForColumn("record_types", "id")
+	if err != nil {
+		return err
 	}
+	s.ids.recordTypes = maxId + 1
 
 	return nil
 }
