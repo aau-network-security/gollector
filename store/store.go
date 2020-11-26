@@ -631,31 +631,40 @@ func propagationPosthook() postHook {
 		// backprop all (but zone entries)
 		log.Debug().Msgf("propagating backwards..")
 		if err := s.backpropCert(); err != nil {
-			return err
+			return errs.Wrap(err, "back prop certs")
 		}
+		log.Debug().Msgf("(1/5)")
 
 		if err := s.backpropFqdn(); err != nil {
-			return err
+			return errs.Wrap(err, "back prop fqdns")
 		}
+		log.Debug().Msgf("(2/5)")
 
 		if err := s.backpropApex(); err != nil {
-			return err
+			return errs.Wrap(err, "back prop apexes")
 		}
+		log.Debug().Msgf("(3/5)")
 
 		if err := s.backpropPublicSuffix(); err != nil {
-			return err
+			return errs.Wrap(err, "back prop public suffixes")
 		}
+		log.Debug().Msgf("(4/5)")
 
 		if err := s.backpropTld(); err != nil {
-			return err
+			return errs.Wrap(err, "back prop tlds")
 		}
+		log.Debug().Msgf("(5/5)")
 
 		// forward prop all (but zone entries)
 		log.Debug().Msgf("propagating forwards..")
 		s.forpropTld()
+		log.Debug().Msgf("(1/4)")
 		s.forpropPublicSuffix()
+		log.Debug().Msgf("(2/4)")
 		s.forpropApex()
+		log.Debug().Msgf("(3/4)")
 		s.forpropFqdn()
+		log.Debug().Msgf("(4/4)")
 		if err := s.forpropCerts(); err != nil {
 			return err
 		}
@@ -663,7 +672,7 @@ func propagationPosthook() postHook {
 		log.Debug().Msgf("propagating backwards (zone entries)..")
 		// backprop zone entries
 		if err := s.backpropZoneEntries(); err != nil {
-			return err
+			return errs.Wrap(err, "back prop zone entries")
 		}
 
 		log.Debug().Msgf("propagating forwards (zone entries)..")
@@ -817,7 +826,7 @@ func storeCachedValuePosthook() postHook {
 		s.influxService.CacheSize("tld", s.cache.tldByName, s.cacheOpts.TLDSize)
 		s.influxService.CacheSize("zone-entry", s.cache.zoneEntriesByApexName, s.cacheOpts.ZoneEntrySize)
 
-		log.Debug().Msgf("Finished storing batch")
+		log.Debug().Msgf("finished storing batch")
 
 		return nil
 	}

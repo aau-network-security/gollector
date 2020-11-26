@@ -100,6 +100,9 @@ func (s *Store) StoreLogEntry(muid string, entry LogEntry) error {
 
 // collect ids for all observed certificates in the batch, either from the cache or the database
 func (s *Store) backpropCert() error {
+	if len(s.batchEntities.certByFingerprint) == 0 {
+		return nil
+	}
 
 	// fetch ids from cache
 	var certsNotFoundInCache []string
@@ -140,6 +143,9 @@ func (s *Store) backpropCert() error {
 
 // collect ids for all observed FQDNs in the batch, either from the cache or the database
 func (s *Store) backpropFqdn() error {
+	if len(s.batchEntities.fqdnByName) == 0 {
+		return nil
+	}
 
 	// fetch ids from cache
 	var fqndNotFoundInCache []string
@@ -184,6 +190,9 @@ func (s *Store) backpropFqdn() error {
 
 // collect ids for all observed apexes in the batch, either from the cache or the database
 func (s *Store) backpropApex() error {
+	if len(s.batchEntities.apexByName) == 0 {
+		return nil
+	}
 
 	// fetch ids from cache
 	var apexNotFoundInCache []string
@@ -228,6 +237,9 @@ func (s *Store) backpropApex() error {
 
 // collect ids for all observed public suffixes in the batch, either from the cache or the database
 func (s *Store) backpropPublicSuffix() error {
+	if len(s.batchEntities.publicSuffixByName) == 0 {
+		return nil
+	}
 
 	// fetch ids from cache
 	var psNotFoundInCache []string
@@ -271,6 +283,9 @@ func (s *Store) backpropPublicSuffix() error {
 
 // collect ids for all observed TLDs in the batch, either from the cache or the database
 func (s *Store) backpropTld() error {
+	if len(s.batchEntities.tldByName) == 0 {
+		return nil
+	}
 
 	// fetch ids from cache
 	var tldNotFoundInCache []string

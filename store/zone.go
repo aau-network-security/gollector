@@ -43,6 +43,10 @@ func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.Z
 
 // get all existing zone entries
 func (s *Store) backpropZoneEntries() error {
+	if len(s.batchEntities.zoneEntryByApex) == 0 {
+		return nil
+	}
+
 	// fetch ids from cache
 	var zoneEntriesNotFoundInCache []string
 

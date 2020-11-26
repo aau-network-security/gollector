@@ -55,7 +55,9 @@ services:
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASS?err}
     volumes:
-      - ./db:/docker-entrypoint-initdb.d      # initialization scripts, only executed first time
-      - ${DB_VOLUME?err}:/var/lib/postgresql/data # persistent storage of database
+      - ./db/docker-entrypoint-initdb.d:/docker-entrypoint-initdb.d  # initialization scripts, only executed first time
+      - ./db/config/postgresql.conf:/etc/postgresql.conf  # mount configuration file
+      - ${DB_VOLUME?err}:/var/lib/postgresql/data  # persistent storage of database
     ports:
       - "${POSTGRES_HOST?err}:${POSTGRES_PORT?err}:5432"
+    command: [ "-c", "config_file=/etc/postgresql.conf" ]
