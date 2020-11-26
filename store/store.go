@@ -2,7 +2,6 @@ package store
 
 import (
 	"fmt"
-	"github.com/cheggaaa/pb/v3"
 	"strings"
 	"sync"
 	"time"
@@ -293,11 +292,13 @@ func (s *Store) RunPostHooks() error {
 }
 
 func (s *Store) runPostHooks() error {
+	log.Debug().Msgf("running post hooks..")
 	for _, h := range s.postHooks {
 		if err := h(s); err != nil {
 			return err
 		}
 	}
+	log.Debug().Msgf("post hooks are done!")
 	return nil
 }
 
@@ -628,57 +629,44 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 func propagationPosthook() postHook {
 	return func(s *Store) error {
 		// backprop all (but zone entries)
-		log.Debug().Msgf("Propagating backwards..")
-		bar := pb.New(5).SetMaxWidth(40).Start()
-
+		log.Debug().Msgf("propagating backwards..")
 		if err := s.backpropCert(); err != nil {
 			return err
 		}
-		bar.Increment()
 
 		if err := s.backpropFqdn(); err != nil {
 			return err
 		}
-		bar.Increment()
 
 		if err := s.backpropApex(); err != nil {
 			return err
 		}
-		bar.Increment()
 
 		if err := s.backpropPublicSuffix(); err != nil {
 			return err
 		}
-		bar.Increment()
 
 		if err := s.backpropTld(); err != nil {
 			return err
 		}
-		bar.Increment()
-		bar.Finish()
 
 		// forward prop all (but zone entries)
-		bar = pb.New(5).SetMaxWidth(40).Start()
-
+		log.Debug().Msgf("propagating forwards..")
 		s.forpropTld()
-		bar.Increment()
 		s.forpropPublicSuffix()
-		bar.Increment()
 		s.forpropApex()
-		bar.Increment()
 		s.forpropFqdn()
-		bar.Increment()
 		if err := s.forpropCerts(); err != nil {
 			return err
 		}
-		bar.Increment()
-		bar.Finish()
 
+		log.Debug().Msgf("propagating backwards (zone entries)..")
 		// backprop zone entries
 		if err := s.backpropZoneEntries(); err != nil {
 			return err
 		}
 
+		log.Debug().Msgf("propagating forwards (zone entries)..")
 		// forward prop zone entries
 		s.forpropZoneEntries()
 
@@ -702,21 +690,18 @@ func storeCachedValuePosthook() postHook {
 		}
 		defer tx.Rollback()
 
-		bar := pb.New(14).SetMaxWidth(40).Start()
 		// inserts
 		if len(s.inserts.fqdns) > 0 {
 			if err := tx.Insert(&s.inserts.fqdns); err != nil {
 				return errs.Wrap(err, "insert fqdns")
 			}
 		}
-		bar.Increment()
 
 		if len(s.inserts.fqdnsAnon) > 0 {
 			if err := tx.Insert(&s.inserts.fqdnsAnon); err != nil {
 				return errs.Wrap(err, "insert anon fqdns")
 			}
 		}
-		bar.Increment()
 
 		if len(s.inserts.apexes) > 0 {
 			a := s.inserts.apexList()
@@ -724,7 +709,6 @@ func storeCachedValuePosthook() postHook {
 				return errs.Wrap(err, "insert apexes")
 			}
 		}
-		bar.Increment()
 
 		if len(s.inserts.apexesAnon) > 0 {
 			a := s.inserts.apexAnonList()
@@ -732,35 +716,30 @@ func storeCachedValuePosthook() postHook {
 				return errs.Wrap(err, "insert anon apexes")
 			}
 		}
-		bar.Increment()
 
 		if len(s.inserts.publicSuffix) > 0 {
 			if err := tx.Insert(&s.inserts.publicSuffix); err != nil {
 				return errs.Wrap(err, "insert public suffix")
 			}
 		}
-		bar.Increment()
 
 		if len(s.inserts.publicSuffixAnon) > 0 {
 			if err := tx.Insert(&s.inserts.publicSuffixAnon); err != nil {
 				return errs.Wrap(err, "insert anon public suffix")
 			}
 		}
-		bar.Increment()
 
 		if len(s.inserts.tld) > 0 {
 			if err := tx.Insert(&s.inserts.tld); err != nil {
 				return errs.Wrap(err, "insert tld")
 			}
 		}
-		bar.Increment()
 
 		if len(s.inserts.tldAnon) > 0 {
 			if err := tx.Insert(&s.inserts.tldAnon); err != nil {
 				return errs.Wrap(err, "insert tld")
 			}
 		}
-		bar.Increment()
 
 		if len(s.inserts.zoneEntries) > 0 {
 			z := s.inserts.zoneEntryList()
@@ -768,45 +747,37 @@ func storeCachedValuePosthook() postHook {
 				return errs.Wrap(err, "insert zone entries")
 			}
 		}
-		bar.Increment()
 
 		if len(s.inserts.logEntries) > 0 {
 			if err := tx.Insert(&s.inserts.logEntries); err != nil {
 				return errs.Wrap(err, "insert log entries")
 			}
 		}
-		bar.Increment()
 
 		if len(s.inserts.certs) > 0 {
 			if err := tx.Insert(&s.inserts.certs); err != nil {
 				return errs.Wrap(err, "insert certs")
 			}
 		}
-		bar.Increment()
 
 		if len(s.inserts.certToFqdns) > 0 {
 			if err := tx.Insert(&s.inserts.certToFqdns); err != nil {
 				return errs.Wrap(err, "insert cert-to-fqdns")
 			}
 		}
-		bar.Increment()
 
 		if len(s.inserts.passiveEntries) > 0 {
 			if err := tx.Insert(&s.inserts.passiveEntries); err != nil {
 				return errs.Wrap(err, "insert passive entries")
 			}
 		}
-		bar.Increment()
 
 		if len(s.inserts.entradaEntries) > 0 {
 			if err := tx.Insert(&s.inserts.entradaEntries); err != nil {
 				return errs.Wrap(err, "insert entrada entries")
 			}
 		}
-		bar.Increment()
-		bar.Finish()
 
-		bar = pb.New(3).SetMaxWidth(40).Start()
 		// updates
 		if len(s.updates.apexes) > 0 {
 			a := s.updates.apexList()
@@ -814,7 +785,6 @@ func storeCachedValuePosthook() postHook {
 				return errs.Wrap(err, "update apexes")
 			}
 		}
-		bar.Increment()
 
 		if len(s.updates.zoneEntries) > 0 {
 			z := s.updates.zoneEntryList()
@@ -823,14 +793,11 @@ func storeCachedValuePosthook() postHook {
 				return errs.Wrap(err, "update zone entries")
 			}
 		}
-		bar.Increment()
 		if len(s.updates.passiveEntries) > 0 {
 			if _, err := tx.Model(&s.updates.passiveEntries).Column("first_seen").Update(); err != nil {
 				return errs.Wrap(err, "update passive entries")
 			}
 		}
-		bar.Increment()
-		bar.Finish()
 
 		s.updates = NewModelSet()
 		s.inserts = NewModelSet()
