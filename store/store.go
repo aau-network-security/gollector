@@ -203,7 +203,7 @@ func (c *cache) describe() {
 func newLRUCache(cacheSize int) *lru.Cache {
 	c, err := lru.New(cacheSize)
 	if err != nil {
-		log.Error().Msg("Error Creating LRU Cache")
+		log.Error().Msgf("Error Creating LRU Cache: %s", err)
 		return &lru.Cache{}
 	}
 	return c
@@ -364,7 +364,6 @@ func (s *Store) migrate() error {
 	return nil
 }
 
-//todo implement a limit
 func (s *Store) init() error {
 	var tlds []*models.Tld
 	if err := s.db.Model(&tlds).Order("id ASC").Limit(s.cacheOpts.TLDSize).Select(); err != nil {

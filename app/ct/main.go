@@ -4,9 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"sync"
-	"time"
-
 	"github.com/aau-network-security/gollector/api"
 	prt "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/collectors/ct"
@@ -17,6 +14,7 @@ import (
 	"github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
 	"google.golang.org/grpc/metadata"
+	"sync"
 )
 
 var (
@@ -119,7 +117,7 @@ func main() {
 	m := sync.Mutex{}
 	progress := 0
 
-	startTime := time.Now()
+	//startTime := time.Now()
 
 	for _, l := range logs {
 		go func(l ct.Log) {
