@@ -63,10 +63,11 @@ func (s *Store) backpropZoneEntries() error {
 		s.batchEntities.zoneEntryByApex[k] = existing
 	}
 
+	// TODO: enable again when filling of cache works properly
 	// the cache is not full yet, so the remaining (cache-miss) tlds cannot be in the database
-	if s.cache.zoneEntriesByApexName.Len() < s.cacheOpts.ZoneEntrySize {
-		return nil
-	}
+	//if s.cache.zoneEntriesByApexName.Len() < s.cacheOpts.ZoneEntrySize {
+	//	return nil
+	//}
 
 	// all entities have been found in the cache, no need to perform a database queries
 	if len(zoneEntriesNotFoundInCache) == 0 {
@@ -84,7 +85,7 @@ func (s *Store) backpropZoneEntries() error {
 
 	// fetch zone ids from database
 	var zoneEntriesFoundInDB []*models.ZonefileEntry
-	if err := s.db.Model(&zoneEntriesFoundInDB).Where("apex_id in (?)", pg.In(apexIdList)).Select(); err != nil {
+	if err := s.db.Model(&zoneEntriesFoundInDB).Where("apex_id in (?)", pg.In(apexIdList)).Where("active = true").Select(); err != nil {
 		return err
 	}
 

@@ -433,15 +433,16 @@ func (s *Store) init() error {
 		s.cache.fqdnByNameAnon.Add(fqdn.Fqdn.Fqdn, fqdn)
 	}
 
-	var entries []*models.ZonefileEntry
-	if err := s.db.Model(&entries).Order("id ASC").Limit(s.cacheOpts.ZoneEntrySize).Select(); err != nil {
-		return err
-	}
-	for _, entry := range entries {
-		apexI, _ := s.cache.apexById.Get(entry.ApexID)
-		apex := apexI.(*models.Apex)
-		s.cache.zoneEntriesByApexName.Add(apex.Apex, entry)
-	}
+	// TODO: properly fill cache of zone file entries (by joining zonefile entries with apexes)
+	//var entries []*models.ZonefileEntry
+	//if err := s.db.Model(&entries).Where("active = true").Order("id ASC").Limit(s.cacheOpts.ZoneEntrySize).Select(); err != nil {
+	//	return err
+	//}
+	//for _, entry := range entries {
+	//	apexI, _ := s.cache.apexById.Get(entry.ApexID)
+	//	apex := apexI.(*models.Apex)
+	//	s.cache.zoneEntriesByApexName.Add(apex.Apex, entry)
+	//}
 
 	var logs []*models.Log
 	if err := s.db.Model(&logs).Order("id ASC").Limit(s.cacheOpts.LogSize).Select(); err != nil {
