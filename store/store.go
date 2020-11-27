@@ -263,7 +263,6 @@ type Store struct {
 	m               *sync.Mutex
 	ids             Ids
 	allowedInterval time.Duration
-	batchSize       int
 	postHooks       []postHook
 	inserts         ModelSet
 	updates         ModelSet
@@ -303,8 +302,8 @@ func (s *Store) runPostHooks() error {
 }
 
 func (s *Store) conditionalPostHooks() error {
-	if len(s.batchEntities.certByFingerprint) >= s.batchSize {
-		log.Debug().Msgf("batch is full (%d), writing to database..", len(s.batchEntities.certByFingerprint))
+	if s.batchEntities.IsFull() {
+		log.Debug().Msgf("batch is full (%d), writing to database..", s.batchEntities.Len())
 		return s.runPostHooks()
 	}
 	return nil
@@ -617,7 +616,6 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		cache:           newCache(opts.CacheOpts),
 		cacheOpts:       opts.CacheOpts,
 		allowedInterval: opts.AllowedInterval,
-		batchSize:       opts.BatchSize,
 		m:               &sync.Mutex{},
 		postHooks:       []postHook{},
 		inserts:         NewModelSet(),
@@ -626,7 +624,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		anonymizer:      &DefaultAnonymizer,
 		ms:              NewMeasurementState(),
 		Ready:           NewReady(),
-		batchEntities:   NewBatchEntities(),
+		batchEntities:   NewBatchEntities(opts.BatchSize),
 		influxService:   ifs,
 	}
 
@@ -849,7 +847,7 @@ func storeCachedValuePosthook() postHook {
 			return errs.Wrap(err, "committing transaction")
 		}
 
-		s.batchEntities = NewBatchEntities()
+		s.batchEntities.Reset()
 
 		// TODO: add anonymized
 		// write size of cache to influx

@@ -30,6 +30,7 @@ type zoneentrystruct struct {
 }
 
 type BatchEntities struct {
+	size                   int
 	tldByName              map[string]*domainstruct
 	tldAnonByName          map[string]*domainstruct
 	publicSuffixByName     map[string]*domainstruct
@@ -42,19 +43,32 @@ type BatchEntities struct {
 	zoneEntryByApex        map[string]*zoneentrystruct
 }
 
-func NewBatchEntities() BatchEntities {
-	return BatchEntities{
-		tldByName:              make(map[string]*domainstruct),
-		tldAnonByName:          make(map[string]*domainstruct),
-		publicSuffixByName:     make(map[string]*domainstruct),
-		publicSuffixAnonByName: make(map[string]*domainstruct),
-		apexByName:             make(map[string]*domainstruct),
-		apexByNameAnon:         make(map[string]*domainstruct),
-		fqdnByName:             make(map[string]*domainstruct),
-		fqdnByNameAnon:         make(map[string]*domainstruct),
-		certByFingerprint:      make(map[string]*certstruct),
-		zoneEntryByApex:        map[string]*zoneentrystruct{},
-	}
+// used to determine if the batch is full, which depends on the number of zone entries or the number of log entries (measured by certs)
+func (be *BatchEntities) IsFull() bool {
+	return be.Len() >= be.size
+}
+
+func (be *BatchEntities) Len() int {
+	return len(be.zoneEntryByApex) + len(be.certByFingerprint)
+}
+
+func (be *BatchEntities) Reset() {
+	be.tldByName = make(map[string]*domainstruct)
+	be.tldAnonByName = make(map[string]*domainstruct)
+	be.publicSuffixByName = make(map[string]*domainstruct)
+	be.publicSuffixAnonByName = make(map[string]*domainstruct)
+	be.apexByName = make(map[string]*domainstruct)
+	be.apexByNameAnon = make(map[string]*domainstruct)
+	be.fqdnByName = make(map[string]*domainstruct)
+	be.fqdnByNameAnon = make(map[string]*domainstruct)
+	be.certByFingerprint = make(map[string]*certstruct)
+	be.zoneEntryByApex = map[string]*zoneentrystruct{}
+}
+
+func NewBatchEntities(size int) BatchEntities {
+	res := BatchEntities{}
+	res.Reset()
+	return res
 }
 
 func (s *Store) StoreLogEntry(muid string, entry LogEntry) error {
