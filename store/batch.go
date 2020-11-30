@@ -66,7 +66,9 @@ func (be *BatchEntities) Reset() {
 }
 
 func NewBatchEntities(size int) BatchEntities {
-	res := BatchEntities{}
+	res := BatchEntities{
+		size: size,
+	}
 	res.Reset()
 	return res
 }

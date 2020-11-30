@@ -48,15 +48,7 @@ func selfSignedCert(notBefore, notAfter time.Time, sans []string) ([]byte, error
 
 // check if storing a zone entry creates the correct db models
 func TestStore_StoreZoneEntry(t *testing.T) {
-	conf := Config{
-		User:     "postgres",
-		Password: "postgres",
-		DBName:   "domains",
-		Host:     "localhost",
-		Port:     10001,
-	}
-
-	s, g, muid, err := OpenStore(conf)
+	s, g, muid, err := OpenStore(TestConfig, TestOpts)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
@@ -163,15 +155,7 @@ func TestSplunkEntryMap_Add(t *testing.T) {
 }
 
 func TestStore_StoreSplunkEntry(t *testing.T) {
-	conf := Config{
-		User:     "postgres",
-		Password: "postgres",
-		DBName:   "domains",
-		Host:     "localhost",
-		Port:     10001,
-	}
-
-	s, g, muid, err := OpenStore(conf)
+	s, g, muid, err := OpenStore(TestConfig, TestOpts)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
@@ -249,20 +233,7 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 	}
 
 	// check initialization of new store
-	opts := Opts{
-		BatchSize: 10,
-		CacheOpts: CacheOpts{
-			LogSize:   3,
-			TLDSize:   3,
-			PSuffSize: 3,
-			ApexSize:  5,
-			FQDNSize:  5,
-			CertSize:  5,
-		},
-		AllowedInterval: 10 * time.Millisecond,
-	}
-
-	s, err = NewStore(conf, opts)
+	s, err = NewStore(TestConfig, TestOpts)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
@@ -386,16 +357,7 @@ func TestHashMap(t *testing.T) {
 }
 
 func TestDebug(t *testing.T) {
-
-	conf := Config{
-		User:     "postgres",
-		Password: "postgres",
-		DBName:   "domains",
-		Host:     "localhost",
-		Port:     10001,
-	}
-
-	s, g, muid, err := OpenStore(conf)
+	s, g, muid, err := OpenStore(TestConfig, TestOpts)
 
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
@@ -523,15 +485,7 @@ func (d testWriteApi) WritePoint(point *write.Point) {
 func TestInfluxDb(t *testing.T) {
 	testing2.SkipCI(t)
 
-	conf := Config{
-		User:     "postgres",
-		Password: "postgres",
-		DBName:   "domains",
-		Host:     "localhost",
-		Port:     5432,
-	}
-
-	s, _, muid, err := OpenStore(conf)
+	s, _, muid, err := OpenStore(TestConfig, TestOpts)
 	if err != nil {
 		t.Fatalf("failed to open store: %s", err)
 	}
@@ -580,14 +534,7 @@ func TestInfluxDb(t *testing.T) {
 }
 
 func TestInitWithExistingDb(t *testing.T) {
-	conf := Config{
-		User:     "postgres",
-		Password: "postgres",
-		DBName:   "domains",
-		Host:     "localhost",
-		Port:     5432,
-	}
-	s, _, muid, err := OpenStore(conf)
+	s, _, muid, err := OpenStore(TestConfig, TestOpts)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
@@ -602,7 +549,7 @@ func TestInitWithExistingDb(t *testing.T) {
 	}
 
 	// test initialization
-	s, err = NewStore(conf, TestOpts)
+	s, err = NewStore(TestConfig, TestOpts)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
@@ -632,7 +579,7 @@ func (h *qh) AfterQuery(event *pg.QueryEvent) {
 }
 
 func TestMaxValForColumn(t *testing.T) {
-	s, _, _, err := OpenStore(TestConfig)
+	s, _, _, err := OpenStore(TestConfig, TestOpts)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
@@ -667,7 +614,7 @@ func TestMaxValForColumn(t *testing.T) {
 	}
 
 	// without any rows in the db
-	s, _, _, err = OpenStore(TestConfig)
+	s, _, _, err = OpenStore(TestConfig, TestOpts)
 	if err != nil {
 		t.Fatalf("failed to create store: %s", err)
 	}
@@ -679,5 +626,71 @@ func TestMaxValForColumn(t *testing.T) {
 
 	if maxId != 0 {
 		t.Fatalf("unexpected max id: expected %d, but got %d", 0, maxTldId)
+	}
+}
+
+func TestConditionalPostHooks(t *testing.T) {
+	opts := TestOpts
+	opts.BatchSize = 2
+
+	s, _, muid, err := OpenStore(TestConfig, opts)
+	if err != nil {
+		t.Fatalf("failed to create store: %s", err)
+	}
+	ts := time.Now()
+	if _, err := s.StoreZoneEntry(muid, ts, "example.org"); err != nil {
+		t.Fatalf("unexpected error while storing zone entry: %s", err)
+	}
+
+	// batch should NOT be full, and conditional post hooks must NOT be run
+	if s.batchEntities.IsFull() {
+		t.Fatalf("expected batch to be not full, but it is not")
+	}
+	if s.batchEntities.Len() != 1 {
+		t.Fatalf("unexpected batch size: expected %d, but got %d", 2, s.batchEntities.Len())
+	}
+	if err := s.conditionalPostHooks(); err != nil {
+		t.Fatalf("unexpected error while running conditional post hooks: %s", err)
+	}
+	if s.batchEntities.IsFull() {
+		t.Fatalf("expected batch to be not full, but it is not")
+	}
+	if s.batchEntities.Len() != 1 {
+		t.Fatalf("unexpected batch size: expected %d, but got %d", 2, s.batchEntities.Len())
+	}
+
+	raw, err := selfSignedCert(ts, ts, []string{"example.org"})
+	if err != nil {
+		t.Fatalf("unexpected error while creating self-signed cert: %s", err)
+	}
+
+	cert, err := x509.ParseCertificate(raw)
+	if err != nil {
+		t.Fatalf("unexpected error while parsing certificate: %s", err)
+	}
+
+	le := LogEntry{
+		Cert:      cert,
+		IsPrecert: false,
+		Index:     0,
+		Ts:        ts,
+		Log: ct.Log{
+			Description:       "",
+			Key:               "",
+			Url:               "",
+			MaximumMergeDelay: 0,
+			OperatedBy:        nil,
+			DnsApiEndpoint:    "",
+		},
+	}
+	if err := s.StoreLogEntry(muid, le); err != nil {
+		t.Fatalf("unexpected error while storing log entry: %s", err)
+	}
+	// conditional post hooks must be run
+	if s.batchEntities.IsFull() {
+		t.Fatalf("expected batch to be not full, but it is")
+	}
+	if s.batchEntities.Len() != 0 {
+		t.Fatalf("unexpected batch size: expected %d, but got %d", 0, s.batchEntities.Len())
 	}
 }

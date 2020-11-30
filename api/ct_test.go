@@ -40,15 +40,7 @@ func TestServer_StoreLogEntries(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			conf := store.Config{
-				User:     "postgres",
-				Password: "postgres",
-				DBName:   "domains",
-				Host:     "localhost",
-				Port:     10001,
-			}
-
-			s, _, muid, err := store.OpenStore(conf)
+			s, _, muid, err := store.OpenStore(store.TestConfig, store.TestOpts)
 			if err != nil {
 				t.Fatalf("failed to open store: %s", err)
 			}

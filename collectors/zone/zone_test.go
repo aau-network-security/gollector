@@ -100,14 +100,7 @@ func TestGetStartTime(t *testing.T) {
 func TestStoreLogentry(t *testing.T) {
 	testing2.SkipCI(t)
 
-	conf := store.Config{
-		Host:     "localhost",
-		User:     "postgres",
-		Password: "postgres",
-		Port:     5432,
-		DBName:   "domains",
-	}
-	s, _, muid, err := store.OpenStore(conf)
+	s, _, muid, err := store.OpenStore(store.TestConfig, store.TestOpts)
 	if err != nil {
 		t.Fatalf("unexpected error while opening store: %s", err)
 	}

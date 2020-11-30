@@ -30,7 +30,7 @@ var TestConfig = Config{
 	Port:     5432,
 }
 
-func OpenStore(conf Config) (*Store, *gorm.DB, string, error) {
+func OpenStore(conf Config, opts Opts) (*Store, *gorm.DB, string, error) {
 	g, err := conf.Open()
 	if err != nil {
 		return nil, nil, "", errors.Wrap(err, "failed to open gorm database")
@@ -40,7 +40,7 @@ func OpenStore(conf Config) (*Store, *gorm.DB, string, error) {
 		return nil, nil, "", errors.Wrap(err, "failed to reset database")
 	}
 
-	s, err := NewStore(conf, TestOpts)
+	s, err := NewStore(conf, opts)
 	if err != nil {
 		return nil, nil, "", errors.Wrap(err, "failed to open store")
 	}
