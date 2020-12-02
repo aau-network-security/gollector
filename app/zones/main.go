@@ -327,9 +327,10 @@ func main() {
 	}
 
 	st := app.TimeFromUnix(stResp.Timestamp)
-	//st := time.Now().Add(-10 * time.Second)
+	if conf.Now {
+		st = time.Now().Add(-1 * time.Millisecond)
+	}
 
-	// retrieve all zone files on a daily basis
 	if err := app.Repeat(fn, st, interval, -1); err != nil {
 		log.Fatal().Msgf("error while retrieving zone files: %s", err)
 	}

@@ -98,6 +98,7 @@ type config struct {
 	Dk      dk          `yaml:"dk"`
 	ApiAddr app.Address `yaml:"api-address"`
 	Meta    app.Meta    `yaml:"meta"`
+	Now     bool        `yaml:"now"`
 }
 
 func readConfig(path string) (config, error) {
