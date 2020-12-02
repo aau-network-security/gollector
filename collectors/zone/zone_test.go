@@ -108,7 +108,7 @@ func TestStoreLogentry(t *testing.T) {
 	ts := time.Now()
 	fqdn := "example.org"
 
-	if _, err := s.StoreZoneEntry(muid, ts, fqdn); err != nil {
+	if err := s.StoreZoneEntry(muid, ts, fqdn); err != nil {
 		t.Fatalf("unexpected error while storing zone entry: %s", err)
 	}
 	if err := s.RunPostHooks(); err != nil {

@@ -58,7 +58,7 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 		for j := 0; j < 2; j++ {
 			// this should only update the "last_seen" field of the current active zonefile entry
 			go func() {
-				if _, err := s.StoreZoneEntry(muid, time.Now(), "example.org"); err != nil {
+				if err := s.StoreZoneEntry(muid, time.Now(), "example.org"); err != nil {
 					t.Fatalf("error while storing entry: %s", err)
 				}
 			}()
@@ -540,7 +540,7 @@ func TestInitWithExistingDb(t *testing.T) {
 	}
 
 	now := time.Now()
-	if _, err := s.StoreZoneEntry(muid, now, "example.org"); err != nil {
+	if err := s.StoreZoneEntry(muid, now, "example.org"); err != nil {
 		t.Fatalf("failed to store zone entry: %s", err)
 	}
 
@@ -638,7 +638,7 @@ func TestConditionalPostHooks(t *testing.T) {
 		t.Fatalf("failed to create store: %s", err)
 	}
 	ts := time.Now()
-	if _, err := s.StoreZoneEntry(muid, ts, "example.org"); err != nil {
+	if err := s.StoreZoneEntry(muid, ts, "example.org"); err != nil {
 		t.Fatalf("unexpected error while storing zone entry: %s", err)
 	}
 

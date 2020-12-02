@@ -7,7 +7,7 @@ import (
 	"github.com/aau-network-security/gollector/store/models"
 )
 
-func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.ZonefileEntry, error) {
+func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) error {
 	s.m.Lock()
 	defer s.m.Unlock()
 
@@ -15,12 +15,12 @@ func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.Z
 
 	sid, ok := s.ms.SId(muid)
 	if !ok {
-		return nil, NoActiveStageErr
+		return NoActiveStageErr
 	}
 
 	domain, err := NewDomain(fqdn)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	s.influxService.ZoneCount(domain.tld.normal)
@@ -38,7 +38,8 @@ func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string) (*models.Z
 		t:   t,
 		sid: sid,
 	}
-	return nil, nil
+
+	return s.conditionalPostHooks()
 }
 
 // get all existing zone entries

@@ -40,7 +40,7 @@ func (s *Server) StoreZoneEntry(str prt.ZoneFileApi_StoreZoneEntryServer) error 
 				Ok:    true,
 				Error: "",
 			}
-			if _, err := s.Store.StoreZoneEntry(muid, ts, ze.Apex); err != nil {
+			if err := s.Store.StoreZoneEntry(muid, ts, ze.Apex); err != nil {
 				s.Log.Log(err, app.LogOptions{
 					Msg: "failed to store zone entry",
 				})
