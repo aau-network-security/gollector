@@ -12,6 +12,9 @@ type config struct {
 	WorkerCount int         `yaml:"worker_count"`
 	ApiAddr     app.Address `yaml:"api-address"`
 	Meta        app.Meta    `yaml:"meta"`
+	All         bool        `yaml:"all"`
+	Included    []string    `yaml:"included"` // urls to include
+	Excluded    []string    `yaml:"excluded"` // urls to exclude
 }
 
 func readConfig(path string) (config, error) {

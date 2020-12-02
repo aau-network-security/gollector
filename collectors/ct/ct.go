@@ -166,6 +166,43 @@ type LogList struct {
 	Operators []Operator `json:"operators"`
 }
 
+// returns true if the list contains the given element
+func containsStr(list []string, v string) bool {
+	for _, e := range list {
+		if e == v {
+			return true
+		}
+	}
+	return false
+}
+
+// filter the log list according to urls to include and exclude
+func (ll *LogList) Filter(all bool, included []string, excluded []string) *LogList {
+	res := LogList{
+		Logs:      []Log{},
+		Operators: ll.Operators, // copy all operators
+	}
+
+	if all {
+		// select all, and exclude
+		for _, log := range ll.Logs {
+			if !containsStr(excluded, log.Url) {
+				res.Logs = append(res.Logs, log)
+			}
+		}
+
+	} else {
+		// select none, and include
+		for _, log := range ll.Logs {
+			if containsStr(included, log.Url) {
+				res.Logs = append(res.Logs, log)
+			}
+		}
+	}
+
+	return &res
+}
+
 // returns a list of logs given the JSON file located at a URL
 func logsFromUrl(url string) (*LogList, error) {
 	c := http.Client{}
@@ -227,14 +264,13 @@ func Scan(ctx context.Context, l *Log, entryFn EntryFunc, opts Options) (int64, 
 		return 0, err
 	}
 
-	//todo continuos was false
 	scannerOpts := scanner.ScannerOptions{
 		FetcherOptions: scanner.FetcherOptions{
 			BatchSize:     1000,
 			ParallelFetch: opts.WorkerCount,
 			StartIndex:    opts.StartIndex,
 			EndIndex:      opts.EndIndex,
-			Continuous:    false,
+			Continuous:    true,
 		},
 		Matcher:     &scanner.MatchAll{},
 		PrecertOnly: false,

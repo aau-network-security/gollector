@@ -134,3 +134,85 @@ func TestScanFromTime(t *testing.T) {
 		t.Fatalf("expected %d received certs, but got %d", 5, receivedCount)
 	}
 }
+
+func TestFilter(t *testing.T) {
+	tests := []struct {
+		name        string
+		all         bool
+		included    []string
+		excluded    []string
+		expectedLen int
+	}{
+		{
+			"all + include",
+			true,
+			[]string{
+				"https://example.org/log1",
+			},
+			[]string{},
+			3,
+		},
+		{
+			"all + exclude",
+			true,
+			[]string{},
+			[]string{
+				"https://example.org/log1",
+			},
+			2,
+		},
+		{
+			"not all + include",
+			false,
+			[]string{
+				"https://example.org/log1",
+			},
+			[]string{},
+			1,
+		},
+		{
+			"not all + exclude",
+			false,
+			[]string{},
+			[]string{
+				"https://example.org/log1",
+			},
+			0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ll := LogList{
+				Logs: []Log{
+					{
+						Url: "https://example.org/log1",
+					},
+					{
+						Url: "https://example.org/log2",
+					}, {
+						Url: "https://example.org/log3",
+					},
+				},
+				Operators: []Operator{
+					{
+						Name: "o1",
+						Id:   1,
+					}, {
+						Name: "o2",
+						Id:   2,
+					},
+				},
+			}
+			res := ll.Filter(tt.all, tt.included, tt.excluded)
+			actual := len(res.Logs)
+			if actual != tt.expectedLen {
+				t.Fatalf("unexpected size of filtered logs: expected %d, but got %d", tt.expectedLen, actual)
+			}
+			if len(res.Operators) != 2 {
+				t.Fatalf("unexpected size of filtered operators: expected %d, but got %d", 2, len(res.Operators))
+			}
+		})
+	}
+
+}

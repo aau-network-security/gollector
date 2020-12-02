@@ -54,11 +54,6 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
-	//t, err := time.Parse("2006-01-02", conf.Time)
-	//if err != nil {
-	//	log.Fatal().Msgf("failed to parse time from config: %s", err)
-	//}
-
 	cc, err := conf.ApiAddr.Dial()
 	if err != nil {
 		log.Fatal().Msgf("failed to dial: %s", err)
@@ -113,9 +108,8 @@ func main() {
 		log.Fatal().Msgf("error while retrieving list of existing logs: %s", err)
 	}
 
-	//logs := logList.Logs
-	logs := []ct.Log{logList.Logs[2]}
-	//logs := logList.Logs[0:3]
+	logList = logList.Filter(conf.All, conf.Included, conf.Excluded)
+	logs := logList.Logs
 
 	wg := sync.WaitGroup{}
 
@@ -124,8 +118,6 @@ func main() {
 	wg.Add(len(logs))
 	m := sync.Mutex{}
 	progress := 0
-
-	//startTime := time.Now()
 
 	for _, l := range logs {
 		go func(l ct.Log) {
@@ -141,11 +133,6 @@ func main() {
 				m.Unlock()
 				wg.Done()
 			}()
-
-			//start, end, err := ct.IndexByDate(ctx, &l, t)
-			//if err != nil {
-			//	return
-			//}
 
 			start, end, err := ct.IndexByLastEntryDB(ctx, &l, ctApiClient)
 			if err != nil {
