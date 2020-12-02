@@ -7,13 +7,20 @@ import (
 	"github.com/aau-network-security/gollector/api"
 	prt "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/collectors/entrada"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/metadata"
+	"os"
 	"time"
 )
 
 func main() {
 	ctx := context.Background()
+
+	log.Logger = log.Output(zerolog.ConsoleWriter{
+		Out:        os.Stderr,
+		TimeFormat: time.RFC3339,
+	})
 
 	confFile := flag.String("config", "config/config.yml", "location of configuration file")
 	flag.Parse()

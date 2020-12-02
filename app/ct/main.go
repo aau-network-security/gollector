@@ -10,11 +10,14 @@ import (
 	ct2 "github.com/google/certificate-transparency-go"
 	"github.com/google/certificate-transparency-go/x509"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/vbauerster/mpb/v4"
 	"github.com/vbauerster/mpb/v4/decor"
 	"google.golang.org/grpc/metadata"
+	"os"
 	"sync"
+	"time"
 )
 
 var (
@@ -37,6 +40,11 @@ func certFromLogEntry(entry *ct2.LogEntry) (*x509.Certificate, bool, error) {
 
 func main() {
 	ctx := context.Background()
+
+	log.Logger = log.Output(zerolog.ConsoleWriter{
+		Out:        os.Stderr,
+		TimeFormat: time.RFC3339,
+	})
 
 	confFile := flag.String("config", "config/config.yml", "location of configuration file")
 	flag.Parse()

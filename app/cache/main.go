@@ -16,7 +16,10 @@ import (
 )
 
 func main() {
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	log.Logger = log.Output(zerolog.ConsoleWriter{
+		Out:        os.Stderr,
+		TimeFormat: time.RFC3339,
+	})
 
 	confFile := flag.String("config", "config/config.yml", "location of configuration file")
 	flag.Parse()

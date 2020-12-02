@@ -13,12 +13,14 @@ import (
 	"github.com/aau-network-security/gollector/collectors/zone/http"
 	"github.com/aau-network-security/gollector/collectors/zone/ssh"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/semaphore"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 	"google.golang.org/grpc/metadata"
 	"net"
+	"os"
 	"sync"
 	"time"
 )
@@ -124,6 +126,11 @@ func getZoneConfigs(conf config, client czds2.Client) ([]zoneConfig, error) {
 
 func main() {
 	ctx := context.Background()
+
+	log.Logger = log.Output(zerolog.ConsoleWriter{
+		Out:        os.Stderr,
+		TimeFormat: time.RFC3339,
+	})
 
 	confFile := flag.String("config", "config/config.yml", "location of configuration file")
 	flag.Parse()

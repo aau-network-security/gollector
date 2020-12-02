@@ -7,12 +7,15 @@ import (
 	prt "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/collectors/splunk"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"io"
+	"os"
 	"sync"
+	"time"
 )
 
 type bufferedStream struct {
@@ -102,6 +105,11 @@ func newBufferedStream(ctx context.Context, cc *grpc.ClientConn, batchSize int, 
 
 func main() {
 	ctx := context.Background()
+
+	log.Logger = log.Output(zerolog.ConsoleWriter{
+		Out:        os.Stderr,
+		TimeFormat: time.RFC3339,
+	})
 
 	confFile := flag.String("config", "config/config.yml", "location of configuration file")
 	flag.Parse()
