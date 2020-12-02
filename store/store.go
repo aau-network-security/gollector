@@ -635,7 +635,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 	}
 
 	//make the table unlogged to improve performance
-	tableList := []string{"apexes", "certificate_to_fqdns", "certificates", "fqdns", "log_entries", "public_suffixes", "tlds"}
+	tableList := []string{"apexes", "certificate_to_fqdns", "certificates", "fqdns", "log_entries", "public_suffixes", "tlds", "zonefile_entries"}
 
 	for _, tl := range tableList {
 		line := fmt.Sprintf("ALTER TABLE %s SET UNLOGGED;", tl)

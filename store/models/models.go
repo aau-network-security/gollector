@@ -79,7 +79,7 @@ type ZonefileEntry struct {
 	ID        uint `gorm:"primary_key" pg:",pk"`
 	FirstSeen time.Time
 	LastSeen  time.Time
-	ApexID    uint
+	ApexID    uint `gorm:"index"`
 	Active    bool
 	StageID   uint
 }
