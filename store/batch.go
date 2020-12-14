@@ -179,7 +179,9 @@ func (s *Store) backpropFqdn() error {
 	}
 
 	// the cache is not full yet, so the remaining (cache-miss) fqdns cannot be in the database
-	if s.cache.fqdnByName.Len() < s.cacheOpts.FQDNSize {
+	curCacheSize := s.cache.fqdnByName.Len()
+	maxCacheSize := s.cacheOpts.FQDNSize
+	if curCacheSize < maxCacheSize {
 		return nil
 	}
 
