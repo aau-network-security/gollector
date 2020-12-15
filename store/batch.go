@@ -199,9 +199,15 @@ func (s *Store) backpropFqdn() error {
 	for _, f := range fqdnFoundInDB {
 		existing := s.batchEntities.fqdnByName[f.Fqdn]
 		if existing == nil {
+			// should not exist..?
 			str := fmt.Sprintf("found fqdn %s in database, but could not find fqdn in batchEntities", f.Fqdn)
+			fmt.Printf("all fqdns in batch entities:")
+			for fqdn, _ := range s.batchEntities.fqdnByName{
+				fmt.Printf("> %s", fqdn)
+			}
 			panic(str)
 		}
+
 		existing.obj = f
 		s.batchEntities.fqdnByName[f.Fqdn] = existing
 		s.cache.fqdnByName.Add(f.Fqdn, f)
