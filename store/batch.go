@@ -199,13 +199,17 @@ func (s *Store) backpropFqdn() error {
 	for _, f := range fqdnFoundInDB {
 		existing := s.batchEntities.fqdnByName[f.Fqdn]
 		if existing == nil {
-			// should not exist..?
-			fmt.Printf("all fqdns in batch entities:\n")
-			for fqdn, _ := range s.batchEntities.fqdnByName {
-				fmt.Printf("> %s\n", fqdn)
+			// TODO: this should not happen..
+			// a domain has been fetched from the database, although it does not belong in this batch, and it hasn't been requested:
+			// create a new entry in the batch for id matching
+			d, err := NewDomain(f.Fqdn)
+			if err != nil {
+				return err
 			}
-			str := fmt.Sprintf("found fqdn %s in database, but could not find fqdn in batchEntities", f.Fqdn)
-			panic(str)
+			existing = &domainstruct{
+				obj:    nil,
+				domain: d,
+			}
 		}
 
 		existing.obj = f
