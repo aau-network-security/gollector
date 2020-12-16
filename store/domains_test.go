@@ -78,6 +78,26 @@ func TestNewDomain(t *testing.T) {
 				fqdn:         "www.example.co.uk",
 			},
 		},
+		{
+			"wildcard domain (1)",
+			"*.gov.bn.",
+			expected{
+				tld:          "bn",
+				publicSuffix: "gov.bn",
+				apex:         "*.gov.bn",
+				fqdn:         "*.gov.bn",
+			},
+		},
+		{
+			"wildcard domain (2)",
+			"z7*.gov.bn.",
+			expected{
+				tld:          "bn",
+				publicSuffix: "gov.bn",
+				apex:         "z7*.gov.bn",
+				fqdn:         "z7*.gov.bn",
+			},
+		},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
