@@ -259,6 +259,19 @@ func (s *Store) backpropApex() error {
 
 	for _, a := range apexFoundInDB {
 		existing := s.batchEntities.apexByName[a.Apex]
+		if existing == nil {
+			// TODO: this should not happen..
+			// a domain has been fetched from the database, although it does not belong in this batch, and it hasn't been requested:
+			// create a new entry in the batch for id matching
+			d, err := NewDomain(a.Apex)
+			if err != nil {
+				return err
+			}
+			existing = &domainstruct{
+				obj:    nil,
+				domain: d,
+			}
+		}
 		existing.obj = a
 		s.batchEntities.apexByName[a.Apex] = existing
 		s.cache.apexByName.Add(a.Apex, a)
@@ -306,6 +319,19 @@ func (s *Store) backpropPublicSuffix() error {
 
 	for _, ps := range psFoundInDB {
 		existing := s.batchEntities.publicSuffixByName[ps.PublicSuffix]
+		if existing == nil {
+			// TODO: this should not happen..
+			// a domain has been fetched from the database, although it does not belong in this batch, and it hasn't been requested:
+			// create a new entry in the batch for id matching
+			d, err := NewDomain(ps.PublicSuffix)
+			if err != nil {
+				return err
+			}
+			existing = &domainstruct{
+				obj:    nil,
+				domain: d,
+			}
+		}
 		existing.obj = ps
 		s.batchEntities.publicSuffixByName[ps.PublicSuffix] = existing
 	}
@@ -352,6 +378,19 @@ func (s *Store) backpropTld() error {
 
 	for _, tld := range tldFoundInDB {
 		existing := s.batchEntities.tldByName[tld.Tld]
+		if existing == nil {
+			// TODO: this should not happen..
+			// a domain has been fetched from the database, although it does not belong in this batch, and it hasn't been requested:
+			// create a new entry in the batch for id matching
+			d, err := NewDomain(tld.Tld)
+			if err != nil {
+				return err
+			}
+			existing = &domainstruct{
+				obj:    nil,
+				domain: d,
+			}
+		}
 		existing.obj = tld
 		s.batchEntities.tldByName[tld.Tld] = existing
 		s.cache.tldByName.Add(tld.Tld, tld)
