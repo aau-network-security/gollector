@@ -140,14 +140,13 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
-	if err := conf.Czds.IsValid(); err != nil {
-		log.Fatal().Msgf("czds configuration is invalid: %s", err)
+	if err := conf.IsValid(); err != nil {
+		log.Fatal().Msgf("invalid configuration: %s", err)
 	}
-	if err := conf.Dk.IsValid(); err != nil {
-		log.Fatal().Msgf("dk configuration is invalid: %s", err)
-	}
-	if err := conf.Com.IsValid(); err != nil {
-		log.Fatal().Msgf("com configuration is invalid: %s", err)
+
+	// create target dir if not exists
+	if err := os.MkdirAll(conf.TargetDir, os.ModePerm); err != nil {
+		log.Fatal().Msgf("failed to create target dir: %s", err)
 	}
 
 	cc, err := conf.ApiAddr.Dial()
@@ -292,6 +291,7 @@ func main() {
 					DomainFn:       domainFn,
 					StreamWrappers: zc.streamWrappers,
 					StreamHandler:  zc.streamHandler,
+					TargetDir:      conf.TargetDir,
 				}
 
 				retryFn := func() error {
