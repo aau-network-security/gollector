@@ -10,6 +10,7 @@ services:
       - ./config:/config:ro # configuration files
     ports:
       - "${GRPC_PORT}:${GRPC_PORT}"
+      - "${PPROF_PORT}:${PPROF_PORT}"
   entrada:
     container_name: gollector-entrada
     build:

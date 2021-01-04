@@ -27,6 +27,7 @@ type config struct {
 	Sentry    app.Sentry `yaml:"sentry"`
 	Api       api.Config `yaml:"api"`
 	StoreOpts storeOpts  `yaml:"store"`
+	PprofPort int        `yaml:"pprof-port"`
 }
 
 func readConfig(path string) (config, error) {
