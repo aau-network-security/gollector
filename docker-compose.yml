@@ -32,6 +32,7 @@ services:
     volumes:
       - ./config:/config:ro # configuration files
       - ${SSH_DIR}:/ssh:ro  # ssh keys
+      - ${TARGET_DIR}:/zonefiles # directory to store zone files
   ct:
     container_name: gollector-ct
     build:
