@@ -610,6 +610,8 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		return nil, err
 	}
 
+	postHooks := []postHook{propagationPosthook(), storeCachedValuePosthook()}
+
 	s := Store{
 		conf:            conf,
 		db:              db,
@@ -617,7 +619,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		cacheOpts:       opts.CacheOpts,
 		allowedInterval: opts.AllowedInterval,
 		m:               &sync.Mutex{},
-		postHooks:       []postHook{},
+		postHooks:       postHooks,
 		inserts:         NewModelSet(),
 		updates:         NewModelSet(),
 		ids:             Ids{},
@@ -627,8 +629,6 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		batchEntities:   NewBatchEntities(opts.BatchSize),
 		influxService:   ifs,
 	}
-
-	s.postHooks = append(s.postHooks, propagationPosthook(), storeCachedValuePosthook())
 
 	if err := s.migrate(); err != nil {
 		return nil, errs.Wrap(err, "migrate models")
@@ -840,13 +840,12 @@ func storeCachedValuePosthook() postHook {
 			}
 		}
 
-		s.updates = NewModelSet()
-		s.inserts = NewModelSet()
-
 		if err := tx.Commit(); err != nil {
 			return errs.Wrap(err, "committing transaction")
 		}
 
+		s.updates = NewModelSet()
+		s.inserts = NewModelSet()
 		s.batchEntities.Reset()
 
 		// TODO: add anonymized
