@@ -33,6 +33,20 @@ services:
       - ./config:/config:ro # configuration files
       - ${SSH_DIR}:/ssh:ro  # ssh keys
       - ${TARGET_DIR}:/zonefiles # directory to store zone files
+  zones-test:
+    container_name: gollector-zones-test
+    build:
+      context: .
+      dockerfile: app/zones/Dockerfile
+    command: [ "--config", "/config/zones-test.yml" ]
+    environment:
+      - COM_FTP_PASS=${COM_FTP_PASS}
+      - CZDS_PASS=${CZDS_PASS}
+      - DK_SSH_PASS=${DK_SSH_PASS}
+    volumes:
+      - ./config:/config:ro # configuration files
+      - ${SSH_DIR}:/ssh:ro  # ssh keys
+      - ${TARGET_DIR}:/zonefiles # directory to store zone files
   ct:
     container_name: gollector-ct
     build:
