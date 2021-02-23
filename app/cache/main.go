@@ -30,13 +30,15 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
-	go func() {
-		addr := fmt.Sprintf("localhost:%d", conf.PprofPort)
-		log.Info().Msgf("running pprof server on [::]:%d", conf.PprofPort)
-		if err := http.ListenAndServe(addr, nil); err != nil {
-			log.Fatal().Msgf("error while running pprof handler: %s", err)
-		}
-	}()
+	if conf.PprofPort > 0 {
+		go func() {
+			addr := fmt.Sprintf("localhost:%d", conf.PprofPort)
+			log.Info().Msgf("running pprof server on [::]:%d", conf.PprofPort)
+			if err := http.ListenAndServe(addr, nil); err != nil {
+				log.Fatal().Msgf("error while running pprof handler: %s", err)
+			}
+		}()
+	}
 
 	if err := conf.Sentry.IsValid(); err != nil {
 		log.Fatal().Msgf("sentry configuration is invalid: %s", err)

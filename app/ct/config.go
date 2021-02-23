@@ -7,8 +7,14 @@ import (
 	"io/ioutil"
 )
 
+type TimeWindow struct {
+	Active bool   `yaml:"active"`
+	Start  string `yaml:"start"`
+	End    string `yaml:"end"`
+}
+
 type config struct {
-	Time        string      `yaml:"time"`
+	TimeWindow  TimeWindow  `yaml:"time-window"`
 	WorkerCount int         `yaml:"worker_count"`
 	ApiAddr     app.Address `yaml:"api-address"`
 	Meta        app.Meta    `yaml:"meta"`

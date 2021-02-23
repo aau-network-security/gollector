@@ -134,15 +134,56 @@ func main() {
 				wg.Done()
 			}()
 
-			start, end, err := ct.IndexByLastEntryDB(ctx, &l, ctApiClient)
+			startIndexInDb, endIndex, err := ct.IndexByLastEntryDB(ctx, &l, ctApiClient)
 			if err != nil {
+				log.Warn().Msgf("failed to get the last index from the database: %s", err)
 				return
 			}
+			startIndex := startIndexInDb
+
+			if conf.TimeWindow.Active {
+				startTime, err := time.Parse("2006-01-02", conf.TimeWindow.Start)
+				if err != nil {
+					log.Warn().Msgf("failed to parse the start date: %s", err)
+					return
+				}
+
+				endTime, err := time.Parse("2006-01-02", conf.TimeWindow.End)
+				if err != nil {
+					log.Warn().Msgf("failed to parse the end date: %s", err)
+					return
+				}
+
+				startIndexByDate, _, err := ct.IndexByDate(ctx, &l, startTime)
+				if err != nil {
+					log.Warn().Msgf("failed to obtain index from start time: %s", err)
+					return
+				}
+
+				endIndexByDate, _, err := ct.IndexByDate(ctx, &l, endTime)
+				if err != nil {
+					log.Warn().Msgf("failed to obtain index from start time: %s", err)
+					return
+				}
+				if endIndexByDate == 0 {
+					log.Warn().Msgf("end of time window is before first entry of log")
+					return
+				}
+
+				if startIndexByDate > startIndexInDb {
+					startIndex = startIndexByDate
+				}
+
+				if endIndexByDate < endIndex {
+					endIndex = endIndexByDate
+				}
+			}
+
 			log.Info().
 				Str("log", l.Name()).
-				Msgf("start index %d", start)
+				Msgf("start index %d", startIndex)
 
-			bar := p.AddBar(end-start,
+			bar := p.AddBar(endIndex-startIndex,
 				mpb.PrependDecorators(
 					decor.Name(l.Name()),
 					decor.CountersNoUnit("%d / %d", decor.WCSyncSpace)),
@@ -191,10 +232,8 @@ func main() {
 
 			opts := ct.Options{
 				WorkerCount: conf.WorkerCount,
-				StartIndex:  0,
-				EndIndex:    end,
-				//EndIndex: 1000,
-				//EndIndex: 10000,
+				StartIndex:  startIndex,
+				EndIndex:    endIndex,
 			}
 
 			count, err = ct.Scan(ctx, &l, entryFn, opts)
