@@ -154,23 +154,23 @@ func main() {
 					return
 				}
 
-				startIndexByDate, _, err := ct.IndexByDate(ctx, &l, startTime)
+				startIndexByDate, err := ct.IndexByDate(ctx, &l, startTime)
 				if err != nil {
 					log.Warn().Msgf("failed to obtain index from start time: %s", err)
 					return
 				}
 
-				endIndexByDate, _, err := ct.IndexByDate(ctx, &l, endTime)
+				endIndexByDate, err := ct.IndexByDate(ctx, &l, endTime)
 				if err != nil {
 					log.Warn().Msgf("failed to obtain index from start time: %s", err)
 					return
 				}
-				if endIndexByDate == 0 {
-					log.Warn().Msgf("end of time window is before first entry of log")
+				if startIndexByDate == endIndexByDate {
+					log.Warn().Msgf("given time window completely falls outside the window of the CT log")
 					return
 				}
 
-				if startIndexByDate > startIndexInDb {
+				if startIndexByDate > startIndex {
 					startIndex = startIndexByDate
 				}
 

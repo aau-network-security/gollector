@@ -46,7 +46,7 @@ type Sth struct {
 }
 
 func indexByDate(ctx context.Context, client *client.LogClient, t time.Time, lower int64, upper int64) (int64, error) {
-	middle := int64((lower + upper) / 2)
+	middle := (lower + upper) / 2
 
 	entries, err := client.GetEntries(ctx, middle, middle+1)
 	if err != nil {
@@ -87,23 +87,47 @@ func indexByDate(ctx context.Context, client *client.LogClient, t time.Time, low
 	return 0, NoIndexFoundErr
 }
 
-func IndexByDate(ctx context.Context, l *Log, t time.Time) (int64, int64, error) {
+// returns the index of the first entry in the log past a given timestamp
+func IndexByDate(ctx context.Context, l *Log, t time.Time) (int64, error) {
 	lc, err := l.GetClient()
 	if err != nil {
-		return 0, 0, errors2.Wrap(err, "get log client")
+		return 0, errors2.Wrap(err, "get log client")
 	}
 
 	sth, err := lc.GetSTH(ctx)
 	if err != nil {
-		return 0, 0, errors2.Wrap(err, "get CT STH")
+		return 0, errors2.Wrap(err, "get CT STH")
 	}
 
-	start, err := indexByDate(ctx, lc, t, 0, int64(sth.TreeSize)-1)
+	// get first entry
+	entries, err := lc.GetEntries(ctx, 0, 0)
 	if err != nil {
-		return 0, 0, errors2.Wrap(err, "get index by date")
+		return 0, err
+	}
+	unixMin := entries[0].Leaf.TimestampedEntry.Timestamp
+	tsMin := time.Unix(int64(unixMin/1000), int64(unixMin%1000))
+	if tsMin.After(t) {
+		return 0, nil
 	}
 
-	return start, int64(sth.TreeSize), nil
+	// get last entry
+	treeSize := int64(sth.TreeSize)
+	entries, err = lc.GetEntries(ctx, treeSize-1, treeSize-1)
+	if err != nil {
+		return 0, err
+	}
+	unixMax := entries[0].Leaf.TimestampedEntry.Timestamp
+	tsMax := time.Unix(int64(unixMax/1000), int64(unixMax%1000))
+	if tsMax.Before(t) {
+		return treeSize, nil
+	}
+
+	idx, err := indexByDate(ctx, lc, t, 0, int64(sth.TreeSize)-1)
+	if err != nil {
+		return 0, errors2.Wrap(err, "get index by date")
+	}
+
+	return idx, nil
 }
 
 func IndexByLastEntryDB(ctx context.Context, l *Log, cc prt.CtApiClient) (int64, int64, error) {
@@ -287,7 +311,7 @@ func Scan(ctx context.Context, l *Log, entryFn EntryFunc, opts Options) (int64, 
 }
 
 func ScanFromTime(ctx context.Context, l *Log, t time.Time, entryFn EntryFunc) (int64, error) {
-	startIndex, endIndex, err := IndexByDate(ctx, l, t)
+	startIndex, err := IndexByDate(ctx, l, t)
 	if err != nil {
 		return 0, err
 	}
@@ -295,7 +319,7 @@ func ScanFromTime(ctx context.Context, l *Log, t time.Time, entryFn EntryFunc) (
 	opts := Options{
 		WorkerCount: 10,
 		StartIndex:  startIndex,
-		EndIndex:    endIndex,
+		EndIndex:    0,
 	}
 
 	return Scan(ctx, l, entryFn, opts)
