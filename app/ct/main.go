@@ -142,7 +142,7 @@ func main() {
 
 			startIndexInDb, endIndex, err := ct.IndexByLastEntryDB(ctx, &l, ctApiClient)
 			if err != nil {
-				log.Warn().Msgf("failed to get the last index from the database: %s", err)
+				log.Warn().Str("log", l.Name()).Msgf("failed to get the last index from the database: %s", err)
 				return
 			}
 			startIndex := startIndexInDb
@@ -150,31 +150,31 @@ func main() {
 			if conf.TimeWindow.Active {
 				startTime, err := time.Parse("2006-01-02", conf.TimeWindow.Start)
 				if err != nil {
-					log.Warn().Msgf("failed to parse the start date: %s", err)
+					log.Warn().Str("log", l.Name()).Msgf("failed to parse the start date: %s", err)
 					return
 				}
 
 				endTime, err := time.Parse("2006-01-02", conf.TimeWindow.End)
 				if err != nil {
-					log.Warn().Msgf("failed to parse the end date: %s", err)
+					log.Warn().Str("log", l.Name()).Msgf("failed to parse the end date: %s", err)
 					return
 				}
 
 				log.Debug().Str("log", l.Name()).Msgf("obtaining start index from time")
 				startIndexByDate, err := ct.IndexByDate(ctx, &l, startTime)
 				if err != nil {
-					log.Warn().Msgf("failed to obtain index from start time: %s", err)
+					log.Warn().Str("log", l.Name()).Msgf("failed to obtain index from start time: %s", err)
 					return
 				}
 
 				log.Debug().Str("log", l.Name()).Msgf("obtaining end index from time..")
 				endIndexByDate, err := ct.IndexByDate(ctx, &l, endTime)
 				if err != nil {
-					log.Warn().Msgf("failed to obtain index from start time: %s", err)
+					log.Warn().Str("log", l.Name()).Msgf("failed to obtain index from start time: %s", err)
 					return
 				}
 				if startIndexByDate == endIndexByDate {
-					log.Warn().Msgf("given time window completely falls outside the window of the CT log")
+					log.Warn().Str("log", l.Name()).Msgf("given time window completely falls outside the window of the CT log")
 					return
 				}
 
@@ -193,7 +193,7 @@ func main() {
 
 			totalCount := endIndex - startIndex
 			if totalCount < 0 {
-				log.Error().Msgf("cannot continue with a negative entry count")
+				log.Error().Str("log", l.Name()).Msgf("cannot continue with a negative entry count")
 				return
 			}
 			log.Debug().Str("log", l.Name()).Msgf("scanning %d entries", totalCount)
