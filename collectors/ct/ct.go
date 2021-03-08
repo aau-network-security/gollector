@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
 	"time"
 
 	prt "github.com/aau-network-security/gollector/api/proto"
@@ -45,7 +46,7 @@ type Sth struct {
 	TreeHeadSignature string `json:"tree_head_signature"`
 }
 
-func indexByDate(ctx context.Context, client *client.LogClient, t time.Time, lower int64, upper int64) (int64, error) {
+func indexByDate(ctx context.Context, client *Client, t time.Time, lower int64, upper int64) (int64, error) {
 	middle := (lower + upper) / 2
 
 	entries, err := client.GetEntries(ctx, middle, middle+1)
@@ -151,6 +152,49 @@ func IndexByLastEntryDB(ctx context.Context, l *Log, cc prt.CtApiClient) (int64,
 	return index.Start, int64(sth.TreeSize), nil
 }
 
+type Client struct {
+	cancelFn   context.CancelFunc
+	lock       *sync.Mutex
+	maxRetries float64
+	curRetries float64
+	c          *client.LogClient
+}
+
+func (c *Client) BaseURI() string {
+	return c.c.BaseURI()
+}
+
+func (c *Client) GetSTH(ctx context.Context) (*ct.SignedTreeHead, error) {
+	return c.c.GetSTH(ctx)
+}
+
+func (c *Client) GetRawEntries(ctx context.Context, start, end int64) (*ct.GetEntriesResponse, error) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	resp, err := c.c.GetRawEntries(ctx, start, end)
+	if err == nil && c.curRetries > 0 {
+		c.curRetries -= 0.05
+	} else {
+		c.curRetries += 1
+		if c.curRetries >= c.maxRetries {
+			log.Warn().Msgf("max retries reached")
+			if c.cancelFn != nil {
+				c.cancelFn()
+			}
+		}
+	}
+	return resp, err
+}
+
+func (c *Client) GetEntries(ctx context.Context, start, end int64) ([]ct.LogEntry, error) {
+	return c.c.GetEntries(ctx, start, end)
+}
+
+func (c *Client) SetCancelFunc(fn context.CancelFunc) {
+	c.cancelFn = fn
+}
+
 type Log struct {
 	Description       string `json:"description"`
 	Key               string `json:"key"`
@@ -158,10 +202,10 @@ type Log struct {
 	MaximumMergeDelay int    `json:"maximum_merge_delay"`
 	OperatedBy        []int  `json:"operated_by"`
 	DnsApiEndpoint    string `json:"dns_api_endpoint"`
-	c                 *client.LogClient
+	c                 *Client
 }
 
-func (l *Log) GetClient() (*client.LogClient, error) {
+func (l *Log) GetClient() (*Client, error) {
 	if l.c != nil {
 		return l.c, nil
 	}
@@ -172,8 +216,14 @@ func (l *Log) GetClient() (*client.LogClient, error) {
 	if err != nil {
 		return nil, errors2.Wrap(err, "create new log client")
 	}
-	l.c = lc
-	return lc, nil
+	client := &Client{
+		lock:       &sync.Mutex{},
+		maxRetries: 100,
+		curRetries: 0,
+		c:          lc,
+	}
+	l.c = client
+	return client, nil
 }
 
 func (l *Log) Name() string {
@@ -283,10 +333,13 @@ func (o Options) Count() int64 {
 }
 
 func Scan(ctx context.Context, l *Log, entryFn EntryFunc, opts Options) (int64, error) {
+	ctx, cancelFn := context.WithCancel(ctx)
+
 	lc, err := l.GetClient()
 	if err != nil {
 		return 0, err
 	}
+	lc.SetCancelFunc(cancelFn)
 
 	scannerOpts := scanner.ScannerOptions{
 		FetcherOptions: scanner.FetcherOptions{
@@ -304,8 +357,19 @@ func Scan(ctx context.Context, l *Log, entryFn EntryFunc, opts Options) (int64, 
 	sc := scanner.NewScanner(lc, scannerOpts)
 	rleFunc := handleRawLogEntryFunc(entryFn)
 
-	if err := sc.Scan(ctx, rleFunc, rleFunc); err != nil {
-		return 0, errors2.Wrap(err, "scan log")
+	errChannel := make(chan error)
+	go func() {
+		errChannel <- sc.Scan(ctx, rleFunc, rleFunc)
+	}()
+
+	select {
+	case err := <-errChannel:
+		if err != nil {
+			return 0, err
+		}
+		break
+	case <-ctx.Done():
+		break
 	}
 	return opts.Count(), nil
 }
