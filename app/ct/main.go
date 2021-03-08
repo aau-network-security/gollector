@@ -179,10 +179,12 @@ func main() {
 				}
 
 				if startIndexByDate > startIndex {
+					log.Debug().Msgf("start index of database (%d) is lower than index based on timestamp (%d)", startIndex, startIndexByDate)
 					startIndex = startIndexByDate
 				}
 
 				if endIndexByDate < endIndex {
+					log.Debug().Msgf("end index of database (%d) is higher than index based on timestamp (%d)", endIndex, endIndexByDate)
 					endIndex = endIndexByDate
 				}
 			}
