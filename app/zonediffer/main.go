@@ -29,6 +29,10 @@ func main() {
 		log.Fatal().Msgf("error while creating zone file provider: %s", err)
 	}
 	for _, tld := range zfp.Tlds() {
+		prevDomains := make(map[string]interface{})
+		curDomains := make(map[string]interface{})
+
+		i := 0
 		for {
 			zf, err := zfp.Next(tld)
 			if err == io.EOF {
@@ -40,7 +44,6 @@ func main() {
 			}
 			log.Debug().Msgf("file: %s", zf.Name())
 
-			remaining := 10
 			for {
 				zfe, err := zf.Next()
 				if err == io.EOF {
@@ -50,13 +53,23 @@ func main() {
 					log.Error().Str("file", zf.Name()).Msgf("error while getting next zone file entry: %s", err)
 					break
 				}
-				log.Debug().Str("file", zf.Name()).Msgf("%s", zfe.Domain)
+				curDomains[zfe.Domain] = nil
+			}
 
-				remaining--
-				if remaining == 0 {
-					break
+			// skip first tld
+			if i > 0 {
+				expired, registered := zone.Compare(prevDomains, curDomains)
+				if len(expired) > 0 {
+					log.Debug().Msgf("expired: %d", len(expired))
+				}
+				if len(registered) > 0 {
+					log.Debug().Msgf("registered: %d", len(registered))
 				}
 			}
+			prevDomains = curDomains
+			curDomains = make(map[string]interface{})
+
+			i++
 		}
 	}
 }
