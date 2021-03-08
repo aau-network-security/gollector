@@ -8,8 +8,6 @@ import (
 	prt "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/collectors/ct"
 	ct2 "github.com/google/certificate-transparency-go"
-	"github.com/google/certificate-transparency-go/x509"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/vbauerster/mpb/v4"
@@ -19,24 +17,6 @@ import (
 	"sync"
 	"time"
 )
-
-var (
-	UnsupportedCertTypeErr = errors.New("provided certificate is not supported")
-)
-
-func certFromLogEntry(entry *ct2.LogEntry) (*x509.Certificate, bool, error) {
-	var cert *x509.Certificate
-	isPrecert := false
-	if entry.Precert != nil {
-		cert = entry.Precert.TBSCertificate
-		isPrecert = true
-	} else if entry.X509Cert != nil {
-		cert = entry.X509Cert
-	} else {
-		return nil, false, UnsupportedCertTypeErr
-	}
-	return cert, isPrecert, nil
-}
 
 func main() {
 	ctx := context.Background()
