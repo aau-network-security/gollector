@@ -160,12 +160,14 @@ func main() {
 					return
 				}
 
+				log.Debug().Str("log", l.Name()).Msgf("obtaining start index from time")
 				startIndexByDate, err := ct.IndexByDate(ctx, &l, startTime)
 				if err != nil {
 					log.Warn().Msgf("failed to obtain index from start time: %s", err)
 					return
 				}
 
+				log.Debug().Str("log", l.Name()).Msgf("obtaining end index from time..")
 				endIndexByDate, err := ct.IndexByDate(ctx, &l, endTime)
 				if err != nil {
 					log.Warn().Msgf("failed to obtain index from start time: %s", err)
@@ -194,6 +196,7 @@ func main() {
 				log.Error().Msgf("cannot continue with a negative entry count")
 				return
 			}
+			log.Debug().Str("log", l.Name()).Msgf("scanning %d entries", totalCount)
 			bar := p.AddBar(totalCount,
 				mpb.PrependDecorators(
 					decor.Name(l.Name()),
