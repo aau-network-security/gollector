@@ -183,7 +183,12 @@ func main() {
 				Str("log", l.Name()).
 				Msgf("start index %d", startIndex)
 
-			bar := p.AddBar(endIndex-startIndex,
+			totalCount := endIndex - startIndex
+			if totalCount < 0 {
+				log.Error().Msgf("cannot continue with a negative entry count")
+				return
+			}
+			bar := p.AddBar(totalCount,
 				mpb.PrependDecorators(
 					decor.Name(l.Name()),
 					decor.CountersNoUnit("%d / %d", decor.WCSyncSpace)),
