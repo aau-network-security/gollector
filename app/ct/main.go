@@ -54,6 +54,12 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
+	logLevel, err := zerolog.ParseLevel(conf.LogLevel)
+	if err != nil {
+		log.Fatal().Msgf("error while parsing log level: %s", err)
+	}
+	zerolog.SetGlobalLevel(logLevel)
+
 	cc, err := conf.ApiAddr.Dial()
 	if err != nil {
 		log.Fatal().Msgf("failed to dial: %s", err)
@@ -202,36 +208,36 @@ func main() {
 			entryFn := func(entry *ct2.LogEntry) error {
 				bar.Increment()
 
-				cert, isPrecert, err := certFromLogEntry(entry)
-				if err != nil {
-					return err
-				}
-
-				var operatedBy []int64
-				for _, ob := range l.OperatedBy {
-					operatedBy = append(operatedBy, int64(ob))
-				}
-
-				log := prt.Log{
-					Description:       l.Description,
-					Key:               l.Key,
-					Url:               l.Url,
-					MaximumMergeDelay: int64(l.MaximumMergeDelay),
-					OperatedBy:        operatedBy,
-					DnsApiEndpoint:    l.DnsApiEndpoint,
-				}
-
-				le := prt.LogEntry{
-					Certificate: cert.Raw,
-					Index:       entry.Index,
-					Timestamp:   int64(entry.Leaf.TimestampedEntry.Timestamp),
-					Log:         &log,
-					IsPrecert:   isPrecert,
-				}
-
-				if err := bs.Send(ctx, &le); err != nil {
-					return errors.Wrap(err, "error while sending log entry to server")
-				}
+				//cert, isPrecert, err := certFromLogEntry(entry)
+				//if err != nil {
+				//	return err
+				//}
+				//
+				//var operatedBy []int64
+				//for _, ob := range l.OperatedBy {
+				//	operatedBy = append(operatedBy, int64(ob))
+				//}
+				//
+				//log := prt.Log{
+				//	Description:       l.Description,
+				//	Key:               l.Key,
+				//	Url:               l.Url,
+				//	MaximumMergeDelay: int64(l.MaximumMergeDelay),
+				//	OperatedBy:        operatedBy,
+				//	DnsApiEndpoint:    l.DnsApiEndpoint,
+				//}
+				//
+				//le := prt.LogEntry{
+				//	Certificate: cert.Raw,
+				//	Index:       entry.Index,
+				//	Timestamp:   int64(entry.Leaf.TimestampedEntry.Timestamp),
+				//	Log:         &log,
+				//	IsPrecert:   isPrecert,
+				//}
+				//
+				//if err := bs.Send(ctx, &le); err != nil {
+				//	return errors.Wrap(err, "error while sending log entry to server")
+				//}
 				return nil
 			}
 

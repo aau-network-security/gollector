@@ -21,6 +21,7 @@ type config struct {
 	All         bool        `yaml:"all"`
 	Included    []string    `yaml:"included"` // urls to include
 	Excluded    []string    `yaml:"excluded"` // urls to exclude
+	LogLevel    string      `yaml:"log-level"`
 }
 
 func readConfig(path string) (config, error) {

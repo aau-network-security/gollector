@@ -16,3 +16,4 @@ included:
   - <URL of a single CT log>
 excluded:
   - <URL of a single CT log>
+log-level: <debug | info | warn | error>
