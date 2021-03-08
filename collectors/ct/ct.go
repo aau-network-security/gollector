@@ -108,6 +108,7 @@ func IndexByDate(ctx context.Context, l *Log, t time.Time) (int64, error) {
 	unixMin := entries[0].Leaf.TimestampedEntry.Timestamp
 	tsMin := time.Unix(int64(unixMin/1000), int64(unixMin%1000))
 	if tsMin.After(t) {
+		// first entry is after provided t
 		return 0, nil
 	}
 
@@ -120,6 +121,7 @@ func IndexByDate(ctx context.Context, l *Log, t time.Time) (int64, error) {
 	unixMax := entries[0].Leaf.TimestampedEntry.Timestamp
 	tsMax := time.Unix(int64(unixMax/1000), int64(unixMax%1000))
 	if tsMax.Before(t) {
+		// last entry is before t
 		return treeSize, nil
 	}
 

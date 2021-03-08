@@ -190,10 +190,13 @@ func main() {
 			log.Info().
 				Str("log", l.Name()).
 				Msgf("start index %d", startIndex)
+			log.Info().
+				Str("log", l.Name()).
+				Msgf("end index %d", endIndex)
 
 			totalCount := endIndex - startIndex
 			if totalCount < 0 {
-				log.Error().Str("log", l.Name()).Msgf("cannot continue with a negative entry count")
+				log.Error().Str("log", l.Name()).Msgf("cannot continue with a negative entry count: %d", totalCount)
 				return
 			}
 			log.Debug().Str("log", l.Name()).Msgf("scanning %d entries", totalCount)
