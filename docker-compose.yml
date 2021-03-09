@@ -38,7 +38,7 @@ services:
     build:
       context: .
       dockerfile: app/zonediffer/Dockerfile
-    command: [ "--config", "/config/zonedifer.yml" ]
+    command: [ "--config", "/config/zonediffer.yml" ]
     volumes:
       - ./config:/config:ro # configuration files
   zones-test:
