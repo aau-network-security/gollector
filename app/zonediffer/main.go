@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"github.com/aau-network-security/gollector/api"
 	prt "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/app/zonediffer/zone"
@@ -91,26 +92,25 @@ func main() {
 		log.Fatal().Msgf("error while creating zone file provider: %s", err)
 	}
 
-	for _, tld := range zfp.Tlds() {
+	tldCount := len(zfp.Tlds())
+	for tldIdx, tld := range zfp.Tlds() {
 		prevDomains := make(map[string]interface{})
 		curDomains := make(map[string]interface{})
 
-		i := 0
+		fileCount := zfp.Count(tld)
+		fileIdx := 0
 		for {
 			zf, err := zfp.Next(tld)
 			if err == io.EOF {
-				log.Debug().Str("tld", tld).Msgf("done")
 				break
 			} else if err != nil {
 				log.Error().Str("tld", tld).Msgf("error while getting next zone file: %s", err)
 				break
 			}
-			log.Debug().Msgf("file: %s", zf.Name())
 
 			for {
 				zfe, err := zf.Next()
 				if err == io.EOF {
-					log.Debug().Str("file", zf.Name()).Msgf("done")
 					break
 				} else if err != nil {
 					log.Error().Str("file", zf.Name()).Msgf("error while getting next zone file entry: %s", err)
@@ -119,12 +119,16 @@ func main() {
 				// using a map also ensures that duplicate domains are only counted once
 				curDomains[zfe.Domain] = nil
 			}
+			log.Debug().
+				Str("file", zf.Name()).
+				Str("progress", fmt.Sprintf("%d/%d", fileIdx+1, fileCount)).
+				Msgf("done")
 
-			//skip first file of each TLD, as there is not comparison material
-			if i == 0 {
+			// skip first file of each TLD, as there is not comparison material
+			if fileIdx == 0 {
 				prevDomains = curDomains
 				curDomains = make(map[string]interface{})
-				i++
+				fileIdx++
 				continue
 			}
 
@@ -161,8 +165,12 @@ func main() {
 			prevDomains = curDomains
 			curDomains = make(map[string]interface{})
 
-			i++
+			fileIdx++
 		}
+		log.Debug().
+			Str("tld", tld).
+			Str("progress", fmt.Sprintf("%d/%d", tldIdx+1, tldCount)).
+			Msgf("done")
 	}
 
 	if err := bs.CloseSend(ctx); err != nil {

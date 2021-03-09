@@ -190,6 +190,14 @@ func (zfp *ZonefileProvider) Tlds() []string {
 	return res
 }
 
+func (zfp *ZonefileProvider) Count(tld string) int {
+	l, ok := zfp.zonefiles[tld]
+	if !ok {
+		return 0
+	}
+	return len(l)
+}
+
 func NewZonefileProvider(dir string) (*ZonefileProvider, error) {
 	// read all files in dir
 	files, err := ioutil.ReadDir(dir)
