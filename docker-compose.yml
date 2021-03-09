@@ -32,7 +32,7 @@ services:
     volumes:
       - ./config:/config:ro # configuration files
       - ${SSH_DIR}:/ssh:ro  # ssh keys
-      - ${TARGET_DIR}:/zonefiles # directory to store zone files
+      - ${ZONEFILE_DIR}:/zonefiles # directory to store zone files
   zonediffer:
     container_name: gollector-zonediffer
     build:
@@ -41,6 +41,7 @@ services:
     command: [ "--config", "/config/zonediffer.yml" ]
     volumes:
       - ./config:/config:ro # configuration files
+      - ${ZONEFILE_DIR}:/zonefiles:ro  # ssh keys
   zones-test:
     container_name: gollector-zones-test
     build:
@@ -54,7 +55,7 @@ services:
     volumes:
       - ./config:/config:ro # configuration files
       - ${SSH_DIR}:/ssh:ro  # ssh keys
-      - ${TARGET_DIR}:/zonefiles # directory to store zone files
+      - ${ZONEFILE_DIR}:/zonefiles # directory to store zone files
   ct:
     container_name: gollector-ct
     build:
