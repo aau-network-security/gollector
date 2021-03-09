@@ -30,10 +30,11 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
-	zfp, err := zone.NewZonefileProvider(conf.InputDir)
+	logLevel, err := zerolog.ParseLevel(conf.LogLevel)
 	if err != nil {
-		log.Fatal().Msgf("error while creating zone file provider: %s", err)
+		log.Fatal().Msgf("error while parsing log level: %s", err)
 	}
+	zerolog.SetGlobalLevel(logLevel)
 
 	cc, err := conf.ApiAddr.Dial()
 	if err != nil {
@@ -80,6 +81,11 @@ func main() {
 	bs, err := api.NewBufferedStream(str, &tmpl, opts)
 	if err != nil {
 		log.Fatal().Msgf("failed to create buffered stream to api: %s", err)
+	}
+
+	zfp, err := zone.NewZonefileProvider(conf.InputDir)
+	if err != nil {
+		log.Fatal().Msgf("error while creating zone file provider: %s", err)
 	}
 
 	for _, tld := range zfp.Tlds() {

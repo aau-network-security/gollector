@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"github.com/miekg/dns"
 	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/text/encoding"
 	"golang.org/x/text/encoding/charmap"
 	"io"
 	"io/ioutil"
+	"math"
 	"os"
 	"path"
 	"path/filepath"
@@ -194,9 +196,12 @@ func NewZonefileProvider(dir string) (*ZonefileProvider, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Debug().Msgf("identified %d zone files to process", len(files))
 
 	zonefiles := make(map[string][]ZoneFile)
-	for _, info := range files {
+	p := int(math.Ceil(float64(len(files)) / float64(20)))
+
+	for i, info := range files {
 		fname := info.Name()
 		ext := filepath.Ext(fname)
 		basename := fname[:len(fname)-len(ext)]
@@ -230,6 +235,12 @@ func NewZonefileProvider(dir string) (*ZonefileProvider, error) {
 
 		l = append(l, zf)
 		zonefiles[tld] = l
+
+		if i%p == 0 {
+			perc := float64(i) / float64(len(files)) * float64(100)
+			log.Debug().Msgf("prepared %.1f%% of zone files", perc)
+		}
+
 	}
 
 	zfp := ZonefileProvider{
