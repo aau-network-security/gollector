@@ -58,15 +58,6 @@ message Index{
 
 service ZoneFileApi {
     rpc StoreZoneEntry(stream ZoneEntryBatch) returns (stream Result) {}
-    rpc GetStartTime(Interval) returns (StartTime) {}
-}
-
-message Interval {
-    int64 Interval = 1; // in milliseconds
-}
-
-message StartTime {
-    int64 Timestamp = 1; // unix time in ms
 }
 
 message ZoneEntryBatch {
@@ -76,6 +67,7 @@ message ZoneEntryBatch {
 message ZoneEntry {
     string Apex = 1;
     int64 Timestamp = 2;
+    bool Registered = 3;
 }
 
 message Result {

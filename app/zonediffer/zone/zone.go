@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"github.com/miekg/dns"
 	"github.com/pkg/errors"
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/charmap"
 	"io"
 	"io/ioutil"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type ZoneFileEntry struct {
@@ -21,6 +24,7 @@ type ZoneFileEntry struct {
 type ZoneFile interface {
 	Next() (*ZoneFileEntry, error)
 	Name() string
+	Timestamp() *time.Time
 	Tld() string
 	io.Closer
 }
@@ -29,6 +33,7 @@ type standardZonefile struct {
 	f   *os.File
 	zp  *dns.ZoneParser
 	tld string
+	ts  *time.Time
 }
 
 func (zf *standardZonefile) Next() (*ZoneFileEntry, error) {
@@ -64,7 +69,11 @@ func (zf *standardZonefile) Name() string {
 	return zf.f.Name()
 }
 
-func newStandardZonefile(path, tld string) (*standardZonefile, error) {
+func (zf *standardZonefile) Timestamp() *time.Time {
+	return zf.ts
+}
+
+func newStandardZonefile(path, tld string, ts *time.Time) (*standardZonefile, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -81,22 +90,30 @@ func newStandardZonefile(path, tld string) (*standardZonefile, error) {
 		f:   f,
 		zp:  zp,
 		tld: tld,
+		ts:  ts,
 	}
 	return &zf, nil
 }
 
 type dkZoneFile struct {
-	f *os.File
-	s *bufio.Scanner
+	f       *os.File
+	s       *bufio.Scanner
+	ts      *time.Time
+	decoder *encoding.Decoder
 }
 
 func (zf dkZoneFile) Next() (*ZoneFileEntry, error) {
 	if !zf.s.Scan() {
 		return nil, io.EOF
 	}
-	domain := zf.s.Text()
+	domain := []byte(zf.s.Text())
+	domain, err := zf.decoder.Bytes(domain)
+	if err != nil {
+		return nil, err
+	}
+
 	zfe := ZoneFileEntry{
-		Domain: domain,
+		Domain: string(domain),
 	}
 
 	return &zfe, nil
@@ -114,7 +131,11 @@ func (zf *dkZoneFile) Tld() string {
 	return "dk"
 }
 
-func NewDkZoneFile(path string) (ZoneFile, error) {
+func (zf *dkZoneFile) Timestamp() *time.Time {
+	return zf.ts
+}
+
+func NewDkZoneFile(path string, ts *time.Time) (ZoneFile, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -127,15 +148,19 @@ func NewDkZoneFile(path string) (ZoneFile, error) {
 
 	s := bufio.NewScanner(g)
 
+	decoder := charmap.ISO8859_1.NewDecoder()
+
 	zf := dkZoneFile{
-		f: f,
-		s: s,
+		f:       f,
+		s:       s,
+		ts:      ts,
+		decoder: decoder,
 	}
 	return &zf, nil
 }
 
 type ZonefileProvider struct {
-	zonefiles map[string][]string
+	zonefiles map[string][]ZoneFile
 }
 
 // returns the zone file of the
@@ -148,18 +173,7 @@ func (zfp *ZonefileProvider) Next(tld string) (ZoneFile, error) {
 		// there are no more files for this tld
 		return nil, io.EOF
 	}
-	fpath := l[0]
-
-	var zf ZoneFile
-	var err error
-	if tld == "dk" {
-		zf, err = NewDkZoneFile(fpath)
-	} else {
-		zf, err = newStandardZonefile(fpath, tld)
-	}
-	if err != nil {
-		return nil, err
-	}
+	zf := l[0]
 	zfp.zonefiles[tld] = l[1:]
 
 	return zf, nil
@@ -181,8 +195,7 @@ func NewZonefileProvider(dir string) (*ZonefileProvider, error) {
 		return nil, err
 	}
 
-	zonefiles := make(map[string][]string)
-	_ = zonefiles
+	zonefiles := make(map[string][]ZoneFile)
 	for _, info := range files {
 		fname := info.Name()
 		ext := filepath.Ext(fname)
@@ -191,14 +204,31 @@ func NewZonefileProvider(dir string) (*ZonefileProvider, error) {
 		if len(splitted) != 2 {
 			return nil, errors.New(fmt.Sprintf("invalid filename structure: %s", fname))
 		}
+
 		tld := splitted[0]
-		// TODO: we ignore date for now
+		tsStr := splitted[1]
+		ts, err := time.Parse("2006-01-02", tsStr)
+		if err != nil {
+			return nil, err
+		}
+
 		l, ok := zonefiles[tld]
 		if !ok {
-			l = []string{}
+			l = []ZoneFile{}
 		}
+
 		fpath := path.Join(dir, fname)
-		l = append(l, fpath)
+		var zf ZoneFile
+		if tld == "dk" {
+			zf, err = NewDkZoneFile(fpath, &ts)
+		} else {
+			zf, err = newStandardZonefile(fpath, tld, &ts)
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		l = append(l, zf)
 		zonefiles[tld] = l
 	}
 

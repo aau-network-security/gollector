@@ -73,7 +73,7 @@ func (c *Config) DSN() string {
 }
 
 type ModelSet struct {
-	zoneEntries      map[uint]*models.ZonefileEntry
+	zoneEntries      []*models.ZonefileEntry
 	fqdns            []*models.Fqdn
 	fqdnsAnon        []*models.FqdnAnon
 	apexes           map[uint]*models.Apex
@@ -128,7 +128,7 @@ func (ms *ModelSet) apexAnonList() []*models.ApexAnon {
 
 func NewModelSet() ModelSet {
 	return ModelSet{
-		zoneEntries:      make(map[uint]*models.ZonefileEntry),
+		zoneEntries:      []*models.ZonefileEntry{},
 		apexes:           make(map[uint]*models.Apex),
 		apexesAnon:       make(map[uint]*models.ApexAnon),
 		fqdns:            []*models.Fqdn{},
@@ -690,26 +690,18 @@ func propagationPosthook() postHook {
 		// forward prop all (but zone entries)
 		log.Debug().Msgf("propagating forwards..")
 		s.forpropTld()
-		log.Debug().Msgf("(1/4)")
+		log.Debug().Msgf("(1/5)")
 		s.forpropPublicSuffix()
-		log.Debug().Msgf("(2/4)")
+		log.Debug().Msgf("(2/5)")
 		s.forpropApex()
-		log.Debug().Msgf("(3/4)")
+		log.Debug().Msgf("(3/5)")
 		s.forpropFqdn()
-		log.Debug().Msgf("(4/4)")
+		log.Debug().Msgf("(4/5)")
 		if err := s.forpropCerts(); err != nil {
 			return err
 		}
-
-		log.Debug().Msgf("propagating backwards (zone entries)..")
-		// backprop zone entries
-		if err := s.backpropZoneEntries(); err != nil {
-			return errs.Wrap(err, "back prop zone entries")
-		}
-
-		log.Debug().Msgf("propagating forwards (zone entries)..")
-		// forward prop zone entries
 		s.forpropZoneEntries()
+		log.Debug().Msgf("(5/5)")
 
 		s.influxService.StoreHit("db-insert", "tld", len(s.inserts.tld))
 		s.influxService.StoreHit("db-insert", "public-suffix", len(s.inserts.publicSuffix))
@@ -717,7 +709,6 @@ func propagationPosthook() postHook {
 		s.influxService.StoreHit("db-insert", "fqdn", len(s.inserts.fqdns))
 		s.influxService.StoreHit("db-insert", "cert", len(s.inserts.certs))
 		s.influxService.StoreHit("db-insert", "zone-entry", len(s.inserts.zoneEntries))
-		s.influxService.StoreHit("db-update", "zone-entry", len(s.updates.zoneEntries))
 
 		return nil
 	}
@@ -783,8 +774,7 @@ func storeCachedValuePosthook() postHook {
 		}
 
 		if len(s.inserts.zoneEntries) > 0 {
-			z := s.inserts.zoneEntryList()
-			if err := tx.Insert(&z); err != nil {
+			if err := tx.Insert(&s.inserts.zoneEntries); err != nil {
 				return errs.Wrap(err, "insert zone entries")
 			}
 		}
@@ -827,13 +817,6 @@ func storeCachedValuePosthook() postHook {
 			}
 		}
 
-		if len(s.updates.zoneEntries) > 0 {
-			z := s.updates.zoneEntryList()
-			_, err := tx.Model(&z).Column("last_seen", "active").Update()
-			if err != nil {
-				return errs.Wrap(err, "update zone entries")
-			}
-		}
 		if len(s.updates.passiveEntries) > 0 {
 			if _, err := tx.Model(&s.updates.passiveEntries).Column("first_seen").Update(); err != nil {
 				return errs.Wrap(err, "update passive entries")

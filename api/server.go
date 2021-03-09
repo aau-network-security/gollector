@@ -38,6 +38,11 @@ func timeFromUnix(ts int64) time.Time {
 }
 
 type Server struct {
+	prt.CtApiServer
+	prt.MeasurementApiServer
+	prt.EntradaApiServer
+	prt.SplunkApiServer
+	prt.ZoneFileApiServer
 	Conf  Config
 	Store *store.Store
 	Log   app.ErrLogger

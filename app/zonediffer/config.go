@@ -1,13 +1,16 @@
 package main
 
 import (
+	"github.com/aau-network-security/gollector/app"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
 	"io/ioutil"
 )
 
 type config struct {
-	InputDir string `yaml:"input-dir"`
+	InputDir string      `yaml:"input-dir"`
+	ApiAddr  app.Address `yaml:"api-address"`
+	Meta     app.Meta    `yaml:"meta"`
 }
 
 func readConfig(path string) (config, error) {

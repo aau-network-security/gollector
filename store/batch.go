@@ -4,8 +4,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"time"
-
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/go-pg/pg"
 )
@@ -24,9 +22,8 @@ type certstruct struct {
 var cacheNotFound = errors.New("not found in the cache")
 
 type zoneentrystruct struct {
-	ze  *models.ZonefileEntry
-	t   time.Time
-	sid uint
+	ze   *models.ZonefileEntry
+	apex string
 }
 
 type BatchEntities struct {
@@ -40,7 +37,7 @@ type BatchEntities struct {
 	fqdnByName             map[string]*domainstruct
 	fqdnByNameAnon         map[string]*domainstruct
 	certByFingerprint      map[string]*certstruct
-	zoneEntryByApex        map[string]*zoneentrystruct
+	zoneEntries            []*zoneentrystruct
 }
 
 // used to determine if the batch is full, which depends on the number of zone entries or the number of log entries (measured by certs)
@@ -49,7 +46,7 @@ func (be *BatchEntities) IsFull() bool {
 }
 
 func (be *BatchEntities) Len() int {
-	return len(be.zoneEntryByApex) + len(be.certByFingerprint)
+	return len(be.zoneEntries) + len(be.certByFingerprint)
 }
 
 func (be *BatchEntities) Reset() {
@@ -62,7 +59,7 @@ func (be *BatchEntities) Reset() {
 	be.fqdnByName = make(map[string]*domainstruct)
 	be.fqdnByNameAnon = make(map[string]*domainstruct)
 	be.certByFingerprint = make(map[string]*certstruct)
-	be.zoneEntryByApex = map[string]*zoneentrystruct{}
+	be.zoneEntries = []*zoneentrystruct{}
 }
 
 func NewBatchEntities(size int) BatchEntities {

@@ -5,8 +5,6 @@ import (
 	"compress/gzip"
 	"errors"
 	"fmt"
-	"github.com/aau-network-security/gollector/store"
-	"github.com/aau-network-security/gollector/store/models"
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
 	"io"
@@ -167,29 +165,4 @@ func Process(z Zone, opts ProcessOpts) error {
 	}
 
 	return nil
-}
-
-// returns a start time to continue a measurement that synchronizes with the last measurement
-func GetStartTime(conf store.Config, interval time.Duration) (time.Time, error) {
-	g, err := conf.Open()
-	if err != nil {
-		return time.Now(), err
-	}
-
-	var entries []*models.ZonefileEntry
-	if err := g.Limit(1).Order("last_seen desc").Find(&entries).Error; err != nil {
-		return time.Now(), err
-	}
-
-	// no database entries, run measurement now
-	if len(entries) == 0 {
-		return time.Now(), nil
-	}
-
-	st := entries[0].LastSeen.Add(interval)
-	for st.Before(time.Now()) {
-		st = st.Add(interval)
-	}
-
-	return st, nil
 }
