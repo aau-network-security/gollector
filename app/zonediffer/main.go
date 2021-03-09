@@ -41,6 +41,7 @@ func main() {
 		log.Fatal().Msgf("failed to dial: %s", err)
 	}
 
+	log.Debug().Msgf("starting measurement")
 	mClient := prt.NewMeasurementApiClient(cc)
 	meta := prt.Meta{
 		Description: conf.Meta.Description,
@@ -78,11 +79,13 @@ func main() {
 		WindowSize: 10000,
 	}
 
+	log.Debug().Msgf("creating buffered stream")
 	bs, err := api.NewBufferedStream(str, &tmpl, opts)
 	if err != nil {
 		log.Fatal().Msgf("failed to create buffered stream to api: %s", err)
 	}
 
+	log.Debug().Msgf("creating zone file provider")
 	zfp, err := zone.NewZonefileProvider(conf.InputDir)
 	if err != nil {
 		log.Fatal().Msgf("error while creating zone file provider: %s", err)
