@@ -118,11 +118,10 @@ type Log struct {
 
 // ----- BEGIN PASSIVE DNS -----
 type PassiveEntry struct {
-	ID           uint `gorm:"primary_key" pg:",pk"`
-	FqdnID       uint
-	RecordTypeID uint
-	FirstSeen    time.Time
-	StageID      uint
+	ID        uint `gorm:"primary_key" pg:",pk"`
+	FqdnID    uint
+	Timestamp time.Time
+	StageID   uint
 }
 
 type EntradaEntry struct {

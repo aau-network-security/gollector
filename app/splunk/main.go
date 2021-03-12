@@ -168,12 +168,12 @@ func main() {
 	}
 
 	entryFn := func(entry splunk.Entry) error {
-		for _, qr := range entry.QueryResults() {
-			ts := entry.Result.Timestamp.UnixNano() / 1e06
+		for _, qry := range entry.Queries() {
+			t := entry.Result.Timestamp.Add(time.Hour * 24) // add one hour to offset UTC+1 timing
+			ts := t.UnixNano() / 1e06
 
 			se := prt.SplunkEntry{
-				Query:     qr.Query,
-				QueryType: qr.QueryType,
+				Query:     qry,
 				Timestamp: ts,
 			}
 

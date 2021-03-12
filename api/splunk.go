@@ -17,7 +17,14 @@ func (s *Server) StorePassiveEntry(str api.SplunkApi_StorePassiveEntryServer) er
 	}
 
 	log.Debug().Str("muid", muid).Msgf("connection opened for passive entries")
-	defer log.Debug().Str("muid", muid).Msgf("connection closed for passive entries")
+	defer func() {
+		defer log.Debug().Str("muid", muid).Msgf("connection closed for passive entries")
+		// should *not* be necessary
+		if err := s.Store.RunPostHooks(); err != nil {
+			log.Fatal().Str("muid", muid).Msgf("failed to run post hooks: %s", err)
+		}
+		s.Store.RunPostHooks()
+	}()
 
 	wg := sync.WaitGroup{}
 
@@ -37,7 +44,7 @@ func (s *Server) StorePassiveEntry(str api.SplunkApi_StorePassiveEntryServer) er
 				Ok:    true,
 				Error: "",
 			}
-			if _, err := s.Store.StorePassiveEntry(muid, se.Query, se.QueryType, ts); err != nil {
+			if _, err := s.Store.StorePassiveEntry(muid, se.Query, ts); err != nil {
 				s.Log.Log(err, app.LogOptions{
 					Msg: "failed to store passive entry",
 					Tags: map[string]string{

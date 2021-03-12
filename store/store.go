@@ -177,8 +177,6 @@ type cache struct {
 	certByFingerprint      *lru.Cache //map[string]*models.Certificate
 	logByUrl               *lru.Cache //map[string]*models.Log
 	recordTypeByName       *lru.Cache //map[string]*models.RecordType
-	passiveEntryByFqdn     splunkEntryMap
-	entradaEntryByFqdn     *lru.Cache //map[string]*models.EntradaEntry
 }
 
 // prints the current status to standard output
@@ -195,8 +193,6 @@ func (c *cache) describe() {
 	log.Debug().Msgf("certificates:    %d", c.certByFingerprint.Len())
 	log.Debug().Msgf("logs:            %d", c.logByUrl.Len())
 	log.Debug().Msgf("record types:    %d", c.recordTypeByName.Len())
-	log.Debug().Msgf("passive entries: %d", c.passiveEntryByFqdn.len())
-	//log.Debug().Msgf("entrada entries: %d", c.entradaEntryByFqdn.Len())
 }
 
 func newLRUCache(cacheSize int) *lru.Cache {
@@ -222,8 +218,7 @@ func newCache(opts CacheOpts) cache {
 		zoneEntriesByApexName:  newLRUCache(opts.ZoneEntrySize), //make(map[string]*models.ZonefileEntry),
 		logByUrl:               newLRUCache(opts.LogSize),       //make(map[string]*models.Log),
 		certByFingerprint:      newLRUCache(opts.CertSize),      //make(map[string]*models.Certificate),
-		passiveEntryByFqdn:     newSplunkEntryMap(),
-		recordTypeByName:       newLRUCache(opts.TLDSize), //make(map[string]*models.RecordType),
+		recordTypeByName:       newLRUCache(opts.TLDSize),       //make(map[string]*models.RecordType),
 	}
 }
 
@@ -441,17 +436,6 @@ func (s *Store) init() error {
 		s.cache.fqdnByNameAnon.Add(fqdn.Fqdn.Fqdn, fqdn)
 	}
 
-	// TODO: properly fill cache of zone file entries (by joining zonefile entries with apexes)
-	//var entries []*models.ZonefileEntry
-	//if err := s.db.Model(&entries).Where("active = true").Order("id ASC").Limit(s.cacheOpts.ZoneEntrySize).Select(); err != nil {
-	//	return err
-	//}
-	//for _, entry := range entries {
-	//	apexI, _ := s.cache.apexById.Get(entry.ApexID)
-	//	apex := apexI.(*models.Apex)
-	//	s.cache.zoneEntriesByApexName.Add(apex.Apex, entry)
-	//}
-
 	var logs []*models.Log
 	if err := s.db.Model(&logs).Order("id ASC").Limit(s.cacheOpts.LogSize).Select(); err != nil {
 		return err
@@ -476,16 +460,6 @@ func (s *Store) init() error {
 	for _, rtype := range rtypes {
 		s.cache.recordTypeByName.Add(rtype.Type, rtype)
 		rtypeById[rtype.ID] = rtype
-	}
-
-	var passiveEntries []*models.PassiveEntry
-	if err := s.db.Model(&passiveEntries).Order("id ASC").Select(); err != nil {
-		return err
-	}
-	for _, entry := range passiveEntries {
-		fqdn := fqdnsById[entry.FqdnID]
-		rtype := rtypeById[entry.RecordTypeID]
-		s.cache.passiveEntryByFqdn.add(fqdn.Fqdn, rtype.Type, entry)
 	}
 
 	// initialize counters
@@ -690,18 +664,20 @@ func propagationPosthook() postHook {
 		// forward prop all (but zone entries)
 		log.Debug().Msgf("propagating forwards..")
 		s.forpropTld()
-		log.Debug().Msgf("(1/5)")
+		log.Debug().Msgf("(1/6)")
 		s.forpropPublicSuffix()
-		log.Debug().Msgf("(2/5)")
+		log.Debug().Msgf("(2/6)")
 		s.forpropApex()
-		log.Debug().Msgf("(3/5)")
+		log.Debug().Msgf("(3/6)")
 		s.forpropFqdn()
-		log.Debug().Msgf("(4/5)")
+		log.Debug().Msgf("(4/6)")
 		if err := s.forpropCerts(); err != nil {
 			return err
 		}
 		s.forpropZoneEntries()
-		log.Debug().Msgf("(5/5)")
+		log.Debug().Msgf("(5/6)")
+		s.forpropPassiveEntries()
+		log.Debug().Msgf("(6/6)")
 
 		s.influxService.StoreHit("db-insert", "tld", len(s.inserts.tld))
 		s.influxService.StoreHit("db-insert", "public-suffix", len(s.inserts.publicSuffix))
@@ -709,6 +685,7 @@ func propagationPosthook() postHook {
 		s.influxService.StoreHit("db-insert", "fqdn", len(s.inserts.fqdns))
 		s.influxService.StoreHit("db-insert", "cert", len(s.inserts.certs))
 		s.influxService.StoreHit("db-insert", "zone-entry", len(s.inserts.zoneEntries))
+		s.influxService.StoreHit("db-insert", "passive-entry", len(s.inserts.passiveEntries))
 
 		return nil
 	}

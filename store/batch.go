@@ -26,6 +26,11 @@ type zoneentrystruct struct {
 	apex string
 }
 
+type passiveentrystruct struct {
+	pe   *models.PassiveEntry
+	fqdn string
+}
+
 type BatchEntities struct {
 	size                   int
 	tldByName              map[string]*domainstruct
@@ -38,6 +43,7 @@ type BatchEntities struct {
 	fqdnByNameAnon         map[string]*domainstruct
 	certByFingerprint      map[string]*certstruct
 	zoneEntries            []*zoneentrystruct
+	passiveEntries         []*passiveentrystruct
 }
 
 // used to determine if the batch is full, which depends on the number of zone entries or the number of log entries (measured by certs)
@@ -60,6 +66,7 @@ func (be *BatchEntities) Reset() {
 	be.fqdnByNameAnon = make(map[string]*domainstruct)
 	be.certByFingerprint = make(map[string]*certstruct)
 	be.zoneEntries = []*zoneentrystruct{}
+	be.passiveEntries = []*passiveentrystruct{}
 }
 
 func NewBatchEntities(size int) BatchEntities {
