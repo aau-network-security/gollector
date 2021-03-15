@@ -619,12 +619,13 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 	//make the table unlogged to improve performance
 	tableList := []string{"apexes", "certificate_to_fqdns", "certificates", "fqdns", "log_entries", "public_suffixes", "tlds", "zonefile_entries"}
 
-	for _, tl := range tableList {
-		line := fmt.Sprintf("ALTER TABLE %s SET UNLOGGED;", tl)
+	for _, table := range tableList {
+		line := fmt.Sprintf("ALTER TABLE %s SET UNLOGGED;", table)
 		_, err := s.db.Exec(line)
 		if err != nil {
-			log.Debug().Msgf("error creating unlogged %s table: %s", tl, err.Error())
+			log.Debug().Msgf("error creating unlogged %s table: %s", table, err.Error())
 		}
+		log.Debug().Msgf("unlogged: %s", table)
 	}
 
 	log.Debug().Msgf("unlogging db tables: done!")
