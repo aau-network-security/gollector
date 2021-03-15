@@ -16,3 +16,4 @@ api:
 sentry:
   enabled: true
   dsn: <dsn that includes key and host>
+log-level: <debug | info | warn | error>
