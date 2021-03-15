@@ -6,3 +6,4 @@ api-address:
 meta:
   host: <host that runs measurement, for meta info storage purposes>
   description: <description of measurement>
+log-level: <debug | info | warn | error>

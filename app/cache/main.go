@@ -30,6 +30,12 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
+	logLevel, err := zerolog.ParseLevel(conf.LogLevel)
+	if err != nil {
+		log.Fatal().Msgf("error while parsing log level: %s", err)
+	}
+	zerolog.SetGlobalLevel(logLevel)
+
 	if conf.PprofPort > 0 {
 		go func() {
 			addr := fmt.Sprintf("localhost:%d", conf.PprofPort)

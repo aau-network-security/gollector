@@ -28,6 +28,7 @@ type config struct {
 	Api       api.Config `yaml:"api"`
 	StoreOpts storeOpts  `yaml:"store"`
 	PprofPort int        `yaml:"pprof-port"`
+	LogLevel  string     `yaml:"log-level"`
 }
 
 func readConfig(path string) (config, error) {
