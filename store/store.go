@@ -574,15 +574,19 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		Database: conf.DBName,
 	}
 
+	log.Debug().Msgf("connecting to database..")
 	db := pg.Connect(&pgOpts)
 	if conf.Debug {
 		db.AddQueryHook(&debugHook{})
 	}
+	log.Debug().Msgf("connecting to database: done!")
 
+	log.Debug().Msgf("creating influx service..")
 	ifs, err := NewInfluxService(conf.InfluxOpts)
 	if err != nil {
 		return nil, err
 	}
+	log.Debug().Msgf("creating influx service: done!")
 
 	postHooks := []postHook{propagationPosthook(), storeCachedValuePosthook()}
 
@@ -604,9 +608,13 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		influxService:   ifs,
 	}
 
+	log.Debug().Msgf("migrating models..!")
 	if err := s.migrate(); err != nil {
 		return nil, errs.Wrap(err, "migrate models")
 	}
+	log.Debug().Msgf("migrating models: done!")
+
+	log.Debug().Msgf("unlogging db tables..")
 
 	//make the table unlogged to improve performance
 	tableList := []string{"apexes", "certificate_to_fqdns", "certificates", "fqdns", "log_entries", "public_suffixes", "tlds", "zonefile_entries"}
@@ -619,13 +627,13 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		}
 	}
 
+	log.Debug().Msgf("unlogging db tables: done!")
+
 	go func() {
 		if err := s.init(); err != nil {
 			log.Error().Msgf("error while initializing database: %s", err)
 		}
-
 		s.cache.describe()
-
 		s.Ready.Finish()
 	}()
 
