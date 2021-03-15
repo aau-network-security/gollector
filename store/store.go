@@ -617,9 +617,34 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 	log.Debug().Msgf("unlogging db tables..")
 
 	//make the table unlogged to improve performance
-	tableList := []string{"apexes", "certificate_to_fqdns", "certificates", "fqdns", "log_entries", "public_suffixes", "tlds", "zonefile_entries"}
+	tableList := []string{"apexes", "certificate_to_fqdns", "certificates", "fqdns", "log_entries", "public_suffixes", "tlds", "zonefile_entries", "passive_entries"}
+
+	// check which columns are already unlogged
+	type item struct {
+		Relname        string
+		Relpersistence string
+	}
+	var items []item
+	qry := "SELECT relname, relpersistence FROM pg_class"
+	if _, err := s.db.Query(&items, qry); err != nil {
+		return nil, err
+	}
+
+	//var unlogged []string
+	unlogMapping := make(map[string]string)
+	for _, item := range items {
+		unlogMapping[item.Relname] = item.Relpersistence
+	}
 
 	for _, table := range tableList {
+		unlogStatus, ok := unlogMapping[table]
+		if !ok {
+			log.Warn().Msgf("unknown logged status; %s", table)
+		} else if unlogStatus == "u" {
+			log.Debug().Msgf("already unlogged: %s", table)
+			continue
+		}
+
 		line := fmt.Sprintf("ALTER TABLE %s SET UNLOGGED;", table)
 		_, err := s.db.Exec(line)
 		if err != nil {
