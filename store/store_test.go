@@ -200,7 +200,7 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 	}
 
 	for _, entry := range entries {
-		if _, err := s.StorePassiveEntry(muid, entry.query, entry.queryType, entry.tm); err != nil {
+		if err := s.StorePassiveEntry(muid, entry.query, entry.tm); err != nil {
 			t.Fatalf("unexpected error while storing passive entry: %s", err)
 		}
 	}

@@ -44,7 +44,7 @@ func (s *Server) StorePassiveEntry(str api.SplunkApi_StorePassiveEntryServer) er
 				Ok:    true,
 				Error: "",
 			}
-			if _, err := s.Store.StorePassiveEntry(muid, se.Query, ts); err != nil {
+			if err := s.Store.StorePassiveEntry(muid, se.Query, ts); err != nil {
 				s.Log.Log(err, app.LogOptions{
 					Msg: "failed to store passive entry",
 					Tags: map[string]string{

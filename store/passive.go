@@ -1,13 +1,14 @@
 package store
 
 import (
+	"github.com/rs/zerolog/log"
 	"strings"
 	"time"
 
 	"github.com/aau-network-security/gollector/store/models"
 )
 
-func (s *Store) StorePassiveEntry(muid string, query string, t time.Time) (*models.PassiveEntry, error) {
+func (s *Store) StorePassiveEntry(muid string, query string, t time.Time) error {
 	s.m.Lock()
 	defer s.m.Unlock()
 
@@ -15,14 +16,14 @@ func (s *Store) StorePassiveEntry(muid string, query string, t time.Time) (*mode
 
 	sid, ok := s.ms.SId(muid)
 	if !ok {
-		return nil, NoActiveStageErr
+		return NoActiveStageErr
 	}
 
 	query = strings.ToLower(query)
 
 	domain, err := NewDomain(query)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	s.batchEntities.fqdnByName[domain.fqdn.normal] = &domainstruct{
 		domain: domain,
@@ -46,5 +47,17 @@ func (s *Store) StorePassiveEntry(muid string, query string, t time.Time) (*mode
 	}
 
 	s.batchEntities.passiveEntries = append(s.batchEntities.passiveEntries, pe)
-	return pe.pe, nil
+	return s.conditionalPostHooks()
+}
+
+func (s *Store) forpropPassiveEntries() {
+	log.Debug().Msgf("forward propagating passive entries..")
+	for _, pe := range s.batchEntities.passiveEntries {
+		fqdnStr := s.batchEntities.fqdnByName[pe.fqdn]
+		fqdn := fqdnStr.obj.(*models.Fqdn)
+
+		pe.pe.FqdnID = fqdn.ID
+		s.inserts.passiveEntries = append(s.inserts.passiveEntries, pe.pe)
+	}
+	log.Debug().Msgf("forward propagating passive entries.. done!")
 }
