@@ -93,7 +93,7 @@ func main() {
 		}
 		logger = hub.GetLogger(tags)
 	} else {
-		logger = app.NewZeroLogger(tags)
+		logger = app.NewZeroLogger(tags, logLevel)
 	}
 
 	serv := api.Server{

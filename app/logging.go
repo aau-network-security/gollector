@@ -94,12 +94,12 @@ func (l *zeroLogger) Log(err error, opts LogOptions) {
 	ev.Msg(opts.Msg)
 }
 
-func NewZeroLogger(tags map[string]string) ErrLogger {
+func NewZeroLogger(tags map[string]string, level zerolog.Level) ErrLogger {
 	ctx := zerolog.New(os.Stderr).With().Timestamp()
 	for k, v := range tags {
 		ctx = ctx.Str(k, v)
 	}
-	l := ctx.Logger()
+	l := ctx.Logger().Level(level)
 	return &zeroLogger{
 		l: l,
 	}
