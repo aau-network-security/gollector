@@ -52,7 +52,7 @@ func (be *BatchEntities) IsFull() bool {
 }
 
 func (be *BatchEntities) Len() int {
-	return len(be.zoneEntries) + len(be.certByFingerprint)
+	return len(be.zoneEntries) + len(be.certByFingerprint) + len(be.passiveEntries)
 }
 
 func (be *BatchEntities) Reset() {
