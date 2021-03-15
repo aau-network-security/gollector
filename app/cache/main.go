@@ -64,11 +64,13 @@ func main() {
 		},
 	}
 
+	log.Debug().Msgf("creating store")
 	start := time.Now()
 	s, err := store.NewStore(conf.Api.Store, opts)
 	if err != nil {
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}
+	log.Debug().Msgf("created store")
 
 	go func() {
 		s.Ready.Wait()
@@ -107,6 +109,7 @@ func main() {
 	if err != nil {
 		log.Fatal().Msgf("failed to listen on address %s: %s", addr, err)
 	}
+	log.Debug().Msgf("started to listen on address %s")
 
 	if err := serv.Run(lis); err != nil {
 		log.Fatal().Msgf("error while running api server: %s", err)
