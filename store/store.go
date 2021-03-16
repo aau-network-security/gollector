@@ -733,18 +733,21 @@ func storeCachedValuePosthook() postHook {
 		}
 		defer tx.Rollback()
 
+		log.Debug().Msgf("storing cached values")
 		// inserts
 		if len(s.inserts.fqdns) > 0 {
 			if err := tx.Insert(&s.inserts.fqdns); err != nil {
 				return errs.Wrap(err, "insert fqdns")
 			}
 		}
+		log.Debug().Msgf("(1/14)")
 
 		if len(s.inserts.fqdnsAnon) > 0 {
 			if err := tx.Insert(&s.inserts.fqdnsAnon); err != nil {
 				return errs.Wrap(err, "insert anon fqdns")
 			}
 		}
+		log.Debug().Msgf("(2/14)")
 
 		if len(s.inserts.apexes) > 0 {
 			a := s.inserts.apexList()
@@ -752,6 +755,7 @@ func storeCachedValuePosthook() postHook {
 				return errs.Wrap(err, "insert apexes")
 			}
 		}
+		log.Debug().Msgf("(3/14)")
 
 		if len(s.inserts.apexesAnon) > 0 {
 			a := s.inserts.apexAnonList()
@@ -759,84 +763,94 @@ func storeCachedValuePosthook() postHook {
 				return errs.Wrap(err, "insert anon apexes")
 			}
 		}
+		log.Debug().Msgf("(4/14)")
 
 		if len(s.inserts.publicSuffix) > 0 {
 			if err := tx.Insert(&s.inserts.publicSuffix); err != nil {
 				return errs.Wrap(err, "insert public suffix")
 			}
 		}
+		log.Debug().Msgf("(5/14)")
 
 		if len(s.inserts.publicSuffixAnon) > 0 {
 			if err := tx.Insert(&s.inserts.publicSuffixAnon); err != nil {
 				return errs.Wrap(err, "insert anon public suffix")
 			}
 		}
+		log.Debug().Msgf("(6/14)")
 
 		if len(s.inserts.tld) > 0 {
 			if err := tx.Insert(&s.inserts.tld); err != nil {
 				return errs.Wrap(err, "insert tld")
 			}
 		}
+		log.Debug().Msgf("(7/14)")
 
 		if len(s.inserts.tldAnon) > 0 {
 			if err := tx.Insert(&s.inserts.tldAnon); err != nil {
 				return errs.Wrap(err, "insert tld")
 			}
 		}
+		log.Debug().Msgf("(8/14)")
+
 
 		if len(s.inserts.zoneEntries) > 0 {
 			if err := tx.Insert(&s.inserts.zoneEntries); err != nil {
 				return errs.Wrap(err, "insert zone entries")
 			}
 		}
+		log.Debug().Msgf("(9/14)")
+
 
 		if len(s.inserts.logEntries) > 0 {
 			if err := tx.Insert(&s.inserts.logEntries); err != nil {
 				return errs.Wrap(err, "insert log entries")
 			}
 		}
+		log.Debug().Msgf("(10/14)")
 
 		if len(s.inserts.certs) > 0 {
 			if err := tx.Insert(&s.inserts.certs); err != nil {
 				return errs.Wrap(err, "insert certs")
 			}
 		}
+		log.Debug().Msgf("(11/14)")
 
 		if len(s.inserts.certToFqdns) > 0 {
 			if err := tx.Insert(&s.inserts.certToFqdns); err != nil {
 				return errs.Wrap(err, "insert cert-to-fqdns")
 			}
 		}
+		log.Debug().Msgf("(12/14)")
 
 		if len(s.inserts.passiveEntries) > 0 {
 			if err := tx.Insert(&s.inserts.passiveEntries); err != nil {
 				return errs.Wrap(err, "insert passive entries")
 			}
 		}
+		log.Debug().Msgf("(13/14)")
 
 		if len(s.inserts.entradaEntries) > 0 {
 			if err := tx.Insert(&s.inserts.entradaEntries); err != nil {
 				return errs.Wrap(err, "insert entrada entries")
 			}
 		}
+		log.Debug().Msgf("(14/14)")
 
 		// updates
+		log.Debug().Msgf("updating cached values")
 		if len(s.updates.apexes) > 0 {
 			a := s.updates.apexList()
 			if err := tx.Update(&a); err != nil {
 				return errs.Wrap(err, "update apexes")
 			}
 		}
-
-		if len(s.updates.passiveEntries) > 0 {
-			if _, err := tx.Model(&s.updates.passiveEntries).Column("first_seen").Update(); err != nil {
-				return errs.Wrap(err, "update passive entries")
-			}
-		}
+		log.Debug().Msgf("(1/1)")
 
 		if err := tx.Commit(); err != nil {
 			return errs.Wrap(err, "committing transaction")
 		}
+		log.Debug().Msgf("transaction committed!")
 
 		s.updates = NewModelSet()
 		s.inserts = NewModelSet()
