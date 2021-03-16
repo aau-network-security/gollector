@@ -53,7 +53,11 @@ func (s *Store) StorePassiveEntry(muid string, query string, t time.Time) error 
 func (s *Store) forpropPassiveEntries() {
 	log.Debug().Msgf("forward propagating passive entries..")
 	for _, pe := range s.batchEntities.passiveEntries {
-		fqdnStr := s.batchEntities.fqdnByName[pe.fqdn]
+		fqdnStr, ok := s.batchEntities.fqdnByName[pe.fqdn]
+		if !ok {
+			log.Warn().Msgf("failed to find fqdn id for passive entry for fqdn '%s': skipping", pe.fqdn)
+			continue
+		}
 		fqdn := fqdnStr.obj.(*models.Fqdn)
 
 		pe.pe.FqdnID = fqdn.ID
