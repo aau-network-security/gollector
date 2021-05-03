@@ -3,15 +3,13 @@ package splunk
 import (
 	"bufio"
 	"encoding/json"
+	"fmt"
+	"github.com/rs/zerolog/log"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"time"
 )
-
-type QueryResult struct {
-	Query     string
-	QueryType string
-}
 
 type strSlice []string
 
@@ -34,9 +32,8 @@ func (s *strSlice) UnmarshalJSON(b []byte) error {
 }
 
 type Result struct {
-	Timestamp  time.Time `json:"timestamp"`
-	Queries    strSlice  `json:"query{}"`
-	QueryTypes strSlice  `json:"query_type{}"`
+	Timestamp time.Time `json:"timestamp"`
+	Queries   strSlice  `json:"query{}"`
 }
 
 type Entry struct {
@@ -45,14 +42,10 @@ type Entry struct {
 	Result  Result `json:"result"`
 }
 
-func (e *Entry) QueryResults() []QueryResult {
-	var res []QueryResult
-	for i := range e.Result.Queries {
-		qr := QueryResult{
-			Query:     e.Result.Queries[i],
-			QueryType: e.Result.QueryTypes[i],
-		}
-		res = append(res, qr)
+func (e *Entry) Queries() []string {
+	var res []string
+	for _, qry := range e.Result.Queries {
+		res = append(res, qry)
 	}
 	return res
 }
@@ -60,32 +53,44 @@ func (e *Entry) QueryResults() []QueryResult {
 type EntryFunc func(Entry) error
 
 func Process(dir string, entryFn EntryFunc) error {
-	walkFn := func(path string, info os.FileInfo, err error) error {
-		// ignore errors
-		if err != nil {
-			return err
-		}
-		// ignore directories
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+	nFiles := len(files)
+
+	for i, info := range files {
 		if info.IsDir() {
-			return nil
+			continue
+		}
+		ext := filepath.Ext(info.Name())
+		if ext != ".json" {
+			continue
 		}
 
+		path := filepath.Join(dir, info.Name())
 		file, err := os.Open(path)
 		if err != nil {
 			return err
 		}
 		sc := bufio.NewScanner(file)
+		count := 0
 		for sc.Scan() {
 			var entry Entry
 			b := sc.Bytes()
 			if err := json.Unmarshal(b, &entry); err != nil {
-				return err
+				log.Debug().Msgf("failed to unmarshal json: %s", err)
+				continue
 			}
 			if err := entryFn(entry); err != nil {
-
+				log.Warn().Msgf("failed to apply function to entry: %s", err)
 			}
+			count++
 		}
-		return nil
+		log.Debug().
+			Str("progress", fmt.Sprintf("%d/%d", i+1, nFiles)).
+			Int("count", count).
+			Msgf("finished DNS file")
 	}
-	return filepath.Walk(dir, walkFn)
+	return nil
 }

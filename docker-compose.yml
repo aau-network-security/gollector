@@ -10,6 +10,7 @@ services:
       - ./config:/config:ro # configuration files
     ports:
       - "${GRPC_PORT}:${GRPC_PORT}"
+      - "${PPROF_PORT}:${PPROF_PORT}"
   entrada:
     container_name: gollector-entrada
     build:
@@ -31,6 +32,30 @@ services:
     volumes:
       - ./config:/config:ro # configuration files
       - ${SSH_DIR}:/ssh:ro  # ssh keys
+      - ${ZONEFILE_DIR}:/zonefiles # directory to store zone files
+  zonediffer:
+    container_name: gollector-zonediffer
+    build:
+      context: .
+      dockerfile: app/zonediffer/Dockerfile
+    command: [ "--config", "/config/zonediffer.yml" ]
+    volumes:
+      - ./config:/config:ro # configuration files
+      - ${ZONEFILE_DIR}:/zonefiles:ro  # ssh keys
+  zones-test:
+    container_name: gollector-zones-test
+    build:
+      context: .
+      dockerfile: app/zones/Dockerfile
+    command: [ "--config", "/config/zones-test.yml" ]
+    environment:
+      - COM_FTP_PASS=${COM_FTP_PASS}
+      - CZDS_PASS=${CZDS_PASS}
+      - DK_SSH_PASS=${DK_SSH_PASS}
+    volumes:
+      - ./config:/config:ro # configuration files
+      - ${SSH_DIR}:/ssh:ro  # ssh keys
+      - ${ZONEFILE_DIR}:/zonefiles # directory to store zone files
   ct:
     container_name: gollector-ct
     build:

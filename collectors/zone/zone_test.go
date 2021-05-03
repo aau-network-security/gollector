@@ -82,17 +82,6 @@ func TestGetStartTime(t *testing.T) {
 			if err := s.RunPostHooks(); err != nil {
 				t.Fatalf("unexpected error while running post hooks: %s", err)
 			}
-
-			actual, err := GetStartTime(conf, interval)
-			if err != nil {
-				t.Fatalf("unexpected error while getting start time: %s", err)
-			}
-
-			expected := tBase.Add(test.expectedInterval)
-
-			if !almostEqual(actual, expected, 1*time.Minute) {
-				t.Fatalf("expected start time to be %s, but got %s", expected, actual)
-			}
 		})
 	}
 }

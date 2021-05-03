@@ -5,13 +5,11 @@ import (
 	"compress/gzip"
 	"errors"
 	"fmt"
-	"github.com/aau-network-security/gollector/store"
-	"github.com/aau-network-security/gollector/store/models"
 	"github.com/miekg/dns"
 	"github.com/rs/zerolog/log"
 	"io"
-	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -39,6 +37,7 @@ type ProcessOpts struct {
 	DomainFn       DomainFunc
 	StreamWrappers []StreamWrapper
 	StreamHandler  StreamHandler
+	TargetDir      string
 }
 
 func (opts *ProcessOpts) isValid() bool {
@@ -118,60 +117,52 @@ func Process(z Zone, opts ProcessOpts) error {
 	}
 
 	// write zone file to temporary file on filesystem before processing
-	f, err := ioutil.TempFile("", "")
+	now := time.Now().Format("2006-01-02")
+	fileName := fmt.Sprintf("%s.%s", z.Tld(), now)
+	filePathTemp := filepath.Join(opts.TargetDir, fileName)
+	filePathPerm := fmt.Sprintf("%s.gz", filePathTemp)
+
+	fTemp, err := os.OpenFile(filePathTemp, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
 	if err != nil {
 		return &ZoneErr{z.Tld(), err}
 	}
-	defer os.Remove(f.Name())
+	defer os.Remove(fTemp.Name())
 
-	if _, err := io.Copy(f, str); err != nil {
+	if _, err := io.Copy(fTemp, str); err != nil {
 		return &ZoneErr{z.Tld(), err}
 	}
 
 	log.Debug().Msgf("successfully written stream to file for '%s'", z.Tld())
 
-	fi, err := os.Open(f.Name())
+	// process content of zone file according to domain function
+	// TODO: re-enable
+	//if err := opts.StreamHandler(fTemp, opts.DomainFn); err != nil {
+	//	return &ZoneErr{z.Tld(), err}
+	//}
+
+	if err := fTemp.Close(); err != nil {
+		return &ZoneErr{z.Tld(), err}
+	}
+
+	// write to permanent file
+	fin, err := os.Open(filePathTemp)
 	if err != nil {
 		return &ZoneErr{z.Tld(), err}
 	}
+	defer fin.Close()
 
-	if err := f.Close(); err != nil {
+	fout, err := os.OpenFile(filePathPerm, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0755)
+	if err != nil {
 		return &ZoneErr{z.Tld(), err}
 	}
+	defer fout.Close()
 
-	// process content of zone file according to domain function
-	if err := opts.StreamHandler(fi, opts.DomainFn); err != nil {
-		return &ZoneErr{z.Tld(), err}
-	}
+	wout := gzip.NewWriter(fout)
+	defer wout.Close()
 
-	if err := fi.Close(); err != nil {
+	if _, err := io.Copy(wout, fin); err != nil {
 		return &ZoneErr{z.Tld(), err}
 	}
 
 	return nil
-}
-
-// returns a start time to continue a measurement that synchronizes with the last measurement
-func GetStartTime(conf store.Config, interval time.Duration) (time.Time, error) {
-	g, err := conf.Open()
-	if err != nil {
-		return time.Now(), err
-	}
-
-	var entries []*models.ZonefileEntry
-	if err := g.Limit(1).Order("last_seen desc").Find(&entries).Error; err != nil {
-		return time.Now(), err
-	}
-
-	// no database entries, run measurement now
-	if len(entries) == 0 {
-		return time.Now(), nil
-	}
-
-	st := entries[0].LastSeen.Add(interval)
-	for st.Before(time.Now()) {
-		st = st.Add(interval)
-	}
-
-	return st, nil
 }

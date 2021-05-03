@@ -3,9 +3,11 @@ RUN apk --update add ca-certificates
 
 FROM golang:1.13 AS builder
 WORKDIR /go/src/github.com/aau-network-security/gollector
+COPY ./go.mod ./
+COPY ./go.sum ./
+RUN go mod download
 COPY ./ ./
 WORKDIR /go/src/github.com/aau-network-security/gollector/app/splunk
-RUN go get ./...
 RUN GOOS=linux CGO_ENABLED=0 go build -o app .
 
 FROM scratch

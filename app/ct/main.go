@@ -8,8 +8,6 @@ import (
 	prt "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/collectors/ct"
 	ct2 "github.com/google/certificate-transparency-go"
-	"github.com/google/certificate-transparency-go/x509"
-	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/vbauerster/mpb/v4"
@@ -19,24 +17,6 @@ import (
 	"sync"
 	"time"
 )
-
-var (
-	UnsupportedCertTypeErr = errors.New("provided certificate is not supported")
-)
-
-func certFromLogEntry(entry *ct2.LogEntry) (*x509.Certificate, bool, error) {
-	var cert *x509.Certificate
-	isPrecert := false
-	if entry.Precert != nil {
-		cert = entry.Precert.TBSCertificate
-		isPrecert = true
-	} else if entry.X509Cert != nil {
-		cert = entry.X509Cert
-	} else {
-		return nil, false, UnsupportedCertTypeErr
-	}
-	return cert, isPrecert, nil
-}
 
 func main() {
 	ctx := context.Background()
@@ -53,6 +33,12 @@ func main() {
 	if err != nil {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
+
+	logLevel, err := zerolog.ParseLevel(conf.LogLevel)
+	if err != nil {
+		log.Fatal().Msgf("error while parsing log level: %s", err)
+	}
+	zerolog.SetGlobalLevel(logLevel)
 
 	cc, err := conf.ApiAddr.Dial()
 	if err != nil {
@@ -134,15 +120,69 @@ func main() {
 				wg.Done()
 			}()
 
-			start, end, err := ct.IndexByLastEntryDB(ctx, &l, ctApiClient)
+			startIndexInDb, endIndex, err := ct.IndexByLastEntryDB(ctx, &l, ctApiClient)
 			if err != nil {
+				log.Warn().Str("log", l.Name()).Msgf("failed to get the last index from the database: %s", err)
 				return
 			}
+			startIndex := startIndexInDb
+
+			if conf.TimeWindow.Active {
+				startTime, err := time.Parse("2006-01-02", conf.TimeWindow.Start)
+				if err != nil {
+					log.Warn().Str("log", l.Name()).Msgf("failed to parse the start date: %s", err)
+					return
+				}
+
+				endTime, err := time.Parse("2006-01-02", conf.TimeWindow.End)
+				if err != nil {
+					log.Warn().Str("log", l.Name()).Msgf("failed to parse the end date: %s", err)
+					return
+				}
+
+				log.Debug().Str("log", l.Name()).Msgf("obtaining start index from time")
+				startIndexByDate, err := ct.IndexByDate(ctx, &l, startTime)
+				if err != nil {
+					log.Warn().Str("log", l.Name()).Msgf("failed to obtain index from start time: %s", err)
+					return
+				}
+
+				log.Debug().Str("log", l.Name()).Msgf("obtaining end index from time..")
+				endIndexByDate, err := ct.IndexByDate(ctx, &l, endTime)
+				if err != nil {
+					log.Warn().Str("log", l.Name()).Msgf("failed to obtain index from start time: %s", err)
+					return
+				}
+				if startIndexByDate == endIndexByDate {
+					log.Warn().Str("log", l.Name()).Msgf("given time window completely falls outside the window of the CT log")
+					return
+				}
+
+				if startIndexByDate > startIndex {
+					log.Debug().Msgf("start index of database (%d) is lower than index based on timestamp (%d)", startIndex, startIndexByDate)
+					startIndex = startIndexByDate
+				}
+
+				if endIndexByDate < endIndex {
+					log.Debug().Msgf("end index of database (%d) is higher than index based on timestamp (%d)", endIndex, endIndexByDate)
+					endIndex = endIndexByDate
+				}
+			}
+
 			log.Info().
 				Str("log", l.Name()).
-				Msgf("start index %d", start)
+				Msgf("start index %d", startIndex)
+			log.Info().
+				Str("log", l.Name()).
+				Msgf("end index %d", endIndex)
 
-			bar := p.AddBar(end-start,
+			totalCount := endIndex - startIndex
+			if totalCount < 0 {
+				log.Error().Str("log", l.Name()).Msgf("cannot continue with a negative entry count: %d", totalCount)
+				return
+			}
+			log.Debug().Str("log", l.Name()).Msgf("scanning %d entries", totalCount)
+			bar := p.AddBar(totalCount,
 				mpb.PrependDecorators(
 					decor.Name(l.Name()),
 					decor.CountersNoUnit("%d / %d", decor.WCSyncSpace)),
@@ -156,45 +196,43 @@ func main() {
 			entryFn := func(entry *ct2.LogEntry) error {
 				bar.Increment()
 
-				cert, isPrecert, err := certFromLogEntry(entry)
-				if err != nil {
-					return err
-				}
-
-				var operatedBy []int64
-				for _, ob := range l.OperatedBy {
-					operatedBy = append(operatedBy, int64(ob))
-				}
-
-				log := prt.Log{
-					Description:       l.Description,
-					Key:               l.Key,
-					Url:               l.Url,
-					MaximumMergeDelay: int64(l.MaximumMergeDelay),
-					OperatedBy:        operatedBy,
-					DnsApiEndpoint:    l.DnsApiEndpoint,
-				}
-
-				le := prt.LogEntry{
-					Certificate: cert.Raw,
-					Index:       entry.Index,
-					Timestamp:   int64(entry.Leaf.TimestampedEntry.Timestamp),
-					Log:         &log,
-					IsPrecert:   isPrecert,
-				}
-
-				if err := bs.Send(ctx, &le); err != nil {
-					return errors.Wrap(err, "error while sending log entry to server")
-				}
+				//cert, isPrecert, err := certFromLogEntry(entry)
+				//if err != nil {
+				//	return err
+				//}
+				//
+				//var operatedBy []int64
+				//for _, ob := range l.OperatedBy {
+				//	operatedBy = append(operatedBy, int64(ob))
+				//}
+				//
+				//log := prt.Log{
+				//	Description:       l.Description,
+				//	Key:               l.Key,
+				//	Url:               l.Url,
+				//	MaximumMergeDelay: int64(l.MaximumMergeDelay),
+				//	OperatedBy:        operatedBy,
+				//	DnsApiEndpoint:    l.DnsApiEndpoint,
+				//}
+				//
+				//le := prt.LogEntry{
+				//	Certificate: cert.Raw,
+				//	Index:       entry.Index,
+				//	Timestamp:   int64(entry.Leaf.TimestampedEntry.Timestamp),
+				//	Log:         &log,
+				//	IsPrecert:   isPrecert,
+				//}
+				//
+				//if err := bs.Send(ctx, &le); err != nil {
+				//	return errors.Wrap(err, "error while sending log entry to server")
+				//}
 				return nil
 			}
 
 			opts := ct.Options{
 				WorkerCount: conf.WorkerCount,
-				StartIndex:  0,
-				EndIndex:    end,
-				//EndIndex: 1000,
-				//EndIndex: 10000,
+				StartIndex:  startIndex,
+				EndIndex:    endIndex,
 			}
 
 			count, err = ct.Scan(ctx, &l, entryFn, opts)

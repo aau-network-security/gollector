@@ -119,6 +119,12 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
+	logLevel, err := zerolog.ParseLevel(conf.LogLevel)
+	if err != nil {
+		log.Fatal().Msgf("error while parsing log level: %s", err)
+	}
+	zerolog.SetGlobalLevel(logLevel)
+
 	cc, err := conf.ApiAddr.Dial()
 	if err != nil {
 		log.Fatal().Msgf("failed to dial: %s", err)
@@ -168,12 +174,12 @@ func main() {
 	}
 
 	entryFn := func(entry splunk.Entry) error {
-		for _, qr := range entry.QueryResults() {
-			ts := entry.Result.Timestamp.UnixNano() / 1e06
+		for _, qry := range entry.Queries() {
+			t := entry.Result.Timestamp.Add(time.Hour * 24) // add one hour to offset UTC+1 timing
+			ts := t.UnixNano() / 1e06
 
 			se := prt.SplunkEntry{
-				Query:     qr.Query,
-				QueryType: qr.QueryType,
+				Query:     qry,
 				Timestamp: ts,
 			}
 

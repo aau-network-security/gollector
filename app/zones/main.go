@@ -140,14 +140,13 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
-	if err := conf.Czds.IsValid(); err != nil {
-		log.Fatal().Msgf("czds configuration is invalid: %s", err)
+	if err := conf.IsValid(); err != nil {
+		log.Fatal().Msgf("invalid configuration: %s", err)
 	}
-	if err := conf.Dk.IsValid(); err != nil {
-		log.Fatal().Msgf("dk configuration is invalid: %s", err)
-	}
-	if err := conf.Com.IsValid(); err != nil {
-		log.Fatal().Msgf("com configuration is invalid: %s", err)
+
+	// create target dir if not exists
+	if err := os.MkdirAll(conf.TargetDir, os.ModePerm); err != nil {
+		log.Fatal().Msgf("failed to create target dir: %s", err)
 	}
 
 	cc, err := conf.ApiAddr.Dial()
@@ -172,16 +171,6 @@ func main() {
 			log.Fatal().Msgf("failed to stop measurement: %s", err)
 		}
 	}()
-
-	interval := 24 * time.Hour
-	zfClient := prt.NewZoneFileApiClient(cc)
-	in := prt.Interval{
-		Interval: int64(interval.Nanoseconds() / 1e06),
-	}
-	stResp, err := zfClient.GetStartTime(ctx, &in)
-	if err != nil {
-		log.Fatal().Msgf("failed to acquire starting time: %s", err)
-	}
 
 	auth := czds2.NewAuthenticator(conf.Czds.Creds, conf.Czds.AuthBaseUrl)
 	client := czds2.NewClient(auth, conf.Czds.ZoneBaseUrl)
@@ -292,6 +281,7 @@ func main() {
 					DomainFn:       domainFn,
 					StreamWrappers: zc.streamWrappers,
 					StreamHandler:  zc.streamHandler,
+					TargetDir:      conf.TargetDir,
 				}
 
 				retryFn := func() error {
@@ -326,11 +316,8 @@ func main() {
 		return nil
 	}
 
-	st := app.TimeFromUnix(stResp.Timestamp)
-	if conf.Now {
-		st = time.Now().Add(-1 * time.Millisecond)
-	}
-
+	st := time.Now().Add(time.Second)
+	interval := 24 * time.Hour
 	if err := app.Repeat(fn, st, interval, -1); err != nil {
 		log.Fatal().Msgf("error while retrieving zone files: %s", err)
 	}

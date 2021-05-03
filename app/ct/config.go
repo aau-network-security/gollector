@@ -7,14 +7,21 @@ import (
 	"io/ioutil"
 )
 
+type TimeWindow struct {
+	Active bool   `yaml:"active"`
+	Start  string `yaml:"start"`
+	End    string `yaml:"end"`
+}
+
 type config struct {
-	Time        string      `yaml:"time"`
+	TimeWindow  TimeWindow  `yaml:"time-window"`
 	WorkerCount int         `yaml:"worker_count"`
 	ApiAddr     app.Address `yaml:"api-address"`
 	Meta        app.Meta    `yaml:"meta"`
 	All         bool        `yaml:"all"`
 	Included    []string    `yaml:"included"` // urls to include
 	Excluded    []string    `yaml:"excluded"` // urls to exclude
+	LogLevel    string      `yaml:"log-level"`
 }
 
 func readConfig(path string) (config, error) {

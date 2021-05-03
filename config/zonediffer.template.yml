@@ -1,4 +1,4 @@
-directory: <path to directory with Splunk JSON files>
+input-dir: <directory with zone files>
 api-address:
   secure: <true | false>
   host: <host>

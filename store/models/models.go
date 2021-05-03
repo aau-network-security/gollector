@@ -76,12 +76,11 @@ func (t FqdnAnon) TableName() string {
 
 // ----- BEGIN ZONEFILE -----
 type ZonefileEntry struct {
-	ID        uint `gorm:"primary_key" pg:",pk"`
-	FirstSeen time.Time
-	LastSeen  time.Time
-	ApexID    uint `gorm:"index"`
-	Active    bool
-	StageID   uint
+	ID         uint `gorm:"primary_key" pg:",pk"`
+	Registered time.Time
+	Expired    time.Time
+	ApexID     uint `gorm:"index"`
+	StageID    uint
 }
 
 // ----- END ZONEFILE -----
@@ -119,11 +118,10 @@ type Log struct {
 
 // ----- BEGIN PASSIVE DNS -----
 type PassiveEntry struct {
-	ID           uint `gorm:"primary_key" pg:",pk"`
-	FqdnID       uint
-	RecordTypeID uint
-	FirstSeen    time.Time
-	StageID      uint
+	ID        uint `gorm:"primary_key" pg:",pk"`
+	FqdnID    uint
+	Timestamp time.Time
+	StageID   uint
 }
 
 type EntradaEntry struct {

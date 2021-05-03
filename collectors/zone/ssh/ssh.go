@@ -2,6 +2,7 @@ package ssh
 
 import (
 	"errors"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/ssh"
 	"io/ioutil"
 	"net"
@@ -14,6 +15,7 @@ var (
 
 type Config struct {
 	Host     string `yaml:"host"`
+	Port     string `yaml:"port"`
 	User     string `yaml:"user"`
 	AuthType string `yaml:"authtype"`
 	Password string
@@ -86,7 +88,13 @@ func DialFunc(conf Config) (func(network, address string) (net.Conn, error), err
 		},
 	}
 
-	host := net.JoinHostPort(conf.Host, "22")
+	port := conf.Port
+	if conf.Port == "" {
+		log.Info().Msgf("no SSH port provided, defaulting to port '22'")
+		port = "22"
+	}
+
+	host := net.JoinHostPort(conf.Host, port)
 	sshClient, err := ssh.Dial("tcp", host, &clientConfig)
 
 	return sshClient.Dial, err

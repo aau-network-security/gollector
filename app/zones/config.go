@@ -93,12 +93,30 @@ func (c *Czds) IsValid() error {
 }
 
 type config struct {
-	Com     com         `yaml:"com"`
-	Czds    Czds        `yaml:"czds"`
-	Dk      dk          `yaml:"dk"`
-	ApiAddr app.Address `yaml:"api-address"`
-	Meta    app.Meta    `yaml:"meta"`
-	Now     bool        `yaml:"now"`
+	Com       com         `yaml:"com"`
+	Czds      Czds        `yaml:"czds"`
+	Dk        dk          `yaml:"dk"`
+	ApiAddr   app.Address `yaml:"api-address"`
+	Meta      app.Meta    `yaml:"meta"`
+	Now       bool        `yaml:"now"`
+	TargetDir string      `yaml:"target-dir"`
+}
+
+func (c *config) IsValid() error {
+	if err := c.Czds.IsValid(); err != nil {
+		return errors.Wrap(err, "czds configuration is invalid")
+	}
+	if err := c.Dk.IsValid(); err != nil {
+		return errors.Wrap(err, "dk configuration is invalid")
+	}
+	if err := c.Com.IsValid(); err != nil {
+		return errors.Wrap(err, "com configuration is invalid")
+	}
+	if c.TargetDir == "" {
+		return errors.New("target directory cannot be empty")
+	}
+
+	return nil
 }
 
 func readConfig(path string) (config, error) {

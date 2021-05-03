@@ -73,7 +73,7 @@ func (c *Config) DSN() string {
 }
 
 type ModelSet struct {
-	zoneEntries      map[uint]*models.ZonefileEntry
+	zoneEntries      []*models.ZonefileEntry
 	fqdns            []*models.Fqdn
 	fqdnsAnon        []*models.FqdnAnon
 	apexes           map[uint]*models.Apex
@@ -128,7 +128,7 @@ func (ms *ModelSet) apexAnonList() []*models.ApexAnon {
 
 func NewModelSet() ModelSet {
 	return ModelSet{
-		zoneEntries:      make(map[uint]*models.ZonefileEntry),
+		zoneEntries:      []*models.ZonefileEntry{},
 		apexes:           make(map[uint]*models.Apex),
 		apexesAnon:       make(map[uint]*models.ApexAnon),
 		fqdns:            []*models.Fqdn{},
@@ -177,8 +177,6 @@ type cache struct {
 	certByFingerprint      *lru.Cache //map[string]*models.Certificate
 	logByUrl               *lru.Cache //map[string]*models.Log
 	recordTypeByName       *lru.Cache //map[string]*models.RecordType
-	passiveEntryByFqdn     splunkEntryMap
-	entradaEntryByFqdn     *lru.Cache //map[string]*models.EntradaEntry
 }
 
 // prints the current status to standard output
@@ -195,8 +193,6 @@ func (c *cache) describe() {
 	log.Debug().Msgf("certificates:    %d", c.certByFingerprint.Len())
 	log.Debug().Msgf("logs:            %d", c.logByUrl.Len())
 	log.Debug().Msgf("record types:    %d", c.recordTypeByName.Len())
-	log.Debug().Msgf("passive entries: %d", c.passiveEntryByFqdn.len())
-	//log.Debug().Msgf("entrada entries: %d", c.entradaEntryByFqdn.Len())
 }
 
 func newLRUCache(cacheSize int) *lru.Cache {
@@ -222,8 +218,7 @@ func newCache(opts CacheOpts) cache {
 		zoneEntriesByApexName:  newLRUCache(opts.ZoneEntrySize), //make(map[string]*models.ZonefileEntry),
 		logByUrl:               newLRUCache(opts.LogSize),       //make(map[string]*models.Log),
 		certByFingerprint:      newLRUCache(opts.CertSize),      //make(map[string]*models.Certificate),
-		passiveEntryByFqdn:     newSplunkEntryMap(),
-		recordTypeByName:       newLRUCache(opts.TLDSize), //make(map[string]*models.RecordType),
+		recordTypeByName:       newLRUCache(opts.TLDSize),       //make(map[string]*models.RecordType),
 	}
 }
 
@@ -441,17 +436,6 @@ func (s *Store) init() error {
 		s.cache.fqdnByNameAnon.Add(fqdn.Fqdn.Fqdn, fqdn)
 	}
 
-	// TODO: properly fill cache of zone file entries (by joining zonefile entries with apexes)
-	//var entries []*models.ZonefileEntry
-	//if err := s.db.Model(&entries).Where("active = true").Order("id ASC").Limit(s.cacheOpts.ZoneEntrySize).Select(); err != nil {
-	//	return err
-	//}
-	//for _, entry := range entries {
-	//	apexI, _ := s.cache.apexById.Get(entry.ApexID)
-	//	apex := apexI.(*models.Apex)
-	//	s.cache.zoneEntriesByApexName.Add(apex.Apex, entry)
-	//}
-
 	var logs []*models.Log
 	if err := s.db.Model(&logs).Order("id ASC").Limit(s.cacheOpts.LogSize).Select(); err != nil {
 		return err
@@ -476,16 +460,6 @@ func (s *Store) init() error {
 	for _, rtype := range rtypes {
 		s.cache.recordTypeByName.Add(rtype.Type, rtype)
 		rtypeById[rtype.ID] = rtype
-	}
-
-	var passiveEntries []*models.PassiveEntry
-	if err := s.db.Model(&passiveEntries).Order("id ASC").Select(); err != nil {
-		return err
-	}
-	for _, entry := range passiveEntries {
-		fqdn := fqdnsById[entry.FqdnID]
-		rtype := rtypeById[entry.RecordTypeID]
-		s.cache.passiveEntryByFqdn.add(fqdn.Fqdn, rtype.Type, entry)
 	}
 
 	// initialize counters
@@ -600,15 +574,21 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		Database: conf.DBName,
 	}
 
+	log.Debug().Msgf("connecting to database..")
 	db := pg.Connect(&pgOpts)
 	if conf.Debug {
 		db.AddQueryHook(&debugHook{})
 	}
+	log.Debug().Msgf("connecting to database: done!")
 
+	log.Debug().Msgf("creating influx service..")
 	ifs, err := NewInfluxService(conf.InfluxOpts)
 	if err != nil {
 		return nil, err
 	}
+	log.Debug().Msgf("creating influx service: done!")
+
+	postHooks := []postHook{propagationPosthook(), storeCachedValuePosthook()}
 
 	s := Store{
 		conf:            conf,
@@ -617,7 +597,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		cacheOpts:       opts.CacheOpts,
 		allowedInterval: opts.AllowedInterval,
 		m:               &sync.Mutex{},
-		postHooks:       []postHook{},
+		postHooks:       postHooks,
 		inserts:         NewModelSet(),
 		updates:         NewModelSet(),
 		ids:             Ids{},
@@ -628,30 +608,58 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 		influxService:   ifs,
 	}
 
-	s.postHooks = append(s.postHooks, propagationPosthook(), storeCachedValuePosthook())
-
+	log.Debug().Msgf("migrating models..!")
 	if err := s.migrate(); err != nil {
 		return nil, errs.Wrap(err, "migrate models")
 	}
+	log.Debug().Msgf("migrating models: done!")
+
+	log.Debug().Msgf("unlogging db tables..")
 
 	//make the table unlogged to improve performance
-	tableList := []string{"apexes", "certificate_to_fqdns", "certificates", "fqdns", "log_entries", "public_suffixes", "tlds", "zonefile_entries"}
+	tableList := []string{"apexes", "certificate_to_fqdns", "certificates", "fqdns", "log_entries", "public_suffixes", "tlds", "zonefile_entries", "passive_entries"}
 
-	for _, tl := range tableList {
-		line := fmt.Sprintf("ALTER TABLE %s SET UNLOGGED;", tl)
+	// check which columns are already unlogged
+	type item struct {
+		Relname        string
+		Relpersistence string
+	}
+	var items []item
+	qry := "SELECT relname, relpersistence FROM pg_class"
+	if _, err := s.db.Query(&items, qry); err != nil {
+		return nil, err
+	}
+
+	//var unlogged []string
+	unlogMapping := make(map[string]string)
+	for _, item := range items {
+		unlogMapping[item.Relname] = item.Relpersistence
+	}
+
+	for _, table := range tableList {
+		unlogStatus, ok := unlogMapping[table]
+		if !ok {
+			log.Warn().Msgf("unknown logged status; %s", table)
+		} else if unlogStatus == "u" {
+			log.Debug().Msgf("already unlogged: %s", table)
+			continue
+		}
+
+		line := fmt.Sprintf("ALTER TABLE %s SET UNLOGGED;", table)
 		_, err := s.db.Exec(line)
 		if err != nil {
-			log.Debug().Msgf("error creating unlogged %s table: %s", tl, err.Error())
+			log.Debug().Msgf("error creating unlogged %s table: %s", table, err.Error())
 		}
+		log.Debug().Msgf("unlogged: %s", table)
 	}
+
+	log.Debug().Msgf("unlogging db tables: done!")
 
 	go func() {
 		if err := s.init(); err != nil {
 			log.Error().Msgf("error while initializing database: %s", err)
 		}
-
 		s.cache.describe()
-
 		s.Ready.Finish()
 	}()
 
@@ -690,26 +698,20 @@ func propagationPosthook() postHook {
 		// forward prop all (but zone entries)
 		log.Debug().Msgf("propagating forwards..")
 		s.forpropTld()
-		log.Debug().Msgf("(1/4)")
+		log.Debug().Msgf("(1/6)")
 		s.forpropPublicSuffix()
-		log.Debug().Msgf("(2/4)")
+		log.Debug().Msgf("(2/6)")
 		s.forpropApex()
-		log.Debug().Msgf("(3/4)")
+		log.Debug().Msgf("(3/6)")
 		s.forpropFqdn()
-		log.Debug().Msgf("(4/4)")
+		log.Debug().Msgf("(4/6)")
 		if err := s.forpropCerts(); err != nil {
 			return err
 		}
-
-		log.Debug().Msgf("propagating backwards (zone entries)..")
-		// backprop zone entries
-		if err := s.backpropZoneEntries(); err != nil {
-			return errs.Wrap(err, "back prop zone entries")
-		}
-
-		log.Debug().Msgf("propagating forwards (zone entries)..")
-		// forward prop zone entries
 		s.forpropZoneEntries()
+		log.Debug().Msgf("(5/6)")
+		s.forpropPassiveEntries()
+		log.Debug().Msgf("(6/6)")
 
 		s.influxService.StoreHit("db-insert", "tld", len(s.inserts.tld))
 		s.influxService.StoreHit("db-insert", "public-suffix", len(s.inserts.publicSuffix))
@@ -717,7 +719,7 @@ func propagationPosthook() postHook {
 		s.influxService.StoreHit("db-insert", "fqdn", len(s.inserts.fqdns))
 		s.influxService.StoreHit("db-insert", "cert", len(s.inserts.certs))
 		s.influxService.StoreHit("db-insert", "zone-entry", len(s.inserts.zoneEntries))
-		s.influxService.StoreHit("db-update", "zone-entry", len(s.updates.zoneEntries))
+		s.influxService.StoreHit("db-insert", "passive-entry", len(s.inserts.passiveEntries))
 
 		return nil
 	}
@@ -731,18 +733,21 @@ func storeCachedValuePosthook() postHook {
 		}
 		defer tx.Rollback()
 
+		log.Debug().Msgf("storing cached values")
 		// inserts
 		if len(s.inserts.fqdns) > 0 {
 			if err := tx.Insert(&s.inserts.fqdns); err != nil {
 				return errs.Wrap(err, "insert fqdns")
 			}
 		}
+		log.Debug().Msgf("(1/14)")
 
 		if len(s.inserts.fqdnsAnon) > 0 {
 			if err := tx.Insert(&s.inserts.fqdnsAnon); err != nil {
 				return errs.Wrap(err, "insert anon fqdns")
 			}
 		}
+		log.Debug().Msgf("(2/14)")
 
 		if len(s.inserts.apexes) > 0 {
 			a := s.inserts.apexList()
@@ -750,6 +755,7 @@ func storeCachedValuePosthook() postHook {
 				return errs.Wrap(err, "insert apexes")
 			}
 		}
+		log.Debug().Msgf("(3/14)")
 
 		if len(s.inserts.apexesAnon) > 0 {
 			a := s.inserts.apexAnonList()
@@ -757,96 +763,97 @@ func storeCachedValuePosthook() postHook {
 				return errs.Wrap(err, "insert anon apexes")
 			}
 		}
+		log.Debug().Msgf("(4/14)")
 
 		if len(s.inserts.publicSuffix) > 0 {
 			if err := tx.Insert(&s.inserts.publicSuffix); err != nil {
 				return errs.Wrap(err, "insert public suffix")
 			}
 		}
+		log.Debug().Msgf("(5/14)")
 
 		if len(s.inserts.publicSuffixAnon) > 0 {
 			if err := tx.Insert(&s.inserts.publicSuffixAnon); err != nil {
 				return errs.Wrap(err, "insert anon public suffix")
 			}
 		}
+		log.Debug().Msgf("(6/14)")
 
 		if len(s.inserts.tld) > 0 {
 			if err := tx.Insert(&s.inserts.tld); err != nil {
 				return errs.Wrap(err, "insert tld")
 			}
 		}
+		log.Debug().Msgf("(7/14)")
 
 		if len(s.inserts.tldAnon) > 0 {
 			if err := tx.Insert(&s.inserts.tldAnon); err != nil {
 				return errs.Wrap(err, "insert tld")
 			}
 		}
+		log.Debug().Msgf("(8/14)")
+
 
 		if len(s.inserts.zoneEntries) > 0 {
-			z := s.inserts.zoneEntryList()
-			if err := tx.Insert(&z); err != nil {
+			if err := tx.Insert(&s.inserts.zoneEntries); err != nil {
 				return errs.Wrap(err, "insert zone entries")
 			}
 		}
+		log.Debug().Msgf("(9/14)")
+
 
 		if len(s.inserts.logEntries) > 0 {
 			if err := tx.Insert(&s.inserts.logEntries); err != nil {
 				return errs.Wrap(err, "insert log entries")
 			}
 		}
+		log.Debug().Msgf("(10/14)")
 
 		if len(s.inserts.certs) > 0 {
 			if err := tx.Insert(&s.inserts.certs); err != nil {
 				return errs.Wrap(err, "insert certs")
 			}
 		}
+		log.Debug().Msgf("(11/14)")
 
 		if len(s.inserts.certToFqdns) > 0 {
 			if err := tx.Insert(&s.inserts.certToFqdns); err != nil {
 				return errs.Wrap(err, "insert cert-to-fqdns")
 			}
 		}
+		log.Debug().Msgf("(12/14)")
 
 		if len(s.inserts.passiveEntries) > 0 {
 			if err := tx.Insert(&s.inserts.passiveEntries); err != nil {
 				return errs.Wrap(err, "insert passive entries")
 			}
 		}
+		log.Debug().Msgf("(13/14)")
 
 		if len(s.inserts.entradaEntries) > 0 {
 			if err := tx.Insert(&s.inserts.entradaEntries); err != nil {
 				return errs.Wrap(err, "insert entrada entries")
 			}
 		}
+		log.Debug().Msgf("(14/14)")
 
 		// updates
+		log.Debug().Msgf("updating cached values")
 		if len(s.updates.apexes) > 0 {
 			a := s.updates.apexList()
 			if err := tx.Update(&a); err != nil {
 				return errs.Wrap(err, "update apexes")
 			}
 		}
-
-		if len(s.updates.zoneEntries) > 0 {
-			z := s.updates.zoneEntryList()
-			_, err := tx.Model(&z).Column("last_seen", "active").Update()
-			if err != nil {
-				return errs.Wrap(err, "update zone entries")
-			}
-		}
-		if len(s.updates.passiveEntries) > 0 {
-			if _, err := tx.Model(&s.updates.passiveEntries).Column("first_seen").Update(); err != nil {
-				return errs.Wrap(err, "update passive entries")
-			}
-		}
-
-		s.updates = NewModelSet()
-		s.inserts = NewModelSet()
+		log.Debug().Msgf("(1/1)")
 
 		if err := tx.Commit(); err != nil {
 			return errs.Wrap(err, "committing transaction")
 		}
+		log.Debug().Msgf("transaction committed!")
 
+		s.updates = NewModelSet()
+		s.inserts = NewModelSet()
 		s.batchEntities.Reset()
 
 		// TODO: add anonymized

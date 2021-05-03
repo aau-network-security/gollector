@@ -6,6 +6,7 @@ import (
 	api "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/app"
 	"github.com/aau-network-security/gollector/store"
+	"github.com/rs/zerolog"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/test/bufconn"
@@ -48,7 +49,7 @@ func TestServer_StoreLogEntries(t *testing.T) {
 			serv := Server{
 				Conf:  Config{},
 				Store: s,
-				Log:   app.NewZeroLogger(nil),
+				Log:   app.NewZeroLogger(nil, zerolog.DebugLevel),
 			}
 
 			lis := bufconn.Listen(1024 * 1024)

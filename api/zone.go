@@ -1,16 +1,13 @@
 package api
 
 import (
-	"context"
 	prt "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/app"
-	"github.com/aau-network-security/gollector/collectors/zone"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"io"
 	"sync"
-	"time"
 )
 
 func (s *Server) StoreZoneEntry(str prt.ZoneFileApi_StoreZoneEntryServer) error {
@@ -20,7 +17,14 @@ func (s *Server) StoreZoneEntry(str prt.ZoneFileApi_StoreZoneEntryServer) error 
 	}
 
 	log.Debug().Str("muid", muid).Msgf("connection opened for zone entries")
-	defer log.Debug().Str("muid", muid).Msgf("connection closed for zone entries")
+	defer func() {
+		log.Debug().Str("muid", muid).Msgf("connection closed for zone entries")
+		// should *not* be necessary
+		if err := s.Store.RunPostHooks(); err != nil {
+			log.Fatal().Str("muid", muid).Msgf("failed to run post hooks: %s", err)
+		}
+		s.Store.RunPostHooks()
+	}()
 
 	wg := sync.WaitGroup{}
 
@@ -40,7 +44,7 @@ func (s *Server) StoreZoneEntry(str prt.ZoneFileApi_StoreZoneEntryServer) error 
 				Ok:    true,
 				Error: "",
 			}
-			if err := s.Store.StoreZoneEntry(muid, ts, ze.Apex); err != nil {
+			if err := s.Store.StoreZoneEntry(muid, ts, ze.Apex, ze.Registered); err != nil {
 				s.Log.Log(err, app.LogOptions{
 					Msg: "failed to store zone entry",
 				})
@@ -67,16 +71,4 @@ func (s *Server) StoreZoneEntry(str prt.ZoneFileApi_StoreZoneEntryServer) error 
 	wg.Wait()
 
 	return nil
-}
-
-func (s *Server) GetStartTime(ctx context.Context, iv *prt.Interval) (*prt.StartTime, error) {
-	st, err := zone.GetStartTime(s.Conf.Store, time.Duration(iv.Interval)*time.Millisecond)
-	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
-	}
-	ts := st.UnixNano() / 1e06
-	resp := &prt.StartTime{
-		Timestamp: ts,
-	}
-	return resp, nil
 }

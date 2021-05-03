@@ -4,8 +4,6 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	"time"
-
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/go-pg/pg"
 )
@@ -24,9 +22,13 @@ type certstruct struct {
 var cacheNotFound = errors.New("not found in the cache")
 
 type zoneentrystruct struct {
-	ze  *models.ZonefileEntry
-	t   time.Time
-	sid uint
+	ze   *models.ZonefileEntry
+	apex string
+}
+
+type passiveentrystruct struct {
+	pe   *models.PassiveEntry
+	fqdn string
 }
 
 type BatchEntities struct {
@@ -40,7 +42,8 @@ type BatchEntities struct {
 	fqdnByName             map[string]*domainstruct
 	fqdnByNameAnon         map[string]*domainstruct
 	certByFingerprint      map[string]*certstruct
-	zoneEntryByApex        map[string]*zoneentrystruct
+	zoneEntries            []*zoneentrystruct
+	passiveEntries         []*passiveentrystruct
 }
 
 // used to determine if the batch is full, which depends on the number of zone entries or the number of log entries (measured by certs)
@@ -49,7 +52,7 @@ func (be *BatchEntities) IsFull() bool {
 }
 
 func (be *BatchEntities) Len() int {
-	return len(be.zoneEntryByApex) + len(be.certByFingerprint)
+	return len(be.zoneEntries) + len(be.certByFingerprint) + len(be.passiveEntries)
 }
 
 func (be *BatchEntities) Reset() {
@@ -62,7 +65,8 @@ func (be *BatchEntities) Reset() {
 	be.fqdnByName = make(map[string]*domainstruct)
 	be.fqdnByNameAnon = make(map[string]*domainstruct)
 	be.certByFingerprint = make(map[string]*certstruct)
-	be.zoneEntryByApex = map[string]*zoneentrystruct{}
+	be.zoneEntries = []*zoneentrystruct{}
+	be.passiveEntries = []*passiveentrystruct{}
 }
 
 func NewBatchEntities(size int) BatchEntities {
@@ -198,6 +202,20 @@ func (s *Store) backpropFqdn() error {
 
 	for _, f := range fqdnFoundInDB {
 		existing := s.batchEntities.fqdnByName[f.Fqdn]
+		if existing == nil {
+			// TODO: this should not happen..
+			// a domain has been fetched from the database, although it does not belong in this batch, and it hasn't been requested:
+			// create a new entry in the batch for id matching
+			d, err := NewDomain(f.Fqdn)
+			if err != nil {
+				return err
+			}
+			existing = &domainstruct{
+				obj:    nil,
+				domain: d,
+			}
+		}
+
 		existing.obj = f
 		s.batchEntities.fqdnByName[f.Fqdn] = existing
 		s.cache.fqdnByName.Add(f.Fqdn, f)
@@ -245,6 +263,19 @@ func (s *Store) backpropApex() error {
 
 	for _, a := range apexFoundInDB {
 		existing := s.batchEntities.apexByName[a.Apex]
+		if existing == nil {
+			// TODO: this should not happen..
+			// a domain has been fetched from the database, although it does not belong in this batch, and it hasn't been requested:
+			// create a new entry in the batch for id matching
+			d, err := NewDomain(a.Apex)
+			if err != nil {
+				return err
+			}
+			existing = &domainstruct{
+				obj:    nil,
+				domain: d,
+			}
+		}
 		existing.obj = a
 		s.batchEntities.apexByName[a.Apex] = existing
 		s.cache.apexByName.Add(a.Apex, a)
@@ -292,6 +323,19 @@ func (s *Store) backpropPublicSuffix() error {
 
 	for _, ps := range psFoundInDB {
 		existing := s.batchEntities.publicSuffixByName[ps.PublicSuffix]
+		if existing == nil {
+			// TODO: this should not happen..
+			// a domain has been fetched from the database, although it does not belong in this batch, and it hasn't been requested:
+			// create a new entry in the batch for id matching
+			d, err := NewDomain(ps.PublicSuffix)
+			if err != nil {
+				return err
+			}
+			existing = &domainstruct{
+				obj:    nil,
+				domain: d,
+			}
+		}
 		existing.obj = ps
 		s.batchEntities.publicSuffixByName[ps.PublicSuffix] = existing
 	}
@@ -338,6 +382,19 @@ func (s *Store) backpropTld() error {
 
 	for _, tld := range tldFoundInDB {
 		existing := s.batchEntities.tldByName[tld.Tld]
+		if existing == nil {
+			// TODO: this should not happen..
+			// a domain has been fetched from the database, although it does not belong in this batch, and it hasn't been requested:
+			// create a new entry in the batch for id matching
+			d, err := NewDomain(tld.Tld)
+			if err != nil {
+				return err
+			}
+			existing = &domainstruct{
+				obj:    nil,
+				domain: d,
+			}
+		}
 		existing.obj = tld
 		s.batchEntities.tldByName[tld.Tld] = existing
 		s.cache.tldByName.Add(tld.Tld, tld)

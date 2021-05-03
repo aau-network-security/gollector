@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/http"
 	_ "net/http/pprof"
 	"os"
 	"time"
@@ -29,6 +30,22 @@ func main() {
 		log.Fatal().Msgf("error while reading configuration: %s", err)
 	}
 
+	logLevel, err := zerolog.ParseLevel(conf.LogLevel)
+	if err != nil {
+		log.Fatal().Msgf("error while parsing log level: %s", err)
+	}
+	zerolog.SetGlobalLevel(logLevel)
+
+	if conf.PprofPort > 0 {
+		go func() {
+			addr := fmt.Sprintf("localhost:%d", conf.PprofPort)
+			log.Info().Msgf("running pprof server on [::]:%d", conf.PprofPort)
+			if err := http.ListenAndServe(addr, nil); err != nil {
+				log.Fatal().Msgf("error while running pprof handler: %s", err)
+			}
+		}()
+	}
+
 	if err := conf.Sentry.IsValid(); err != nil {
 		log.Fatal().Msgf("sentry configuration is invalid: %s", err)
 	}
@@ -47,11 +64,13 @@ func main() {
 		},
 	}
 
+	log.Debug().Msgf("creating store")
 	start := time.Now()
 	s, err := store.NewStore(conf.Api.Store, opts)
 	if err != nil {
 		log.Fatal().Msgf("error while creating store: %s", err)
 	}
+	log.Debug().Msgf("created store")
 
 	go func() {
 		s.Ready.Wait()
@@ -76,7 +95,7 @@ func main() {
 		}
 		logger = hub.GetLogger(tags)
 	} else {
-		logger = app.NewZeroLogger(tags)
+		logger = app.NewZeroLogger(tags, logLevel)
 	}
 
 	serv := api.Server{
