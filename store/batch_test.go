@@ -14,7 +14,7 @@ func TestBatchEntities(t *testing.T) {
 	}
 
 	be.certByFingerprint["fp1"] = &certstruct{}
-	be.zoneEntryByApex["example.com"] = &zoneentrystruct{}
+	be.zoneEntries = append(be.zoneEntries, &zoneentrystruct{})
 
 	if !be.IsFull() {
 		t.Fatalf("expected batch entities to be full, but is not")

@@ -100,60 +100,6 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 	}
 }
 
-func TestSplunkEntryMap_Add(t *testing.T) {
-	tests := []struct {
-		name          string
-		queries       []string
-		queryTypes    []string
-		expectedCount int
-	}{
-		{
-			"single query",
-			[]string{"a.com"},
-			[]string{"A"},
-			1,
-		},
-		{
-			"multiple query types",
-			[]string{"a.com", "a.com"},
-			[]string{"A", "AAAA"},
-			2,
-		},
-		{
-			"multiple queries",
-			[]string{"a.com", "b.com"},
-			[]string{"A", "A"},
-			2,
-		},
-		{
-			"multiple queries, multile query types",
-			[]string{"a.com", "a.com", "b.com", "b.com"},
-			[]string{"A", "AAAA", "A", "AAAA"},
-			4,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if len(test.queries) != len(test.queryTypes) {
-				t.Fatalf("invalid test case (number of queries must match number of query types)!")
-			}
-
-			sem := newSplunkEntryMap()
-
-			pe := &models.PassiveEntry{}
-
-			for i := range test.queries {
-				sem.add(test.queries[i], test.queryTypes[i], pe)
-			}
-
-			if sem.len() != test.expectedCount {
-				t.Fatalf("expected length to be %d, but got %d", test.expectedCount, sem.len())
-			}
-		})
-	}
-}
-
 func TestStore_StoreSplunkEntry(t *testing.T) {
 	s, g, muid, err := OpenStore(TestConfig, TestOpts)
 	if err != nil {
@@ -257,11 +203,6 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 			"fqdnByName",
 			s.cache.fqdnByName.Len(),
 			3,
-		},
-		{
-			"passiveEntryByFqdn",
-			s.cache.passiveEntryByFqdn.len(),
-			4,
 		},
 		{
 			"recordTypeByName",

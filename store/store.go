@@ -678,48 +678,85 @@ func propagationPosthook() postHook {
 		if err := s.backpropFqdn(); err != nil {
 			return errs.Wrap(err, "back prop fqdns")
 		}
-		log.Debug().Msgf("(2/5)")
+		log.Debug().Msgf("(2/9)")
 
 		if err := s.backpropApex(); err != nil {
 			return errs.Wrap(err, "back prop apexes")
 		}
-		log.Debug().Msgf("(3/5)")
+		log.Debug().Msgf("(3/9)")
 
 		if err := s.backpropPublicSuffix(); err != nil {
 			return errs.Wrap(err, "back prop public suffixes")
 		}
-		log.Debug().Msgf("(4/5)")
+		log.Debug().Msgf("(4/9)")
 
 		if err := s.backpropTld(); err != nil {
 			return errs.Wrap(err, "back prop tlds")
 		}
-		log.Debug().Msgf("(5/5)")
+		log.Debug().Msgf("(5/9)")
+
+		if err := s.backpropFqdnAnon(); err != nil {
+			return errs.Wrap(err, "back prop anon fqdn")
+		}
+		log.Debug().Msgf("(6/9)")
+
+		if err := s.backpropApexAnon(); err != nil {
+			return errs.Wrap(err, "back prop anon apex")
+		}
+		log.Debug().Msgf("(7/9)")
+
+		if err := s.backpropPublicSuffixAnon(); err != nil {
+			return errs.Wrap(err, "back prop anon apex")
+		}
+		log.Debug().Msgf("(8/9)")
+
+		if err := s.backpropTldAnon(); err != nil {
+			return errs.Wrap(err, "back prop anon apex")
+		}
+		log.Debug().Msgf("(9/9)")
 
 		// forward prop all (but zone entries)
 		log.Debug().Msgf("propagating forwards..")
 		s.forpropTld()
-		log.Debug().Msgf("(1/6)")
+		log.Debug().Msgf("(1/12)")
 		s.forpropPublicSuffix()
-		log.Debug().Msgf("(2/6)")
+		log.Debug().Msgf("(2/12)")
 		s.forpropApex()
-		log.Debug().Msgf("(3/6)")
+		log.Debug().Msgf("(3/12)")
 		s.forpropFqdn()
-		log.Debug().Msgf("(4/6)")
+		log.Debug().Msgf("(4/12)")
+		s.forpropTldAnon()
+		log.Debug().Msgf("(5/12)")
+		s.forpropPublicSuffixAnon()
+		log.Debug().Msgf("(6/12)")
+		s.forpropApexAnon()
+		log.Debug().Msgf("(7/12)")
+		s.forpropFqdnAnon()
+		log.Debug().Msgf("(8/12)")
+
 		if err := s.forpropCerts(); err != nil {
 			return err
 		}
+		log.Debug().Msgf("(9/12)")
 		s.forpropZoneEntries()
-		log.Debug().Msgf("(5/6)")
+		log.Debug().Msgf("(10/12)")
 		s.forpropPassiveEntries()
-		log.Debug().Msgf("(6/6)")
+		log.Debug().Msgf("(11/12)")
+		s.forpropEntradaEntries()
+		log.Debug().Msgf("(12/12)")
 
 		s.influxService.StoreHit("db-insert", "tld", len(s.inserts.tld))
+		s.influxService.StoreHit("db-insert", "tld-anon", len(s.inserts.tldAnon))
 		s.influxService.StoreHit("db-insert", "public-suffix", len(s.inserts.publicSuffix))
+		s.influxService.StoreHit("db-insert", "public-suffix-anon", len(s.inserts.publicSuffixAnon))
 		s.influxService.StoreHit("db-insert", "apex", len(s.inserts.apexes))
+		s.influxService.StoreHit("db-insert", "apex-anon", len(s.inserts.apexesAnon))
 		s.influxService.StoreHit("db-insert", "fqdn", len(s.inserts.fqdns))
+		s.influxService.StoreHit("db-insert", "fqdn-anon", len(s.inserts.fqdnsAnon))
 		s.influxService.StoreHit("db-insert", "cert", len(s.inserts.certs))
 		s.influxService.StoreHit("db-insert", "zone-entry", len(s.inserts.zoneEntries))
 		s.influxService.StoreHit("db-insert", "passive-entry", len(s.inserts.passiveEntries))
+		s.influxService.StoreHit("db-insert", "entrada-entry", len(s.inserts.entradaEntries))
 
 		return nil
 	}
@@ -793,14 +830,12 @@ func storeCachedValuePosthook() postHook {
 		}
 		log.Debug().Msgf("(8/14)")
 
-
 		if len(s.inserts.zoneEntries) > 0 {
 			if err := tx.Insert(&s.inserts.zoneEntries); err != nil {
 				return errs.Wrap(err, "insert zone entries")
 			}
 		}
 		log.Debug().Msgf("(9/14)")
-
 
 		if len(s.inserts.logEntries) > 0 {
 			if err := tx.Insert(&s.inserts.logEntries); err != nil {
@@ -860,9 +895,13 @@ func storeCachedValuePosthook() postHook {
 		// write size of cache to influx
 		s.influxService.CacheSize("cert", s.cache.certByFingerprint, s.cacheOpts.CertSize)
 		s.influxService.CacheSize("fqdn", s.cache.fqdnByName, s.cacheOpts.FQDNSize)
+		s.influxService.CacheSize("fqdn-anon", s.cache.fqdnByNameAnon, s.cacheOpts.FQDNSize)
 		s.influxService.CacheSize("apex", s.cache.apexByName, s.cacheOpts.ApexSize)
-		s.influxService.CacheSize("public-suffix", s.cache.publicSuffixByName, s.cacheOpts.ApexSize)
+		s.influxService.CacheSize("apex-anon", s.cache.apexByNameAnon, s.cacheOpts.ApexSize)
+		s.influxService.CacheSize("public-suffix", s.cache.publicSuffixByName, s.cacheOpts.PSuffSize)
+		s.influxService.CacheSize("public-suffix-anon", s.cache.publicSuffixAnonByName, s.cacheOpts.PSuffSize)
 		s.influxService.CacheSize("tld", s.cache.tldByName, s.cacheOpts.TLDSize)
+		s.influxService.CacheSize("tld-anon", s.cache.tldAnonByName, s.cacheOpts.TLDSize)
 		s.influxService.CacheSize("zone-entry", s.cache.zoneEntriesByApexName, s.cacheOpts.ZoneEntrySize)
 
 		log.Debug().Msgf("finished storing batch")

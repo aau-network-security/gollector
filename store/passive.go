@@ -1,6 +1,7 @@
 package store
 
 import (
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"strings"
 	"time"
@@ -23,7 +24,7 @@ func (s *Store) StorePassiveEntry(muid string, query string, t time.Time) error 
 
 	domain, err := NewDomain(query)
 	if err != nil {
-		return err
+		return errors.Wrap(err, "failed to create domain")
 	}
 	s.batchEntities.fqdnByName[domain.fqdn.normal] = &domainstruct{
 		domain: domain,
