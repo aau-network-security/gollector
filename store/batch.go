@@ -10,6 +10,7 @@ import (
 
 type domainstruct struct {
 	obj    interface{}
+	create bool
 	domain *domain
 }
 
@@ -109,15 +110,19 @@ func (s *Store) StoreLogEntry(muid string, entry LogEntry) error {
 			continue
 		}
 		s.batchEntities.fqdnByName[domain.fqdn.normal] = &domainstruct{
+			create: true,
 			domain: domain,
 		}
 		s.batchEntities.apexByName[domain.apex.normal] = &domainstruct{
+			create: true,
 			domain: domain,
 		}
 		s.batchEntities.publicSuffixByName[domain.publicSuffix.normal] = &domainstruct{
+			create: true,
 			domain: domain,
 		}
 		s.batchEntities.tldByName[domain.tld.normal] = &domainstruct{
+			create: true,
 			domain: domain,
 		}
 	}

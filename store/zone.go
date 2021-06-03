@@ -25,12 +25,15 @@ func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string, registered
 	s.influxService.ZoneCount(domain.tld.normal)
 
 	s.batchEntities.apexByName[domain.apex.normal] = &domainstruct{
+		create: true,
 		domain: domain,
 	}
 	s.batchEntities.publicSuffixByName[domain.publicSuffix.normal] = &domainstruct{
+		create: true,
 		domain: domain,
 	}
 	s.batchEntities.tldByName[domain.tld.normal] = &domainstruct{
+		create: true,
 		domain: domain,
 	}
 	ze := &models.ZonefileEntry{

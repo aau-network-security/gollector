@@ -155,20 +155,6 @@ func (s *Store) backpropFqdn() error {
 
 	for _, f := range fqdnFoundInDB {
 		existing := s.batchEntities.fqdnByName[f.Fqdn]
-		if existing == nil {
-			// TODO: this should not happen..
-			// a domain has been fetched from the database, although it does not belong in this batch, and it hasn't been requested:
-			// create a new entry in the batch for id matching
-			d, err := NewDomain(f.Fqdn)
-			if err != nil {
-				return err
-			}
-			existing = &domainstruct{
-				obj:    nil,
-				domain: d,
-			}
-		}
-
 		existing.obj = f
 		s.batchEntities.fqdnByName[f.Fqdn] = existing
 		s.cache.fqdnByName.Add(f.Fqdn, f)
@@ -216,19 +202,6 @@ func (s *Store) backpropApex() error {
 
 	for _, a := range apexFoundInDB {
 		existing := s.batchEntities.apexByName[a.Apex]
-		if existing == nil {
-			// TODO: this should not happen..
-			// a domain has been fetched from the database, although it does not belong in this batch, and it hasn't been requested:
-			// create a new entry in the batch for id matching
-			d, err := NewDomain(a.Apex)
-			if err != nil {
-				return err
-			}
-			existing = &domainstruct{
-				obj:    nil,
-				domain: d,
-			}
-		}
 		existing.obj = a
 		s.batchEntities.apexByName[a.Apex] = existing
 		s.cache.apexByName.Add(a.Apex, a)
@@ -276,19 +249,6 @@ func (s *Store) backpropPublicSuffix() error {
 
 	for _, ps := range psFoundInDB {
 		existing := s.batchEntities.publicSuffixByName[ps.PublicSuffix]
-		if existing == nil {
-			// TODO: this should not happen..
-			// a domain has been fetched from the database, although it does not belong in this batch, and it hasn't been requested:
-			// create a new entry in the batch for id matching
-			d, err := NewDomain(ps.PublicSuffix)
-			if err != nil {
-				return err
-			}
-			existing = &domainstruct{
-				obj:    nil,
-				domain: d,
-			}
-		}
 		existing.obj = ps
 		s.batchEntities.publicSuffixByName[ps.PublicSuffix] = existing
 	}
@@ -335,19 +295,6 @@ func (s *Store) backpropTld() error {
 
 	for _, tld := range tldFoundInDB {
 		existing := s.batchEntities.tldByName[tld.Tld]
-		if existing == nil {
-			// TODO: this should not happen..
-			// a domain has been fetched from the database, although it does not belong in this batch, and it hasn't been requested:
-			// create a new entry in the batch for id matching
-			d, err := NewDomain(tld.Tld)
-			if err != nil {
-				return err
-			}
-			existing = &domainstruct{
-				obj:    nil,
-				domain: d,
-			}
-		}
 		existing.obj = tld
 		s.batchEntities.tldByName[tld.Tld] = existing
 		s.cache.tldByName.Add(tld.Tld, tld)
@@ -396,19 +343,6 @@ func (s *Store) backpropFqdnAnon() error {
 
 	for _, f := range foundInDB {
 		existing := s.batchEntities.fqdnByNameAnon[f.Fqdn.Fqdn]
-		if existing == nil {
-			// TODO: this should not happen..
-			// a domain has been fetched from the database, although it does not belong in this batch, and it hasn't been requested:
-			// create a new entry in the batch for id matching
-			d, err := NewDomain(f.Fqdn.Fqdn)
-			if err != nil {
-				return err
-			}
-			existing = &domainstruct{
-				obj:    nil,
-				domain: d,
-			}
-		}
 		existing.obj = f
 		s.batchEntities.fqdnByNameAnon[f.Fqdn.Fqdn] = existing
 		s.cache.fqdnByNameAnon.Add(f.Fqdn, f)
@@ -438,11 +372,6 @@ func (s *Store) backpropApexAnon() error {
 		s.batchEntities.apexByNameAnon[k] = existing
 	}
 
-	// the cache is not full yet, so the remaining (cache-miss) apexes cannot be in the database
-	if s.cache.apexByNameAnon.Len() < s.cacheOpts.ApexSize {
-		return nil
-	}
-
 	// all entities have been found in the cache, no need to perform a database queries
 	if len(notFoundInCache) == 0 {
 		return nil
@@ -456,19 +385,6 @@ func (s *Store) backpropApexAnon() error {
 
 	for _, a := range foundInDB {
 		existing := s.batchEntities.apexByNameAnon[a.Apex.Apex]
-		if existing == nil {
-			// TODO: this should not happen..
-			// a domain has been fetched from the database, although it does not belong in this batch, and it hasn't been requested:
-			// create a new entry in the batch for id matching
-			d, err := NewDomain(a.Apex.Apex)
-			if err != nil {
-				return err
-			}
-			existing = &domainstruct{
-				obj:    nil,
-				domain: d,
-			}
-		}
 		existing.obj = a
 		s.batchEntities.apexByNameAnon[a.Apex.Apex] = existing
 		s.cache.apexByNameAnon.Add(a.Apex, a)
@@ -516,19 +432,6 @@ func (s *Store) backpropPublicSuffixAnon() error {
 
 	for _, ps := range foundInDB {
 		existing := s.batchEntities.publicSuffixAnonByName[ps.PublicSuffix.PublicSuffix]
-		if existing == nil {
-			// TODO: this should not happen..
-			// a domain has been fetched from the database, although it does not belong in this batch, and it hasn't been requested:
-			// create a new entry in the batch for id matching
-			d, err := NewDomain(ps.PublicSuffix.PublicSuffix)
-			if err != nil {
-				return err
-			}
-			existing = &domainstruct{
-				obj:    nil,
-				domain: d,
-			}
-		}
 		existing.obj = ps
 		s.batchEntities.publicSuffixAnonByName[ps.PublicSuffix.PublicSuffix] = existing
 	}
@@ -575,19 +478,6 @@ func (s *Store) backpropTldAnon() error {
 
 	for _, tld := range foundInDB {
 		existing := s.batchEntities.tldAnonByName[tld.Tld.Tld]
-		if existing == nil {
-			// TODO: this should not happen..
-			// a domain has been fetched from the database, although it does not belong in this batch, and it hasn't been requested:
-			// create a new entry in the batch for id matching
-			d, err := NewDomain(tld.Tld.Tld)
-			if err != nil {
-				return err
-			}
-			existing = &domainstruct{
-				obj:    nil,
-				domain: d,
-			}
-		}
 		existing.obj = tld
 		s.batchEntities.tldAnonByName[tld.Tld.Tld] = existing
 		s.cache.tldAnonByName.Add(tld.Tld, tld)
@@ -598,7 +488,7 @@ func (s *Store) backpropTldAnon() error {
 
 func (s *Store) forpropTld() {
 	for k, str := range s.batchEntities.tldByName {
-		if str.obj == nil {
+		if str.obj == nil && str.create {
 			res := &models.Tld{
 				ID:  s.ids.tlds,
 				Tld: k,
@@ -614,7 +504,7 @@ func (s *Store) forpropTld() {
 
 func (s *Store) forpropPublicSuffix() {
 	for k, str := range s.batchEntities.publicSuffixByName {
-		if str.obj == nil {
+		if str.obj == nil && str.create {
 			// get TLD name from public suffix object
 			tldstr := s.batchEntities.tldByName[str.domain.tld.normal]
 			tld := tldstr.obj.(*models.Tld)
@@ -634,8 +524,7 @@ func (s *Store) forpropPublicSuffix() {
 
 func (s *Store) forpropApex() {
 	for k, str := range s.batchEntities.apexByName {
-		if str.obj == nil {
-
+		if str.obj == nil && str.create {
 			// get TLD name from domain object
 			tldstr := s.batchEntities.tldByName[str.domain.tld.normal]
 			tld := tldstr.obj.(*models.Tld)
@@ -660,8 +549,7 @@ func (s *Store) forpropApex() {
 
 func (s *Store) forpropFqdn() {
 	for k, str := range s.batchEntities.fqdnByName {
-
-		if str.obj == nil {
+		if str.obj == nil && str.create {
 			// get TLD name from domain object
 			tldstr := s.batchEntities.tldByName[str.domain.tld.normal]
 			tld := tldstr.obj.(*models.Tld)
@@ -691,16 +579,20 @@ func (s *Store) forpropFqdn() {
 func (s *Store) forpropTldAnon() {
 	for k, str := range s.batchEntities.tldAnonByName {
 		if str.obj == nil {
-			tldstr := s.batchEntities.tldByName[str.domain.tld.normal]
-			tld := tldstr.obj.(*models.Tld)
-
 			res := &models.TldAnon{
 				Tld: models.Tld{
 					ID:  s.ids.tldsAnon,
 					Tld: k,
 				},
-				TldID: tld.ID,
 			}
+
+			tldstr := s.batchEntities.tldByName[str.domain.tld.normal]
+
+			if tldstr.obj != nil {
+				tld := tldstr.obj.(*models.Tld)
+				res.TldID = tld.ID
+			}
+
 			s.inserts.tldAnon = append(s.inserts.tldAnon, res)
 			str.obj = res
 			s.batchEntities.tldAnonByName[k] = str
@@ -716,17 +608,20 @@ func (s *Store) forpropPublicSuffixAnon() {
 			tldstr := s.batchEntities.tldAnonByName[str.domain.tld.anon]
 			tldAnon := tldstr.obj.(*models.TldAnon)
 
-			psuffixstr := s.batchEntities.publicSuffixByName[str.domain.publicSuffix.normal]
-			psuffix := psuffixstr.obj.(*models.PublicSuffix)
-
 			res := &models.PublicSuffixAnon{
 				PublicSuffix: models.PublicSuffix{
 					ID:           s.ids.suffixesAnon,
 					TldID:        tldAnon.ID,
 					PublicSuffix: k,
 				},
-				PublicSuffixID: psuffix.ID,
 			}
+
+			psuffixstr := s.batchEntities.publicSuffixByName[str.domain.publicSuffix.normal]
+			if psuffixstr.obj != nil {
+				psuffix := psuffixstr.obj.(*models.PublicSuffix)
+				res.PublicSuffixID = psuffix.ID
+			}
+
 			str.obj = res
 			s.inserts.publicSuffixAnon = append(s.inserts.publicSuffixAnon, res)
 			s.batchEntities.publicSuffixAnonByName[k] = str
@@ -739,12 +634,8 @@ func (s *Store) forpropPublicSuffixAnon() {
 func (s *Store) forpropApexAnon() {
 	for k, str := range s.batchEntities.apexByNameAnon {
 		if str.obj == nil {
-
 			suffixstr := s.batchEntities.publicSuffixAnonByName[str.domain.publicSuffix.anon]
 			suffixAnon := suffixstr.obj.(*models.PublicSuffixAnon)
-
-			apexstr := s.batchEntities.apexByName[str.domain.apex.normal]
-			apex := apexstr.obj.(*models.Apex)
 
 			res := &models.ApexAnon{
 				Apex: models.Apex{
@@ -753,8 +644,15 @@ func (s *Store) forpropApexAnon() {
 					TldID:          suffixAnon.TldID,
 					PublicSuffixID: suffixAnon.ID,
 				},
-				ApexID: apex.ID,
 			}
+
+			apexstr := s.batchEntities.apexByName[str.domain.apex.normal]
+			if apexstr.obj != nil {
+				apex := apexstr.obj.(*models.Apex)
+				res.ApexID = apex.ID
+
+			}
+
 			str.obj = res
 			s.inserts.apexesAnon[res.ID] = res
 			s.batchEntities.apexByNameAnon[k] = str
@@ -771,9 +669,6 @@ func (s *Store) forpropFqdnAnon() {
 			apexstr := s.batchEntities.apexByNameAnon[str.domain.apex.anon]
 			apexAnon := apexstr.obj.(*models.ApexAnon)
 
-			fqdnstr := s.batchEntities.fqdnByName[str.domain.fqdn.normal]
-			fqdn := fqdnstr.obj.(*models.Fqdn)
-
 			res := &models.FqdnAnon{
 				Fqdn: models.Fqdn{
 					ID:             s.ids.fqdnsAnon,
@@ -782,8 +677,14 @@ func (s *Store) forpropFqdnAnon() {
 					PublicSuffixID: apexAnon.PublicSuffixID,
 					ApexID:         apexAnon.ID,
 				},
-				FqdnID: fqdn.ID,
 			}
+
+			fqdnstr := s.batchEntities.fqdnByName[str.domain.fqdn.normal]
+			if fqdnstr.obj != nil {
+				fqdn := fqdnstr.obj.(*models.Fqdn)
+				res.FqdnID = fqdn.ID
+			}
+
 			str.obj = res
 			s.inserts.fqdnsAnon = append(s.inserts.fqdnsAnon, res)
 			s.batchEntities.fqdnByNameAnon[k] = str
