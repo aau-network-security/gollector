@@ -635,3 +635,128 @@ func TestConditionalPostHooks(t *testing.T) {
 		t.Fatalf("unexpected batch size: expected %d, but got %d", 0, s.batchEntities.Len())
 	}
 }
+
+func TestUpdateAnonymizedDomains(t *testing.T) {
+	opts := Opts{
+		BatchSize: 10,
+		CacheOpts: CacheOpts{
+			LogSize:       1,
+			TLDSize:       1,
+			PSuffSize:     1,
+			ApexSize:      1,
+			FQDNSize:      1,
+			CertSize:      1,
+			ZoneEntrySize: 1,
+		},
+		AllowedInterval: 10,
+	}
+	s, g, _, err := OpenStore(TestConfig, opts)
+	if err != nil {
+		t.Fatalf("failed to open store: %s", err)
+	}
+	a := NewAnonymizer(NewSha256LabelAnonymizer())
+	s = s.WithAnonymizer(a)
+
+	s.db.AddQueryHook(&qh{})
+
+	domain, err := NewDomain("www.example.co.uk")
+	if err != nil {
+		t.Fatalf("failed to create domain: %s", err)
+	}
+	s.anonymizer.Anonymize(domain)
+
+	// add anonymized domains
+	// add existing TLD
+	tld := &models.TldAnon{
+		Tld: models.Tld{
+			ID:  1,
+			Tld: domain.tld.anon, // uk
+		},
+	}
+	if err := g.Create(tld).Error; err != nil {
+		t.Fatalf("failed to create TLD: %s", err)
+	}
+	s.cache.tldAnonByName.Add(domain.tld.anon, tld)
+
+	// add existing public suffix
+	psuffix := &models.PublicSuffixAnon{
+		PublicSuffix: models.PublicSuffix{
+			PublicSuffix: domain.publicSuffix.anon, // co.uk
+			ID:           1,
+			TldID:        1,
+		},
+	}
+	if err := g.Create(psuffix).Error; err != nil {
+		t.Fatalf("failed to create public suffix: %s", err)
+	}
+	s.cache.publicSuffixAnonByName.Add(domain.publicSuffix.anon, psuffix)
+
+	// add existing apex
+	apex := &models.ApexAnon{
+		Apex: models.Apex{
+			Apex:           domain.apex.anon, // example.co.uk
+			ID:             1,
+			TldID:          1,
+			PublicSuffixID: 1,
+		},
+	}
+	if err := g.Create(apex).Error; err != nil {
+		t.Fatalf("failed to create apex: %s", err)
+	}
+	s.cache.apexByNameAnon.Add(domain.apex.anon, apex)
+
+	// add existing apex
+	fqdn := &models.FqdnAnon{
+		Fqdn: models.Fqdn{
+			Fqdn:           domain.fqdn.anon, // www.example.co.uk
+			ID:             1,
+			TldID:          1,
+			PublicSuffixID: 1,
+			ApexID:         1,
+		},
+	}
+	if err := g.Create(fqdn).Error; err != nil {
+		t.Fatalf("failed to create apex: %s", err)
+	}
+	s.cache.fqdnByNameAnon.Add(domain.fqdn.anon, fqdn)
+
+	// create unanonymized FQDNs
+	s.batchEntities.fqdnByName[domain.fqdn.normal] = &domainstruct{
+		create: true,
+		domain: domain,
+	}
+	s.batchEntities.apexByName[domain.apex.normal] = &domainstruct{
+		create: true,
+		domain: domain,
+	}
+	s.batchEntities.publicSuffixByName[domain.publicSuffix.normal] = &domainstruct{
+		create: true,
+		domain: domain,
+	}
+	s.batchEntities.tldByName[domain.tld.normal] = &domainstruct{
+		create: true,
+		domain: domain,
+	}
+
+	// add anonymized FQDNs to batch entities
+	s.batchEntities.fqdnByNameAnon[domain.fqdn.anon] = &domainstruct{
+		create: false,
+		domain: domain,
+	}
+	s.batchEntities.apexByNameAnon[domain.apex.anon] = &domainstruct{
+		create: false,
+		domain: domain,
+	}
+	s.batchEntities.publicSuffixAnonByName[domain.publicSuffix.anon] = &domainstruct{
+		create: false,
+		domain: domain,
+	}
+	s.batchEntities.tldAnonByName[domain.tld.anon] = &domainstruct{
+		create: false,
+		domain: domain,
+	}
+
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("failed to run post hooks: %s", err)
+	}
+}

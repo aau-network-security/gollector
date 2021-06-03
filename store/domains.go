@@ -498,6 +498,14 @@ func (s *Store) forpropTld() {
 			s.batchEntities.tldByName[k] = str
 			s.ids.tlds++
 			s.cache.tldByName.Add(k, res)
+
+			// update anonymized TLD if exists
+			tldstr := s.batchEntities.tldAnonByName[str.domain.tld.anon]
+			if tldstr.obj != nil {
+				tldAnon := tldstr.obj.(*models.TldAnon)
+				tldAnon.TldID = res.ID
+				s.updates.tldAnon = append(s.updates.tldAnon, tldAnon)
+			}
 		}
 	}
 }
@@ -518,6 +526,14 @@ func (s *Store) forpropPublicSuffix() {
 			s.batchEntities.publicSuffixByName[k] = str
 			s.ids.suffixes++
 			s.cache.publicSuffixByName.Add(k, res)
+
+			// update anonymized public suffix if exists
+			psuffixstr := s.batchEntities.publicSuffixAnonByName[str.domain.publicSuffix.anon]
+			if psuffixstr.obj != nil {
+				psuffixAnon := psuffixstr.obj.(*models.PublicSuffixAnon)
+				psuffixAnon.PublicSuffixID = res.ID
+				s.updates.publicSuffixAnon = append(s.updates.publicSuffixAnon, psuffixAnon)
+			}
 		}
 	}
 }
@@ -543,6 +559,14 @@ func (s *Store) forpropApex() {
 			s.batchEntities.apexByName[k] = str
 			s.ids.apexes++
 			s.cache.apexByName.Add(k, res)
+
+			// update anonymized apex if exists
+			apexstr := s.batchEntities.apexByNameAnon[str.domain.apex.anon]
+			if apexstr.obj != nil {
+				apexAnon := apexstr.obj.(*models.ApexAnon)
+				apexAnon.ApexID = res.ID
+				s.updates.apexesAnon[res.ID] = apexAnon
+			}
 		}
 	}
 }
@@ -572,13 +596,21 @@ func (s *Store) forpropFqdn() {
 			s.batchEntities.fqdnByName[k] = str
 			s.ids.fqdns++
 			s.cache.fqdnByName.Add(k, res)
+
+			// update anonymized fqdn if exists
+			fqdnstr := s.batchEntities.fqdnByNameAnon[str.domain.fqdn.anon]
+			if fqdnstr.obj != nil {
+				fqdnAnon := fqdnstr.obj.(*models.FqdnAnon)
+				fqdnAnon.FqdnID = res.ID
+				s.updates.fqdnsAnon = append(s.updates.fqdnsAnon, fqdnAnon)
+			}
 		}
 	}
 }
 
 func (s *Store) forpropTldAnon() {
 	for k, str := range s.batchEntities.tldAnonByName {
-		if str.obj == nil {
+		if str.obj == nil && str.create {
 			res := &models.TldAnon{
 				Tld: models.Tld{
 					ID:  s.ids.tldsAnon,
@@ -604,7 +636,7 @@ func (s *Store) forpropTldAnon() {
 
 func (s *Store) forpropPublicSuffixAnon() {
 	for k, str := range s.batchEntities.publicSuffixAnonByName {
-		if str.obj == nil {
+		if str.obj == nil && str.create {
 			tldstr := s.batchEntities.tldAnonByName[str.domain.tld.anon]
 			tldAnon := tldstr.obj.(*models.TldAnon)
 
@@ -633,7 +665,7 @@ func (s *Store) forpropPublicSuffixAnon() {
 
 func (s *Store) forpropApexAnon() {
 	for k, str := range s.batchEntities.apexByNameAnon {
-		if str.obj == nil {
+		if str.obj == nil && str.create {
 			suffixstr := s.batchEntities.publicSuffixAnonByName[str.domain.publicSuffix.anon]
 			suffixAnon := suffixstr.obj.(*models.PublicSuffixAnon)
 
@@ -665,7 +697,7 @@ func (s *Store) forpropApexAnon() {
 func (s *Store) forpropFqdnAnon() {
 	for k, str := range s.batchEntities.fqdnByNameAnon {
 
-		if str.obj == nil {
+		if str.obj == nil && str.create {
 			apexstr := s.batchEntities.apexByNameAnon[str.domain.apex.anon]
 			apexAnon := apexstr.obj.(*models.ApexAnon)
 
