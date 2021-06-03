@@ -760,3 +760,108 @@ func TestUpdateAnonymizedDomains(t *testing.T) {
 		t.Fatalf("failed to run post hooks: %s", err)
 	}
 }
+
+func TestStoreDifferentEntries(t *testing.T) {
+	opts := Opts{
+		BatchSize: 10,
+		CacheOpts: CacheOpts{
+			LogSize:       1,
+			TLDSize:       1,
+			PSuffSize:     1,
+			ApexSize:      1,
+			FQDNSize:      1,
+			CertSize:      1,
+			ZoneEntrySize: 1,
+		},
+		AllowedInterval: 10,
+	}
+	s, g, muid, err := OpenStore(TestConfig, opts)
+	if err != nil {
+		t.Fatalf("failed to open store: %s", err)
+	}
+	a := NewAnonymizer(NewSha256LabelAnonymizer())
+	s = s.WithAnonymizer(a)
+
+	s.db.AddQueryHook(&qh{})
+
+	domain := "www.example.co.uk"
+	ts := time.Now()
+	// passive entry
+	if err := s.StorePassiveEntry(muid, domain, ts); err != nil {
+		t.Fatalf("failed to create passive store entry: %s", err)
+	}
+	// ENTRADA entry
+	if err := s.StoreEntradaEntry(muid, domain, ts); err != nil {
+		t.Fatalf("failed to create passive store entry: %s", err)
+	}
+	// zone entry
+	if err := s.StoreZoneEntry(muid, ts, domain, false); err != nil {
+		t.Fatalf("failed to create passive store entry: %s", err)
+	}
+	// log entry
+	raw, err := selfSignedCert(ts, ts.Add(10*time.Minute), []string{domain})
+	if err != nil {
+		t.Fatalf("failed to create self-signe cert: %s", err)
+	}
+
+	cert, err := x509.ParseCertificate(raw)
+	if err != nil {
+		t.Fatalf("unexpected error while parsing certificate: %s", err)
+	}
+
+	logEntry := LogEntry{
+		Cert:      cert,
+		IsPrecert: false,
+		Index:     0,
+		Ts:        ts,
+		Log: ct.Log{
+			Description:       "Test log",
+			Key:               "No key",
+			Url:               "localhost",
+			MaximumMergeDelay: 10,
+			OperatedBy:        []int{1},
+			DnsApiEndpoint:    "aau.dk",
+		},
+	}
+
+	if err := s.StoreLogEntry(muid, logEntry); err != nil {
+		t.Fatalf("failed to create passive store entry: %s", err)
+	}
+
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("failed to run post hooks: %s", err)
+	}
+
+	counts := []struct {
+		count uint
+		model interface{}
+	}{
+		{1, &models.Tld{}},
+		{1, &models.TldAnon{}},
+		{1, &models.PublicSuffix{}},
+		{1, &models.PublicSuffixAnon{}},
+		{1, &models.Apex{}},
+		{1, &models.ApexAnon{}},
+		{1, &models.Fqdn{}},
+		{1, &models.FqdnAnon{}},
+		{1, &models.Certificate{}},
+		{1, &models.CertificateToFqdn{}},
+		{1, &models.LogEntry{}},
+		{1, &models.PassiveEntry{}},
+		{1, &models.ZonefileEntry{}},
+		{1, &models.EntradaEntry{}},
+	}
+
+	for _, tc := range counts {
+		var count uint
+
+		if err := g.Model(tc.model).Count(&count).Error; err != nil {
+			t.Fatalf("failed to retrieve model count: %s", err)
+		}
+
+		if count != tc.count {
+			n := reflect.TypeOf(tc.model)
+			t.Fatalf("expected %d %s elements, but got %d", tc.count, n, count)
+		}
+	}
+}
