@@ -33,6 +33,7 @@ func (s *Store) StoreEntradaEntry(muid string, fqdn string, t time.Time) error {
 	}
 	s.batchEntities.fqdnByNameAnon[domain.fqdn.anon] = &domainstruct{
 		domain: domain,
+		create: true,
 	}
 	s.batchEntities.apexByName[domain.apex.normal] = &domainstruct{
 		domain: domain,
@@ -40,6 +41,7 @@ func (s *Store) StoreEntradaEntry(muid string, fqdn string, t time.Time) error {
 	}
 	s.batchEntities.apexByNameAnon[domain.apex.anon] = &domainstruct{
 		domain: domain,
+		create: true,
 	}
 	s.batchEntities.publicSuffixByName[domain.publicSuffix.normal] = &domainstruct{
 		domain: domain,
@@ -47,6 +49,7 @@ func (s *Store) StoreEntradaEntry(muid string, fqdn string, t time.Time) error {
 	}
 	s.batchEntities.publicSuffixAnonByName[domain.publicSuffix.anon] = &domainstruct{
 		domain: domain,
+		create: true,
 	}
 	s.batchEntities.tldByName[domain.tld.normal] = &domainstruct{
 		domain: domain,
@@ -54,6 +57,7 @@ func (s *Store) StoreEntradaEntry(muid string, fqdn string, t time.Time) error {
 	}
 	s.batchEntities.tldAnonByName[domain.tld.anon] = &domainstruct{
 		domain: domain,
+		create: true,
 	}
 
 	ee := &entradaentrystruct{
