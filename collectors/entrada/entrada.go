@@ -65,6 +65,7 @@ func NewSource(host, port string) *Source {
 	opts := imp.DefaultOptions
 	opts.Host = host
 	opts.Port = port
+	opts.QueryTimeout = 60 * 60 // 1 hour
 
 	c := imp.NewConnector(&opts)
 	db := sql.OpenDB(c)
