@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"github.com/aau-network-security/gollector/api"
 	prt "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/collectors/entrada"
@@ -96,11 +95,17 @@ func main() {
 
 	// todo: remove limit
 	src := entrada.NewSource(conf.Host, conf.Port)
-	entradaOpts := entrada.Options{
-		Query: fmt.Sprintf("SELECT qname, unixtime FROM dns.queries LIMIT %d", 10000),
+	//entradaOpts := entrada.Options{
+	//	Query: fmt.Sprintf("SELECT qname, unixtime FROM dns.queries LIMIT %d", 10000),
+	//}
+
+	// TODO: remove!
+	entryFn = func(fqdn string, t time.Time) error {
+		log.Info().Msgf("%s", fqdn)
+		return nil
 	}
 
-	if err := src.Process(ctx, entryFn, entradaOpts); err != nil {
+	if err := src.Process(ctx, entryFn, entrada.DefaultOptions); err != nil {
 		log.Fatal().Msgf("error while processing impala source: %s", err)
 	}
 
