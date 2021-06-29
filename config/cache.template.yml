@@ -1,3 +1,8 @@
+anonymize-salt:
+  tld-salt: <salt>
+  psuffix-salt: <salt>
+  apex-salt: <salt>
+  fqdn-salt: <salt>
 api:
   store:
     host: localhost

@@ -654,7 +654,12 @@ func TestUpdateAnonymizedDomains(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open store: %s", err)
 	}
-	a := NewAnonymizer(NewSha256LabelAnonymizer())
+	a := NewAnonymizer(
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+	)
 	s = s.WithAnonymizer(a)
 
 	s.db.AddQueryHook(&qh{})
@@ -779,7 +784,12 @@ func TestStoreDifferentEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open store: %s", err)
 	}
-	a := NewAnonymizer(NewSha256LabelAnonymizer())
+	a := NewAnonymizer(
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+	)
 	s = s.WithAnonymizer(a)
 
 	s.db.AddQueryHook(&qh{})

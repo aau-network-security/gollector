@@ -15,7 +15,12 @@ import (
 var (
 	AnonymizerErr     = errors.New("cannot anonymize without anonymizer")
 	FqdnIsIpErr       = errors.New("fqdn is an IP address instead")
-	DefaultAnonymizer = Anonymizer{&DefaultLabelAnonymizer{}}
+	DefaultAnonymizer = Anonymizer{
+		&DefaultLabelAnonymizer{},
+		&DefaultLabelAnonymizer{},
+		&DefaultLabelAnonymizer{},
+		&DefaultLabelAnonymizer{},
+	}
 )
 
 type LabelAnonymizer interface {
@@ -28,33 +33,38 @@ func (la *DefaultLabelAnonymizer) AnonymizeLabel(s string) string {
 	return s
 }
 
-type Sha256LabelAnonymizer struct{}
+type Sha256LabelAnonymizer struct {
+	salt string
+}
 
 func (la *Sha256LabelAnonymizer) AnonymizeLabel(s string) string {
 	h := sha256.New()
+	s = s + la.salt
 	h.Write([]byte(s))
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-func NewSha256LabelAnonymizer() LabelAnonymizer {
-	return &Sha256LabelAnonymizer{}
+func NewSha256LabelAnonymizer(salt string) LabelAnonymizer {
+	return &Sha256LabelAnonymizer{
+		salt: salt,
+	}
 }
 
 type Anonymizer struct {
-	la LabelAnonymizer
+	tldAnonymizer, psuffixAnonymizer, apexAnonymizer, fqdnAnonymizer LabelAnonymizer
 }
 
 func (a *Anonymizer) Anonymize(d *domain) {
-	d.tld.anon = a.la.AnonymizeLabel(d.tld.normal)
-	d.publicSuffix.anon = a.la.AnonymizeLabel(d.publicSuffix.normal)
-	d.apex.anon = a.la.AnonymizeLabel(d.apex.normal)
-	d.fqdn.anon = a.la.AnonymizeLabel(d.fqdn.normal)
+	d.tld.anon = a.tldAnonymizer.AnonymizeLabel(d.tld.normal)
+	d.publicSuffix.anon = a.psuffixAnonymizer.AnonymizeLabel(d.publicSuffix.normal)
+	d.apex.anon = a.apexAnonymizer.AnonymizeLabel(d.apex.normal)
+	d.fqdn.anon = a.fqdnAnonymizer.AnonymizeLabel(d.fqdn.normal)
 	d.anonymized = true
 }
 
-func NewAnonymizer(la LabelAnonymizer) *Anonymizer {
+func NewAnonymizer(tldAnonymizer, psuffixAnonymizer, apexAnonymizer, fqdnAnonymizer LabelAnonymizer) *Anonymizer {
 	return &Anonymizer{
-		la: la,
+		tldAnonymizer, psuffixAnonymizer, apexAnonymizer, fqdnAnonymizer,
 	}
 }
 

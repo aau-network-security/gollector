@@ -96,7 +96,11 @@ func main() {
 	// todo: remove limit
 	src := entrada.NewSource(conf.Host, conf.Port)
 
-	if err := src.Process(ctx, entryFn, entrada.DefaultOptions); err != nil {
+	eopts := entrada.Options{
+		Query: "SELECT 1, 1",
+	}
+
+	if err := src.Process(ctx, entryFn, eopts); err != nil {
 		log.Fatal().Msgf("error while processing impala source: %s", err)
 	}
 

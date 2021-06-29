@@ -12,7 +12,12 @@ func TestStoreEntradaEntry_NonExistingUnanonymized(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to open store: %s", err)
 	}
-	a := NewAnonymizer(NewSha256LabelAnonymizer())
+	a := NewAnonymizer(
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+	)
 	s = s.WithAnonymizer(a)
 
 	fqdns := []string{
@@ -111,7 +116,12 @@ func TestStoreEntradaEntry_ExistingUnanonymized(t *testing.T) {
 	}
 	s.cache.apexByName.Add("exmaple.co.uk", apex)
 
-	a := NewAnonymizer(NewSha256LabelAnonymizer())
+	a := NewAnonymizer(
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+	)
 	s = s.WithAnonymizer(a)
 
 	fqdns := []string{

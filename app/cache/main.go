@@ -79,8 +79,12 @@ func main() {
 		log.Info().Msgf("loading store took %s", diff.String())
 	}()
 
-	la := store.NewSha256LabelAnonymizer()
-	a := store.NewAnonymizer(la)
+	a := store.NewAnonymizer(
+		store.NewSha256LabelAnonymizer(conf.AnonymizeSalt.TldSalt),
+		store.NewSha256LabelAnonymizer(conf.AnonymizeSalt.PSuffixSalt),
+		store.NewSha256LabelAnonymizer(conf.AnonymizeSalt.ApexSalt),
+		store.NewSha256LabelAnonymizer(conf.AnonymizeSalt.FqdnSalt),
+	)
 	s = s.WithAnonymizer(a)
 
 	tags := map[string]string{
