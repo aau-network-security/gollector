@@ -83,6 +83,7 @@ type domain struct {
 
 func NewDomain(fqdn string) (*domain, error) {
 	fqdn = strings.TrimSuffix(fqdn, ".")
+	fqdn = strings.TrimPrefix(fqdn, ".")
 	fqdn = strings.ToLower(fqdn)
 	fqdn = strings.ReplaceAll(fqdn, "\t", "")
 	fqdn = strings.ReplaceAll(fqdn, "\n", "")
