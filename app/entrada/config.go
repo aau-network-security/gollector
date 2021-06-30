@@ -7,11 +7,18 @@ import (
 	"io/ioutil"
 )
 
+type TimeWindow struct {
+	Start string `yaml:"start"`
+	End   string `yaml:"end"`
+}
+
 type config struct {
-	Host    string      `yaml:"host"`
-	Port    string      `yaml:"port"`
-	ApiAddr app.Address `yaml:"api-address"`
-	Meta    app.Meta    `yaml:"meta"`
+	Host       string      `yaml:"host"`
+	Port       string      `yaml:"port"`
+	ApiAddr    app.Address `yaml:"api-address"`
+	Meta       app.Meta    `yaml:"meta"`
+	TimeWindow TimeWindow  `yaml:"time-window"`
+	Limit      int64       `yaml:"limit"`
 }
 
 func (c *config) isValid() error {

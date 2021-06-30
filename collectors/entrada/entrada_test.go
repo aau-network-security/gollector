@@ -27,7 +27,7 @@ func Test(t *testing.T) {
 		Query: fmt.Sprintf("SELECT qname, unixtime FROM dns.queries LIMIT %d", expected),
 	}
 
-	if err := src.Process(ctx, entryFn, opts); err != nil {
+	if _, err := src.Process(ctx, entryFn, opts); err != nil {
 		t.Fatalf("unexpected error while processing impala data: %s", err)
 	}
 

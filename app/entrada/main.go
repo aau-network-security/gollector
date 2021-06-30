@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"github.com/aau-network-security/gollector/api"
 	prt "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/collectors/entrada"
@@ -93,15 +94,37 @@ func main() {
 		return nil
 	}
 
-	// todo: remove limit
 	src := entrada.NewSource(conf.Host, conf.Port)
 
-	eopts := entrada.Options{
-		Query: "SELECT 1, 1",
+	startTime, err := time.Parse("2006-01-02", conf.TimeWindow.Start)
+	if err != nil {
+		log.Fatal().Msgf("failed to parse the start date: %s", err)
 	}
+	startTimeNano := startTime.Unix()
 
-	if err := src.Process(ctx, entryFn, eopts); err != nil {
-		log.Fatal().Msgf("error while processing impala source: %s", err)
+	endTime, err := time.Parse("2006-01-02", conf.TimeWindow.End)
+	if err != nil {
+		log.Fatal().Msgf("failed to parse the end date: %s", err)
+	}
+	endTimeNano := endTime.Unix()
+
+	// todo: add pagination
+
+	proceed := true
+	var offset int64
+	for proceed {
+		eopts := entrada.Options{
+			Query: fmt.Sprintf("SELECT qname, min(unixtime) FROM dns.queries GROUP BY qname WHERE unixtime >= %d AND unixtime < %d ORDER BY qname LIMIT %d OFFSET %d", startTimeNano, endTimeNano, conf.Limit, offset),
+		}
+		c, err := src.Process(ctx, entryFn, eopts)
+		if err != nil {
+			log.Fatal().Msgf("error while processing impala source: %s", err)
+		}
+		offset += c
+		log.Debug().Msgf("Processed %d entries so far", offset)
+		if c < conf.Limit {
+			break
+		}
 	}
 
 	if err := bs.CloseSend(ctx); err != nil {
