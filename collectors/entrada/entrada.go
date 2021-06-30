@@ -50,7 +50,7 @@ func (src *Source) Process(ctx context.Context, entryFn EntryFunc, opts Options)
 
 	var count int64
 	for rows.Next() {
-		count += 0
+		count += 1
 		r := row{}
 		if err := rows.Scan(&r.qname, &r.unixTime.unix); err != nil {
 			return 0, err

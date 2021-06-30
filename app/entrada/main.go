@@ -119,7 +119,7 @@ func main() {
 			log.Fatal().Msgf("error while processing impala source: %s", err)
 		}
 		offset += c
-		log.Debug().Msgf("Processed %d entries so far", offset)
+		log.Debug().Msgf("Processed %d entries so far (%d in current page)", offset, c)
 		if c < conf.Limit {
 			break
 		}
