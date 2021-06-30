@@ -77,7 +77,10 @@ func (s *Store) forpropEntradaEntries() {
 	for _, ee := range s.batchEntities.entradaEntries {
 		fqdnStr, ok := s.batchEntities.fqdnByNameAnon[ee.fqdn]
 		if !ok {
-			log.Warn().Msgf("failed to find fqdn id for passive entry for fqdn '%s': skipping", ee.fqdn)
+			// should not happen?
+			log.Error().Msgf("failed to find anonymized fqdn '%s'", ee.fqdn)
+			log.Error().Msgf("anonymized fqdns in current entity batch: '%s'", s.batchEntities.fqdnByNameAnon)
+			panic("failure!")
 			continue
 		}
 		fqdnAnon := fqdnStr.obj.(*models.FqdnAnon)

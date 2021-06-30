@@ -113,7 +113,10 @@ func TestNewDomain(t *testing.T) {
 
 func TestAnonymizer(t *testing.T) {
 	a := Anonymizer{
-		la: &TestLabelAnonymizer{},
+		&TestLabelAnonymizer{},
+		&TestLabelAnonymizer{},
+		&TestLabelAnonymizer{},
+		&TestLabelAnonymizer{},
 	}
 	d := domain{
 		tld:          newLabel("a"),
