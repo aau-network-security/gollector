@@ -108,13 +108,11 @@ func main() {
 	}
 	endTimeNano := endTime.Unix()
 
-	// todo: add pagination
-
 	proceed := true
 	var offset int64
 	for proceed {
 		eopts := entrada.Options{
-			Query: fmt.Sprintf("SELECT qname, min(unixtime) FROM dns.queries GROUP BY qname WHERE unixtime >= %d AND unixtime < %d ORDER BY qname LIMIT %d OFFSET %d", startTimeNano, endTimeNano, conf.Limit, offset),
+			Query: fmt.Sprintf("SELECT qname, min(unixtime) FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname ORDER BY qname LIMIT %d OFFSET %d", startTimeNano, endTimeNano, conf.Limit, offset),
 		}
 		c, err := src.Process(ctx, entryFn, eopts)
 		if err != nil {
