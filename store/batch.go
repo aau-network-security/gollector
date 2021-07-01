@@ -71,6 +71,7 @@ func (be *BatchEntities) Reset() {
 	be.certByFingerprint = make(map[string]*certstruct)
 	be.zoneEntries = []*zoneentrystruct{}
 	be.passiveEntries = []*passiveentrystruct{}
+	be.entradaEntries = []*entradaentrystruct{}
 }
 
 func NewBatchEntities(size int) BatchEntities {

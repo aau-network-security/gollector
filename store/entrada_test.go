@@ -13,10 +13,10 @@ func TestStoreEntradaEntry_NonExistingUnanonymized(t *testing.T) {
 		t.Fatalf("failed to open store: %s", err)
 	}
 	a := NewAnonymizer(
-		NewSha256LabelAnonymizer(""),
-		NewSha256LabelAnonymizer(""),
-		NewSha256LabelAnonymizer(""),
-		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer("1"),
+		NewSha256LabelAnonymizer("2"),
+		NewSha256LabelAnonymizer("3"),
+		NewSha256LabelAnonymizer("4"),
 	)
 	s = s.WithAnonymizer(a)
 

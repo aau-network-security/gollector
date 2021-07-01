@@ -5,6 +5,7 @@ go 1.13
 require (
 	cloud.google.com/go/bigquery v1.8.0 // indirect
 	cloud.google.com/go/pubsub v1.5.0 // indirect
+	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/bippio/go-impala v2.0.0+incompatible
 	github.com/cheggaaa/pb v2.0.7+incompatible // indirect
 	github.com/cheggaaa/pb/v3 v3.0.5 // indirect

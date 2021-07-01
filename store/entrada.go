@@ -79,7 +79,7 @@ func (s *Store) forpropEntradaEntries() {
 		if !ok {
 			// should not happen?
 			log.Error().Msgf("failed to find anonymized fqdn '%s'", ee.fqdn)
-			log.Error().Msgf("anonymized fqdns in current entity batch: '%s'", s.batchEntities.fqdnByNameAnon)
+			log.Error().Msgf("anonymized fqdns in current entity batch: '%+v'", s.batchEntities.fqdnByNameAnon)
 			panic("failure!")
 			continue
 		}
