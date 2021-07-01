@@ -73,33 +73,68 @@ func (c *Config) DSN() string {
 }
 
 type ModelSet struct {
-	zoneEntries      []*models.ZonefileEntry
 	fqdns            []*models.Fqdn
 	fqdnsAnon        []*models.FqdnAnon
 	apexes           map[uint]*models.Apex
 	apexesAnon       map[uint]*models.ApexAnon
-	certs            []*models.Certificate
-	logEntries       []*models.LogEntry
-	certToFqdns      []*models.CertificateToFqdn
-	passiveEntries   []*models.PassiveEntry
-	entradaEntries   []*models.EntradaEntry
-	tld              []*models.Tld
-	tldAnon          []*models.TldAnon
 	publicSuffix     []*models.PublicSuffix
 	publicSuffixAnon []*models.PublicSuffixAnon
+	tld              []*models.Tld
+	tldAnon          []*models.TldAnon
+	certs            []*models.Certificate
+	certToFqdns      []*models.CertificateToFqdn
+	zoneEntries      []*models.ZonefileEntry
+	logEntries       []*models.LogEntry
+	passiveEntries   []*models.PassiveEntry
+	entradaEntries   []*models.EntradaEntry
 }
 
-func (ms *ModelSet) Len() int {
-	return len(ms.zoneEntries) +
-		len(ms.fqdns) +
-		len(ms.fqdnsAnon) +
-		len(ms.apexes) +
-		len(ms.apexesAnon) +
-		len(ms.certs) +
-		len(ms.logEntries) +
-		len(ms.certToFqdns) +
-		len(ms.passiveEntries) +
-		len(ms.entradaEntries)
+func (ms *ModelSet) Description() string {
+	res := "[\n"
+	if len(ms.fqdns) > 0 {
+		res += fmt.Sprintf("fqdns: %d\n", len(ms.fqdns))
+	}
+	if len(ms.fqdnsAnon) > 0 {
+		res += fmt.Sprintf("fqdnsAnon: %d\n", len(ms.fqdnsAnon))
+	}
+	if len(ms.apexes) > 0 {
+		res += fmt.Sprintf("apexes: %d\n", len(ms.apexes))
+	}
+	if len(ms.apexesAnon) > 0 {
+		res += fmt.Sprintf("apexesAnon: %d\n", len(ms.apexesAnon))
+	}
+	if len(ms.publicSuffix) > 0 {
+		res += fmt.Sprintf("publicSuffix: %d\n", len(ms.publicSuffix))
+	}
+	if len(ms.publicSuffixAnon) > 0 {
+		res += fmt.Sprintf("publicSuffixAnon: %d\n", len(ms.publicSuffixAnon))
+	}
+	if len(ms.tld) > 0 {
+		res += fmt.Sprintf("tld: %d\n", len(ms.tld))
+	}
+	if len(ms.tldAnon) > 0 {
+		res += fmt.Sprintf("tldAnon: %d\n", len(ms.tldAnon))
+	}
+	if len(ms.certs) > 0 {
+		res += fmt.Sprintf("certs: %d\n", len(ms.certs))
+	}
+	if len(ms.certToFqdns) > 0 {
+		res += fmt.Sprintf("certToFqdns: %d\n", len(ms.certToFqdns))
+	}
+	if len(ms.zoneEntries) > 0 {
+		res += fmt.Sprintf("zoneEntries: %d\n", len(ms.zoneEntries))
+	}
+	if len(ms.logEntries) > 0 {
+		res += fmt.Sprintf("logEntries: %d\n", len(ms.logEntries))
+	}
+	if len(ms.passiveEntries) > 0 {
+		res += fmt.Sprintf("passiveEntries: %d\n", len(ms.passiveEntries))
+	}
+	if len(ms.entradaEntries) > 0 {
+		res += fmt.Sprintf("entradaEntries: %d\n", len(ms.entradaEntries))
+	}
+	res += "]"
+	return res
 }
 
 func (ms *ModelSet) zoneEntryList() []*models.ZonefileEntry {
@@ -885,6 +920,9 @@ func storeCachedValuePosthook() postHook {
 			return errs.Wrap(err, "committing transaction")
 		}
 		log.Debug().Msgf("transaction committed!")
+
+		log.Debug().Msgf("inserted the following number of entities: %s", s.inserts.Description())
+		log.Debug().Msgf("updated the following number of entities: %s", s.updates.Description())
 
 		s.updates = NewModelSet()
 		s.inserts = NewModelSet()
