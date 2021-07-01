@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	imp "github.com/bippio/go-impala"
+	"github.com/rs/zerolog/log"
 	"io"
 	"time"
 )
@@ -56,7 +57,7 @@ func (src *Source) Process(ctx context.Context, entryFn EntryFunc, opts Options)
 			return 0, err
 		}
 		if err := entryFn(r.qname, r.unixTime.toTime()); err != nil {
-			return 0, err
+			log.Warn().Msgf("failed to process qname: %s", err)
 		}
 	}
 

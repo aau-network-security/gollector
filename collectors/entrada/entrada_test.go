@@ -11,7 +11,7 @@ import (
 
 func Test(t *testing.T) {
 	// create mock ENTRADA source
-	expected := 100
+	expected := 5
 	opts := Options{
 		Query: fmt.Sprintf("SELECT qname, unixtime FROM dns.queries LIMIT %d", expected),
 	}
@@ -20,10 +20,12 @@ func Test(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create mock SQL")
 	}
-	csvString := ""
-	for i := 0; i < expected; i++ {
-		csvString += "www.example.co.uk,1\n"
-	}
+	csvString := `www.example.co.uk,1 
+a,2
+a,3
+1.2.3.4,3
+help.me,4
+`
 	mock.ExpectQuery(opts.Query).WillReturnRows(sqlmock.NewRows([]string{"a", "b"}).FromCSVString(csvString))
 
 	src := Source{
@@ -32,10 +34,13 @@ func Test(t *testing.T) {
 	defer src.Close()
 
 	// create store
+	storeOpts := store.TestOpts
+	storeOpts.BatchSize = 2
 	s, _, muid, err := store.OpenStore(store.TestConfig, store.TestOpts)
 	if err != nil {
 		t.Fatalf("failed to open store: %s", err)
 	}
+
 	a := store.NewAnonymizer(
 		store.NewSha256LabelAnonymizer("1"),
 		store.NewSha256LabelAnonymizer("2"),
@@ -62,5 +67,9 @@ func Test(t *testing.T) {
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatalf("there were unfulfilled expectations: %s", err)
+	}
+
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("unexpected error while running post hooks: %s", err)
 	}
 }
