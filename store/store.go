@@ -617,7 +617,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 	log.Debug().Msgf("unlogging db tables..")
 
 	//make the table unlogged to improve performance
-	tableList := []string{"apexes", "certificate_to_fqdns", "certificates", "fqdns", "log_entries", "public_suffixes", "tlds", "zonefile_entries", "passive_entries"}
+	tableList := []string{"apexes", "certificate_to_fqdns", "certificates", "fqdns", "log_entries", "public_suffixes", "tlds", "zonefile_entries", "passive_entries", "entrada_entries"}
 
 	// check which columns are already unlogged
 	type item struct {
