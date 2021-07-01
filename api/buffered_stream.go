@@ -122,7 +122,7 @@ func NewBufferedStream(str Stream, tmpl Batch, opts BufferedStreamOpts) (*buffer
 			if err != nil {
 				st := status.Convert(err)
 				log.Error().Msgf("failed to receive message: %s", st.Message())
-				break
+				continue
 			}
 			if !res.Ok {
 				log.Error().Msgf("error while processing batch entry: %s", res.Error)

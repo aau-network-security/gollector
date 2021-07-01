@@ -77,3 +77,9 @@ func NewSource(host, port string) *Source {
 	}
 	return src
 }
+
+func NewSourceByDb(db *sql.DB) *Source {
+	return &Source{
+		db: db,
+	}
+}
