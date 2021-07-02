@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	imp "github.com/bippio/go-impala"
+	"github.com/rs/zerolog/log"
 	"io"
 	"time"
 )
@@ -42,29 +43,32 @@ func (src *Source) Close() error {
 	return src.db.Close()
 }
 
-func (src *Source) Process(ctx context.Context, entryFn EntryFunc, opts Options) error {
+func (src *Source) Process(ctx context.Context, entryFn EntryFunc, opts Options) (int64, error) {
 	rows, err := src.db.QueryContext(ctx, opts.Query)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
+	var count int64
 	for rows.Next() {
+		count += 1
 		r := row{}
 		if err := rows.Scan(&r.qname, &r.unixTime.unix); err != nil {
-			return err
+			return 0, err
 		}
 		if err := entryFn(r.qname, r.unixTime.toTime()); err != nil {
-			return err
+			log.Warn().Msgf("failed to process qname: %s", err)
 		}
 	}
 
-	return rows.Err()
+	return count, rows.Err()
 }
 
 func NewSource(host, port string) *Source {
 	opts := imp.DefaultOptions
 	opts.Host = host
 	opts.Port = port
+	opts.QueryTimeout = 60 * 60 // 1 hour
 
 	c := imp.NewConnector(&opts)
 	db := sql.OpenDB(c)
@@ -72,4 +76,10 @@ func NewSource(host, port string) *Source {
 		db: db,
 	}
 	return src
+}
+
+func NewSourceByDb(db *sql.DB) *Source {
+	return &Source{
+		db: db,
+	}
 }

@@ -17,6 +17,8 @@ services:
       context: .
       dockerfile: app/entrada/Dockerfile
     command: [ "--config", "/config/entrada.yml" ]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./config:/config:ro # configuration files
   zones:

@@ -5,9 +5,10 @@ go 1.13
 require (
 	cloud.google.com/go/bigquery v1.8.0 // indirect
 	cloud.google.com/go/pubsub v1.5.0 // indirect
+	github.com/DATA-DOG/go-sqlmock v1.5.0
 	github.com/bippio/go-impala v2.0.0+incompatible
-	github.com/cheggaaa/pb v2.0.7+incompatible
-	github.com/cheggaaa/pb/v3 v3.0.5
+	github.com/cheggaaa/pb v2.0.7+incompatible // indirect
+	github.com/cheggaaa/pb/v3 v3.0.5 // indirect
 	github.com/coreos/bbolt v1.3.3 // indirect
 	github.com/coreos/go-systemd v0.0.0-20190620071333-e64a0ec8b42a // indirect
 	github.com/dgrijalva/jwt-go v3.2.0+incompatible
@@ -17,6 +18,7 @@ require (
 	github.com/gliderlabs/ssh v0.1.4 // indirect
 	github.com/go-acme/lego v2.7.2+incompatible
 	github.com/go-pg/pg v8.0.6+incompatible
+	github.com/go-pg/pg/extra/pgdebug v0.2.0
 	github.com/gobuffalo/flect v0.1.5 // indirect
 	github.com/golang/protobuf v1.4.3
 	github.com/golangci/go-tools v0.0.0-20190124090046-35a9f45a5db0 // indirect
@@ -56,7 +58,7 @@ require (
 	github.com/weppos/publicsuffix-go v0.10.0
 	github.com/xanzy/ssh-agent v0.2.1 // indirect
 	go.etcd.io/etcd v3.3.13+incompatible // indirect
-	golang.org/x/crypto v0.0.0-20201002170205-7f63de1d35b0
+	golang.org/x/crypto v0.0.0-20201012173705-84dcc777aaee
 	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
 	golang.org/x/text v0.3.3
 	google.golang.org/grpc v1.36.0
@@ -73,7 +75,6 @@ require (
 	gopkg.in/src-d/go-git-fixtures.v3 v3.5.0 // indirect
 	gopkg.in/src-d/go-git.v4 v4.11.0 // indirect
 	gopkg.in/yaml.v2 v2.3.0
-	mellium.im/sasl v0.2.1 // indirect
 	sourcegraph.com/sqs/pbtypes v1.0.0 // indirect
 )
 

@@ -8,6 +8,8 @@ import (
 	prt "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/collectors/ct"
 	ct2 "github.com/google/certificate-transparency-go"
+	"github.com/google/certificate-transparency-go/x509"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/vbauerster/mpb/v4"
@@ -17,6 +19,24 @@ import (
 	"sync"
 	"time"
 )
+
+var (
+	UnsupportedCertTypeErr = errors.New("provided certificate is not supported")
+)
+
+func certFromLogEntry(entry *ct2.LogEntry) (*x509.Certificate, bool, error) {
+	var cert *x509.Certificate
+	isPrecert := false
+	if entry.Precert != nil {
+		cert = entry.Precert.TBSCertificate
+		isPrecert = true
+	} else if entry.X509Cert != nil {
+		cert = entry.X509Cert
+	} else {
+		return nil, false, UnsupportedCertTypeErr
+	}
+	return cert, isPrecert, nil
+}
 
 func main() {
 	ctx := context.Background()
@@ -196,36 +216,36 @@ func main() {
 			entryFn := func(entry *ct2.LogEntry) error {
 				bar.Increment()
 
-				//cert, isPrecert, err := certFromLogEntry(entry)
-				//if err != nil {
-				//	return err
-				//}
-				//
-				//var operatedBy []int64
-				//for _, ob := range l.OperatedBy {
-				//	operatedBy = append(operatedBy, int64(ob))
-				//}
-				//
-				//log := prt.Log{
-				//	Description:       l.Description,
-				//	Key:               l.Key,
-				//	Url:               l.Url,
-				//	MaximumMergeDelay: int64(l.MaximumMergeDelay),
-				//	OperatedBy:        operatedBy,
-				//	DnsApiEndpoint:    l.DnsApiEndpoint,
-				//}
-				//
-				//le := prt.LogEntry{
-				//	Certificate: cert.Raw,
-				//	Index:       entry.Index,
-				//	Timestamp:   int64(entry.Leaf.TimestampedEntry.Timestamp),
-				//	Log:         &log,
-				//	IsPrecert:   isPrecert,
-				//}
-				//
-				//if err := bs.Send(ctx, &le); err != nil {
-				//	return errors.Wrap(err, "error while sending log entry to server")
-				//}
+				cert, isPrecert, err := certFromLogEntry(entry)
+				if err != nil {
+					return err
+				}
+
+				var operatedBy []int64
+				for _, ob := range l.OperatedBy {
+					operatedBy = append(operatedBy, int64(ob))
+				}
+
+				log := prt.Log{
+					Description:       l.Description,
+					Key:               l.Key,
+					Url:               l.Url,
+					MaximumMergeDelay: int64(l.MaximumMergeDelay),
+					OperatedBy:        operatedBy,
+					DnsApiEndpoint:    l.DnsApiEndpoint,
+				}
+
+				le := prt.LogEntry{
+					Certificate: cert.Raw,
+					Index:       entry.Index,
+					Timestamp:   int64(entry.Leaf.TimestampedEntry.Timestamp),
+					Log:         &log,
+					IsPrecert:   isPrecert,
+				}
+
+				if err := bs.Send(ctx, &le); err != nil {
+					return errors.Wrap(err, "error while sending log entry to server")
+				}
 				return nil
 			}
 

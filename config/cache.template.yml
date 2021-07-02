@@ -1,3 +1,8 @@
+anonymize-salt:
+  tld-salt: <salt>
+  psuffix-salt: <salt>
+  apex-salt: <salt>
+  fqdn-salt: <salt>
 api:
   store:
     host: localhost
@@ -17,3 +22,13 @@ sentry:
   enabled: true
   dsn: <dsn that includes key and host>
 log-level: <debug | info | warn | error>
+store:
+  batch-size: 10000
+  cache-size:
+    log: 100000
+    tld: 100000
+    public-suffix: 100000
+    apex: 100000
+    fqdn: 100000
+    cert: 100000
+    zone-entry: 100000

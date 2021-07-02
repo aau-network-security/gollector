@@ -3,10 +3,11 @@ package store
 import (
 	"crypto/sha256"
 	"fmt"
+	"github.com/aau-network-security/gollector/store/models"
+	"github.com/go-pg/pg"
 	"net"
 	"strings"
 
-	"github.com/aau-network-security/gollector/store/models"
 	"github.com/pkg/errors"
 	"github.com/weppos/publicsuffix-go/net/publicsuffix"
 )
@@ -14,7 +15,12 @@ import (
 var (
 	AnonymizerErr     = errors.New("cannot anonymize without anonymizer")
 	FqdnIsIpErr       = errors.New("fqdn is an IP address instead")
-	DefaultAnonymizer = Anonymizer{&DefaultLabelAnonymizer{}}
+	DefaultAnonymizer = Anonymizer{
+		&DefaultLabelAnonymizer{},
+		&DefaultLabelAnonymizer{},
+		&DefaultLabelAnonymizer{},
+		&DefaultLabelAnonymizer{},
+	}
 )
 
 type LabelAnonymizer interface {
@@ -27,33 +33,38 @@ func (la *DefaultLabelAnonymizer) AnonymizeLabel(s string) string {
 	return s
 }
 
-type Sha256LabelAnonymizer struct{}
+type Sha256LabelAnonymizer struct {
+	salt string
+}
 
 func (la *Sha256LabelAnonymizer) AnonymizeLabel(s string) string {
 	h := sha256.New()
+	s = s + la.salt
 	h.Write([]byte(s))
 	return fmt.Sprintf("%x", h.Sum(nil))
 }
 
-func NewSha256LabelAnonymizer() *Sha256LabelAnonymizer {
-	return &Sha256LabelAnonymizer{}
+func NewSha256LabelAnonymizer(salt string) LabelAnonymizer {
+	return &Sha256LabelAnonymizer{
+		salt: salt,
+	}
 }
 
 type Anonymizer struct {
-	la LabelAnonymizer
+	tldAnonymizer, psuffixAnonymizer, apexAnonymizer, fqdnAnonymizer LabelAnonymizer
 }
 
 func (a *Anonymizer) Anonymize(d *domain) {
-	d.tld.anon = a.la.AnonymizeLabel(d.tld.normal)
-	d.publicSuffix.anon = a.la.AnonymizeLabel(d.publicSuffix.normal)
-	d.apex.anon = a.la.AnonymizeLabel(d.apex.normal)
-	d.fqdn.anon = a.la.AnonymizeLabel(d.fqdn.normal)
+	d.tld.anon = a.tldAnonymizer.AnonymizeLabel(d.tld.normal)
+	d.publicSuffix.anon = a.psuffixAnonymizer.AnonymizeLabel(d.publicSuffix.normal)
+	d.apex.anon = a.apexAnonymizer.AnonymizeLabel(d.apex.normal)
+	d.fqdn.anon = a.fqdnAnonymizer.AnonymizeLabel(d.fqdn.normal)
 	d.anonymized = true
 }
 
-func NewAnonymizer(la LabelAnonymizer) *Anonymizer {
+func NewAnonymizer(tldAnonymizer, psuffixAnonymizer, apexAnonymizer, fqdnAnonymizer LabelAnonymizer) *Anonymizer {
 	return &Anonymizer{
-		la: la,
+		tldAnonymizer, psuffixAnonymizer, apexAnonymizer, fqdnAnonymizer,
 	}
 }
 
@@ -72,6 +83,7 @@ type domain struct {
 
 func NewDomain(fqdn string) (*domain, error) {
 	fqdn = strings.TrimSuffix(fqdn, ".")
+	fqdn = strings.TrimPrefix(fqdn, ".")
 	fqdn = strings.ToLower(fqdn)
 	fqdn = strings.ReplaceAll(fqdn, "\t", "")
 	fqdn = strings.ReplaceAll(fqdn, "\n", "")
@@ -113,463 +125,614 @@ func NewDomain(fqdn string) (*domain, error) {
 	return d, nil
 }
 
-func (s *Store) ensureAnonymized(domain *domain) error {
-	if !domain.anonymized {
-		if s.anonymizer == nil {
-			return AnonymizerErr
-		}
-		s.anonymizer.Anonymize(domain)
+// collect ids for all observed FQDNs in the batch, either from the cache or the database
+func (s *Store) backpropFqdn() error {
+	if len(s.batchEntities.fqdnByName) == 0 {
+		return nil
 	}
+
+	// fetch ids from cache
+	var fqndNotFoundInCache []string
+	for k := range s.batchEntities.fqdnByName {
+		fqdnI, ok := s.cache.fqdnByName.Get(k)
+		if !ok {
+			fqndNotFoundInCache = append(fqndNotFoundInCache, k)
+			continue
+		}
+		s.influxService.StoreHit("cache-hit", "fqdn", 1)
+		fqdn := fqdnI.(*models.Fqdn)
+		existing := s.batchEntities.fqdnByName[k]
+		existing.obj = fqdn
+		s.batchEntities.fqdnByName[k] = existing
+	}
+
+	// the cache is not full yet, so the remaining (cache-miss) fqdns cannot be in the database
+	curCacheSize := s.cache.fqdnByName.Len()
+	maxCacheSize := s.cacheOpts.FQDNSize
+	if curCacheSize < maxCacheSize {
+		return nil
+	}
+
+	// all entities have been found in the cache, no need to perform a database queries
+	if len(fqndNotFoundInCache) == 0 {
+		return nil
+	}
+
+	// fetch ids from database
+	var fqdnFoundInDB []*models.Fqdn
+	if err := s.db.Model(&fqdnFoundInDB).Where("fqdn in (?)", pg.In(fqndNotFoundInCache)).Select(); err != nil {
+		return err
+	}
+
+	for _, f := range fqdnFoundInDB {
+		existing := s.batchEntities.fqdnByName[f.Fqdn]
+		existing.obj = f
+		s.batchEntities.fqdnByName[f.Fqdn] = existing
+		s.cache.fqdnByName.Add(f.Fqdn, f)
+	}
+	s.influxService.StoreHit("db-hit", "fqdn", len(fqdnFoundInDB))
 	return nil
 }
 
-//Return the Tld found, otherwise error
-func (s *Store) getTldFromCacheOrDB(domain *domain) (*models.Tld, error) {
-	//Check if it is in the cache
-	resI, ok := s.cache.tldByName.Get(domain.tld.normal)
-	if !ok {
-		if s.cache.tldByName.Len() < s.cacheOpts.TLDSize {
-			s.influxService.StoreHit("cache-insert", "tld", 1)
-			return nil, cacheNotFull
-		}
-		//Check if it is in the DB
-		var tld models.Tld
-		if err := s.db.Model(&tld).Where("tld = ?", domain.tld.normal).First(); err != nil {
-			s.influxService.StoreHit("db-insert", "tld", 1)
-			return nil, err
-		}
-		s.influxService.StoreHit("db-hit", "tld", 1)
-		return &tld, nil //It is in DB
+// collect ids for all observed apexes in the batch, either from the cache or the database
+func (s *Store) backpropApex() error {
+	if len(s.batchEntities.apexByName) == 0 {
+		return nil
 	}
-	res := resI.(*models.Tld)
-	s.influxService.StoreHit("cache-hit", "tld", 1)
-	return res, nil //It is in Cache
+
+	// fetch ids from cache
+	var apexNotFoundInCache []string
+	for k := range s.batchEntities.apexByName {
+		apexI, ok := s.cache.apexByName.Get(k)
+		if !ok {
+			apexNotFoundInCache = append(apexNotFoundInCache, k)
+			continue
+		}
+		s.influxService.StoreHit("cache-hit", "apex", 1)
+		apex := apexI.(*models.Apex)
+		existing := s.batchEntities.apexByName[k]
+		existing.obj = apex
+		s.batchEntities.apexByName[k] = existing
+	}
+
+	// the cache is not full yet, so the remaining (cache-miss) apexes cannot be in the database
+	if s.cache.apexByName.Len() < s.cacheOpts.ApexSize {
+		return nil
+	}
+
+	// all entities have been found in the cache, no need to perform a database queries
+	if len(apexNotFoundInCache) == 0 {
+		return nil
+	}
+
+	// fetch ids from database
+	var apexFoundInDB []*models.Apex
+	if err := s.db.Model(&apexFoundInDB).Where("apex in (?)", pg.In(apexNotFoundInCache)).Select(); err != nil {
+		return err
+	}
+
+	for _, a := range apexFoundInDB {
+		existing := s.batchEntities.apexByName[a.Apex]
+		existing.obj = a
+		s.batchEntities.apexByName[a.Apex] = existing
+		s.cache.apexByName.Add(a.Apex, a)
+	}
+	s.influxService.StoreHit("db-hit", "apex", len(apexFoundInDB))
+	return nil
 }
 
-func (s *Store) getTldAnonFromCacheOrDB(domain *domain) (*models.TldAnon, error) {
-	anonI, ok := s.cache.tldAnonByName.Get(domain.tld.anon)
-	if !ok {
-		if s.cache.tldAnonByName.Len() < s.cacheOpts.TLDSize {
-			s.influxService.StoreHit("cache-insert", "tld-anon", 1)
-			return nil, cacheNotFull
-		}
-		var tldAnon models.TldAnon
-		if err := s.db.Model(&tldAnon).Where("tld = ?", domain.tld.normal).First(); err != nil {
-			s.influxService.StoreHit("db-insert", "tld-anon", 1)
-			return nil, err
-		}
-		s.influxService.StoreHit("db-hit", "tld-anon", 1)
-		return &tldAnon, nil //It is in DB
+// collect ids for all observed public suffixes in the batch, either from the cache or the database
+func (s *Store) backpropPublicSuffix() error {
+	if len(s.batchEntities.publicSuffixByName) == 0 {
+		return nil
 	}
-	anon := anonI.(*models.TldAnon)
-	s.influxService.StoreHit("cache-hit", "tld-anon", 1)
-	return anon, nil //It is in Cache
+
+	// fetch ids from cache
+	var psNotFoundInCache []string
+	for k := range s.batchEntities.publicSuffixByName {
+		psI, ok := s.cache.publicSuffixByName.Get(k)
+		if !ok {
+			psNotFoundInCache = append(psNotFoundInCache, k)
+			continue
+		}
+		s.influxService.StoreHit("cache-hit", "public-suffix", 1)
+		ps := psI.(*models.PublicSuffix)
+		existing := s.batchEntities.publicSuffixByName[k]
+		existing.obj = ps
+		s.batchEntities.publicSuffixByName[k] = existing
+	}
+
+	// the cache is not full yet, so the remaining (cache-miss) public suffixes cannot be in the database
+	if s.cache.publicSuffixByName.Len() < s.cacheOpts.PSuffSize {
+		return nil
+	}
+
+	// all entities have been found in the cache, no need to perform a database queries
+	if len(psNotFoundInCache) == 0 {
+		return nil
+	}
+
+	// fetch ids from database
+	var psFoundInDB []*models.PublicSuffix
+	if err := s.db.Model(&psFoundInDB).Where("public_suffix in (?)", pg.In(psNotFoundInCache)).Select(); err != nil {
+		return err
+	}
+
+	for _, ps := range psFoundInDB {
+		existing := s.batchEntities.publicSuffixByName[ps.PublicSuffix]
+		existing.obj = ps
+		s.batchEntities.publicSuffixByName[ps.PublicSuffix] = existing
+	}
+	s.influxService.StoreHit("db-hit", "public-suffix", len(psFoundInDB))
+	return nil
 }
 
-func (s *Store) getOrCreateTld(domain *domain) (*models.Tld, error) {
-	if err := s.ensureAnonymized(domain); err != nil {
-		return nil, err
+// collect ids for all observed TLDs in the batch, either from the cache or the database
+func (s *Store) backpropTld() error {
+	if len(s.batchEntities.tldByName) == 0 {
+		return nil
 	}
 
-	res, err := s.getTldFromCacheOrDB(domain)
-	if err != nil { // It is not in cache or DB
-
-		tx, err := s.db.Begin()
-		if err != nil {
-			return nil, err
+	// fetch ids from cache
+	var tldNotFoundInCache []string
+	for k := range s.batchEntities.tldByName {
+		tldI, ok := s.cache.tldByName.Get(k)
+		if !ok {
+			tldNotFoundInCache = append(tldNotFoundInCache, k)
+			continue
 		}
+		s.influxService.StoreHit("cache-hit", "tld", 1)
+		tld := tldI.(*models.Tld)
+		existing := s.batchEntities.tldByName[k]
+		existing.obj = tld
+		s.batchEntities.tldByName[k] = existing
+	}
 
-		res = &models.Tld{
-			ID:  s.ids.tlds,
-			Tld: domain.tld.normal,
-		}
-		if err := tx.Insert(res); err != nil {
-			return nil, errors.Wrap(err, "insert tld")
-		}
+	// the cache is not full yet, so the remaining (cache-miss) tlds cannot be in the database
+	if s.cache.tldByName.Len() < s.cacheOpts.TLDSize {
+		return nil
+	}
 
-		// update anonymized model (if it exists)
-		anon, err := s.getTldAnonFromCacheOrDB(domain)
-		if err == nil { //It is in the cache
-			anon.TldID = res.ID
-			if err := tx.Update(anon); err != nil {
-				return nil, err
+	// all entities have been found in the cache, no need to perform a database queries
+	if len(tldNotFoundInCache) == 0 {
+		return nil
+	}
+
+	// fetch ids from database
+	var tldFoundInDB []*models.Tld
+	if err := s.db.Model(&tldFoundInDB).Where("tld in (?)", pg.In(tldNotFoundInCache)).Select(); err != nil {
+		return err
+	}
+
+	for _, tld := range tldFoundInDB {
+		existing := s.batchEntities.tldByName[tld.Tld]
+		existing.obj = tld
+		s.batchEntities.tldByName[tld.Tld] = existing
+		s.cache.tldByName.Add(tld.Tld, tld)
+	}
+	s.influxService.StoreHit("db-hit", "tld", len(tldFoundInDB))
+	return nil
+}
+
+func (s *Store) backpropFqdnAnon() error {
+	if len(s.batchEntities.fqdnByNameAnon) == 0 {
+		return nil
+	}
+
+	// fetch ids from cache
+	var notFoundInCache []string
+	for k := range s.batchEntities.fqdnByNameAnon {
+		fqdnI, ok := s.cache.fqdnByNameAnon.Get(k)
+		if !ok {
+			notFoundInCache = append(notFoundInCache, k)
+			continue
+		}
+		s.influxService.StoreHit("cache-hit", "fqdn-anon", 1)
+		fqdn := fqdnI.(*models.FqdnAnon)
+		existing := s.batchEntities.fqdnByNameAnon[k]
+		existing.obj = fqdn
+		s.batchEntities.fqdnByNameAnon[k] = existing
+	}
+
+	// the cache is not full yet, so the remaining (cache-miss) fqdns cannot be in the database
+	curCacheSize := s.cache.fqdnByNameAnon.Len()
+	maxCacheSize := s.cacheOpts.FQDNSize
+	if curCacheSize < maxCacheSize {
+		return nil
+	}
+
+	// all entities have been found in the cache, no need to perform a database queries
+	if len(notFoundInCache) == 0 {
+		return nil
+	}
+
+	// fetch ids from database
+	var foundInDB []*models.FqdnAnon
+	if err := s.db.Model(&foundInDB).Where("fqdn in (?)", pg.In(notFoundInCache)).Select(); err != nil {
+		return err
+	}
+
+	for _, f := range foundInDB {
+		existing := s.batchEntities.fqdnByNameAnon[f.Fqdn.Fqdn]
+		existing.obj = f
+		s.batchEntities.fqdnByNameAnon[f.Fqdn.Fqdn] = existing
+		s.cache.fqdnByNameAnon.Add(f.Fqdn, f)
+	}
+	s.influxService.StoreHit("db-hit", "fqdn-anon", len(foundInDB))
+	return nil
+}
+
+// collect ids for all observed apexes in the batch, either from the cache or the database
+func (s *Store) backpropApexAnon() error {
+	if len(s.batchEntities.apexByNameAnon) == 0 {
+		return nil
+	}
+
+	// fetch ids from cache
+	var notFoundInCache []string
+	for k := range s.batchEntities.apexByNameAnon {
+		apexI, ok := s.cache.apexByNameAnon.Get(k)
+		if !ok {
+			notFoundInCache = append(notFoundInCache, k)
+			continue
+		}
+		s.influxService.StoreHit("cache-hit", "apex-anon", 1)
+		apex := apexI.(*models.ApexAnon)
+		existing := s.batchEntities.apexByNameAnon[k]
+		existing.obj = apex
+		s.batchEntities.apexByNameAnon[k] = existing
+	}
+
+	// all entities have been found in the cache, no need to perform a database queries
+	if len(notFoundInCache) == 0 {
+		return nil
+	}
+
+	// fetch ids from database
+	var foundInDB []*models.ApexAnon
+	if err := s.db.Model(&foundInDB).Where("apex in (?)", pg.In(notFoundInCache)).Select(); err != nil {
+		return err
+	}
+
+	for _, a := range foundInDB {
+		existing := s.batchEntities.apexByNameAnon[a.Apex.Apex]
+		existing.obj = a
+		s.batchEntities.apexByNameAnon[a.Apex.Apex] = existing
+		s.cache.apexByNameAnon.Add(a.Apex, a)
+	}
+	s.influxService.StoreHit("db-hit", "apex-anon", len(foundInDB))
+	return nil
+}
+
+// collect ids for all observed public suffixes in the batch, either from the cache or the database
+func (s *Store) backpropPublicSuffixAnon() error {
+	if len(s.batchEntities.publicSuffixAnonByName) == 0 {
+		return nil
+	}
+
+	// fetch ids from cache
+	var notFoundInCache []string
+	for k := range s.batchEntities.publicSuffixAnonByName {
+		psI, ok := s.cache.publicSuffixAnonByName.Get(k)
+		if !ok {
+			notFoundInCache = append(notFoundInCache, k)
+			continue
+		}
+		s.influxService.StoreHit("cache-hit", "public-suffix-anon", 1)
+		ps := psI.(*models.PublicSuffixAnon)
+		existing := s.batchEntities.publicSuffixAnonByName[k]
+		existing.obj = ps
+		s.batchEntities.publicSuffixAnonByName[k] = existing
+	}
+
+	// the cache is not full yet, so the remaining (cache-miss) public suffixes cannot be in the database
+	if s.cache.publicSuffixAnonByName.Len() < s.cacheOpts.PSuffSize {
+		return nil
+	}
+
+	// all entities have been found in the cache, no need to perform a database queries
+	if len(notFoundInCache) == 0 {
+		return nil
+	}
+
+	// fetch ids from database
+	var foundInDB []*models.PublicSuffixAnon
+	if err := s.db.Model(&foundInDB).Where("public_suffix in (?)", pg.In(notFoundInCache)).Select(); err != nil {
+		return err
+	}
+
+	for _, ps := range foundInDB {
+		existing := s.batchEntities.publicSuffixAnonByName[ps.PublicSuffix.PublicSuffix]
+		existing.obj = ps
+		s.batchEntities.publicSuffixAnonByName[ps.PublicSuffix.PublicSuffix] = existing
+	}
+	s.influxService.StoreHit("db-hit", "public-suffix-anon", len(foundInDB))
+	return nil
+}
+
+// collect ids for all observed TLDs in the batch, either from the cache or the database
+func (s *Store) backpropTldAnon() error {
+	if len(s.batchEntities.tldAnonByName) == 0 {
+		return nil
+	}
+
+	// fetch ids from cache
+	var notFoundInCache []string
+	for k := range s.batchEntities.tldAnonByName {
+		tldI, ok := s.cache.tldAnonByName.Get(k)
+		if !ok {
+			notFoundInCache = append(notFoundInCache, k)
+			continue
+		}
+		s.influxService.StoreHit("cache-hit", "tld-anon", 1)
+		tld := tldI.(*models.TldAnon)
+		existing := s.batchEntities.tldAnonByName[k]
+		existing.obj = tld
+		s.batchEntities.tldAnonByName[k] = existing
+	}
+
+	// the cache is not full yet, so the remaining (cache-miss) tlds cannot be in the database
+	if s.cache.tldAnonByName.Len() < s.cacheOpts.TLDSize {
+		return nil
+	}
+
+	// all entities have been found in the cache, no need to perform a database queries
+	if len(notFoundInCache) == 0 {
+		return nil
+	}
+
+	// fetch ids from database
+	var foundInDB []*models.TldAnon
+	if err := s.db.Model(&foundInDB).Where("tld in (?)", pg.In(notFoundInCache)).Select(); err != nil {
+		return err
+	}
+
+	for _, tld := range foundInDB {
+		existing := s.batchEntities.tldAnonByName[tld.Tld.Tld]
+		existing.obj = tld
+		s.batchEntities.tldAnonByName[tld.Tld.Tld] = existing
+		s.cache.tldAnonByName.Add(tld.Tld, tld)
+	}
+	s.influxService.StoreHit("db-hit", "tld-anon", len(foundInDB))
+	return nil
+}
+
+func (s *Store) forpropTld() {
+	for k, str := range s.batchEntities.tldByName {
+		if str.obj == nil && str.create {
+			res := &models.Tld{
+				ID:  s.ids.tlds,
+				Tld: k,
+			}
+			s.inserts.tld = append(s.inserts.tld, res)
+			str.obj = res
+			s.batchEntities.tldByName[k] = str
+			s.ids.tlds++
+			s.cache.tldByName.Add(k, res)
+
+			// update anonymized TLD if exists
+			tldstr := s.batchEntities.tldAnonByName[str.domain.tld.anon]
+			if tldstr.obj != nil {
+				tldAnon := tldstr.obj.(*models.TldAnon)
+				tldAnon.TldID = res.ID
+				s.updates.tldAnon = append(s.updates.tldAnon, tldAnon)
 			}
 		}
-
-		if err := tx.Commit(); err != nil {
-			return nil, err
-		}
-
-		s.cache.tldByName.Add(domain.tld.normal, res)
-		s.ids.tlds++
 	}
-	return res, nil //it was in cache or DB
 }
 
-func (s *Store) getOrCreateTldAnon(domain *domain) (*models.TldAnon, error) {
-	if err := s.ensureAnonymized(domain); err != nil {
-		return nil, err
-	}
+func (s *Store) forpropPublicSuffix() {
+	for k, str := range s.batchEntities.publicSuffixByName {
+		if str.obj == nil && str.create {
+			// get TLD name from public suffix object
+			tldstr := s.batchEntities.tldByName[str.domain.tld.normal]
+			tld := tldstr.obj.(*models.Tld)
+			res := &models.PublicSuffix{
+				ID:           s.ids.suffixes,
+				TldID:        tld.ID,
+				PublicSuffix: k,
+			}
+			str.obj = res
+			s.inserts.publicSuffix = append(s.inserts.publicSuffix, res)
+			s.batchEntities.publicSuffixByName[k] = str
+			s.ids.suffixes++
+			s.cache.publicSuffixByName.Add(k, res)
 
-	res, err := s.getTldAnonFromCacheOrDB(domain)
-	if err != nil { // It is not in cache or DB
-		tldId := uint(0)
-		tld, err := s.getTldFromCacheOrDB(domain)
-		if err == nil { // It is in cache or DB
-			tldId = tld.ID
-		}
-		res = &models.TldAnon{
-			Tld: models.Tld{
-				ID:  s.ids.tldsAnon,
-				Tld: domain.tld.anon,
-			},
-			TldID: tldId,
-		}
-		if err := s.db.Insert(res); err != nil {
-			return nil, errors.Wrap(err, "insert anon tld")
-		}
-		s.cache.tldAnonByName.Add(domain.tld.anon, res)
-		s.ids.tldsAnon++
-	}
-	return res, nil
-}
-
-func (s *Store) getPublicSuffixFromCacheOrDB(domain *domain) (*models.PublicSuffix, error) {
-	psI, ok := s.cache.publicSuffixByName.Get(domain.publicSuffix.normal)
-	if !ok {
-		if s.cache.publicSuffixByName.Len() < s.cacheOpts.PSuffSize {
-			s.influxService.StoreHit("cache-insert", "public-suffix", 1)
-			return nil, cacheNotFull
-		}
-		var ps models.PublicSuffix
-		if err := s.db.Model(&ps).Where("public_suffix = ?", domain.publicSuffix.normal).First(); err != nil {
-			s.influxService.StoreHit("db-insert", "public-suffix", 1)
-			return nil, err
-		}
-		s.influxService.StoreHit("db-hit", "public-suffix", 1)
-		return &ps, nil //It is in DB
-	}
-	ps := psI.(*models.PublicSuffix)
-	s.influxService.StoreHit("cache-hit", "public-suffix", 1)
-	return ps, nil //It is in Cache
-}
-
-func (s *Store) getPublicSuffixAnonFromCacheOrDB(domain *domain) (*models.PublicSuffixAnon, error) {
-	psI, ok := s.cache.publicSuffixAnonByName.Get(domain.publicSuffix.anon)
-	if !ok {
-		if s.cache.publicSuffixAnonByName.Len() < s.cacheOpts.PSuffSize {
-			s.influxService.StoreHit("cache-insert", "public-suffix-anon", 1)
-			return nil, cacheNotFull
-		}
-		var psAnon models.PublicSuffixAnon
-		if err := s.db.Model(&psAnon).Where("public_suffix = ?", domain.publicSuffix.anon).First(); err != nil {
-			s.influxService.StoreHit("db-insert", "public-suffix-anon", 1)
-			return nil, err
-		}
-		s.influxService.StoreHit("db-hit", "public-suffix-anon", 1)
-		return &psAnon, nil //It is in DB
-	}
-	ps := psI.(*models.PublicSuffixAnon)
-	s.influxService.StoreHit("cache-hit", "public-suffix-anon", 1)
-	return ps, nil //It is in Cache
-}
-
-func (s *Store) getOrCreatePublicSuffix(domain *domain) (*models.PublicSuffix, error) {
-	if err := s.ensureAnonymized(domain); err != nil {
-		return nil, err
-	}
-
-	res, err := s.getPublicSuffixFromCacheOrDB(domain)
-	if err != nil { // It is not in cache or DB
-
-		tx, err := s.db.Begin()
-		if err != nil {
-			return nil, err
-		}
-		defer tx.Rollback()
-
-		tld, err := s.getOrCreateTld(domain)
-		if err != nil {
-			return nil, err
-		}
-
-		res = &models.PublicSuffix{
-			ID:           s.ids.suffixes,
-			PublicSuffix: domain.publicSuffix.normal,
-			TldID:        tld.ID,
-		}
-		if err := tx.Insert(res); err != nil {
-			return nil, errors.Wrap(err, "insert public suffix")
-		}
-
-		// update anonymized model (if it exists)
-		anon, err := s.getPublicSuffixAnonFromCacheOrDB(domain)
-		if err == nil { //It is in the cache or DB
-			anon.PublicSuffixID = res.ID
-			if err := tx.Update(anon); err != nil {
-				return nil, err
+			// update anonymized public suffix if exists
+			psuffixstr := s.batchEntities.publicSuffixAnonByName[str.domain.publicSuffix.anon]
+			if psuffixstr.obj != nil {
+				psuffixAnon := psuffixstr.obj.(*models.PublicSuffixAnon)
+				psuffixAnon.PublicSuffixID = res.ID
+				s.updates.publicSuffixAnon = append(s.updates.publicSuffixAnon, psuffixAnon)
 			}
 		}
-
-		if err := tx.Commit(); err != nil {
-			return nil, err
-		}
-
-		s.cache.publicSuffixByName.Add(domain.publicSuffix.normal, res)
-		s.ids.suffixes++
 	}
-	return res, nil
 }
 
-func (s *Store) getOrCreatePublicSuffixAnon(domain *domain) (*models.PublicSuffixAnon, error) {
-	if err := s.ensureAnonymized(domain); err != nil {
-		return nil, err
+func (s *Store) forpropApex() {
+	for k, str := range s.batchEntities.apexByName {
+		if str.obj == nil && str.create {
+			// get TLD name from domain object
+			tldstr := s.batchEntities.tldByName[str.domain.tld.normal]
+			tld := tldstr.obj.(*models.Tld)
+
+			suffixstr := s.batchEntities.publicSuffixByName[str.domain.publicSuffix.normal]
+			suffix := suffixstr.obj.(*models.PublicSuffix)
+
+			res := &models.Apex{
+				ID:             s.ids.apexes,
+				TldID:          tld.ID,
+				PublicSuffixID: suffix.ID,
+				Apex:           k,
+			}
+			str.obj = res
+			s.inserts.apexes[res.ID] = res
+			s.batchEntities.apexByName[k] = str
+			s.ids.apexes++
+			s.cache.apexByName.Add(k, res)
+
+			// update anonymized apex if exists
+			apexstr := s.batchEntities.apexByNameAnon[str.domain.apex.anon]
+			if apexstr.obj != nil {
+				apexAnon := apexstr.obj.(*models.ApexAnon)
+				apexAnon.ApexID = res.ID
+				s.updates.apexesAnon[res.ID] = apexAnon
+			}
+		}
 	}
-
-	res, err := s.getPublicSuffixAnonFromCacheOrDB(domain)
-	if err != nil { // It is not in cache or DB
-		tldAnon, err := s.getOrCreateTldAnon(domain)
-		if err != nil {
-			return nil, err
-		}
-
-		suffixId := uint(0)
-		suffix, err := s.getPublicSuffixFromCacheOrDB(domain)
-		if err == nil { //It is in the cache or DB
-			suffixId = suffix.ID
-		}
-
-		res = &models.PublicSuffixAnon{
-			PublicSuffix: models.PublicSuffix{
-				ID:           s.ids.suffixesAnon,
-				PublicSuffix: domain.publicSuffix.anon,
-				TldID:        tldAnon.ID,
-			},
-			PublicSuffixID: suffixId,
-		}
-		if err := s.db.Insert(res); err != nil {
-			return nil, errors.Wrap(err, "insert anon public suffix")
-		}
-		s.cache.publicSuffixAnonByName.Add(domain.publicSuffix.anon, res)
-		s.ids.suffixesAnon++
-	}
-	return res, nil
 }
 
-func (s *Store) getApexFromCacheOrDB(domain *domain) (*models.Apex, error) {
-	aI, ok := s.cache.apexByName.Get(domain.apex.normal)
-	if !ok {
-		if s.cache.apexByName.Len() < s.cacheOpts.ApexSize {
-			s.influxService.StoreHit("cache-insert", "apex", 1)
-			return nil, cacheNotFull
-		}
-		var a models.Apex
-		if err := s.db.Model(&a).Where("apex = ?", domain.apex.normal).First(); err != nil {
-			s.influxService.StoreHit("db-insert", "apex", 1)
-			return nil, err
-		}
-		s.influxService.StoreHit("db-hit", "apex", 1)
-		return &a, nil //It is in DB
-	}
-	apex := aI.(*models.Apex)
-	s.influxService.StoreHit("cache-hit", "apex", 1)
-	return apex, nil //It is in Cache
-}
+func (s *Store) forpropFqdn() {
+	for k, str := range s.batchEntities.fqdnByName {
+		if str.obj == nil && str.create {
+			// get TLD name from domain object
+			tldstr := s.batchEntities.tldByName[str.domain.tld.normal]
+			tld := tldstr.obj.(*models.Tld)
 
-func (s *Store) getApexAnonFromCacheOrDB(domain *domain) (*models.ApexAnon, error) {
-	aI, ok := s.cache.apexByNameAnon.Get(domain.apex.anon)
-	if !ok {
-		if s.cache.apexByNameAnon.Len() < s.cacheOpts.ApexSize {
-			s.influxService.StoreHit("cache-insert", "apex-anon", 1)
-			return nil, cacheNotFull
-		}
-		var aAnon models.ApexAnon
-		if err := s.db.Model(&aAnon).Where("apex = ?", domain.apex.anon).First(); err != nil {
-			s.influxService.StoreHit("db-insert", "apex-anon", 1)
-			return nil, err
-		}
-		s.influxService.StoreHit("db-hit", "apex-anon", 1)
-		return &aAnon, nil //It is in DB
-	}
-	a := aI.(*models.ApexAnon)
-	s.influxService.StoreHit("cache-hit", "apex-anon", 1)
-	return a, nil //It is in Cache
-}
+			suffixstr := s.batchEntities.publicSuffixByName[str.domain.publicSuffix.normal]
+			suffix := suffixstr.obj.(*models.PublicSuffix)
 
-func (s *Store) getOrCreateApex(domain *domain) (*models.Apex, error) {
-	if err := s.ensureAnonymized(domain); err != nil {
-		return nil, err
-	}
+			apexstr := s.batchEntities.apexByName[str.domain.apex.normal]
+			apex := apexstr.obj.(*models.Apex)
 
-	res, err := s.getApexFromCacheOrDB(domain)
-	if err != nil { // It is not in cache or DB
-		ps, err := s.getOrCreatePublicSuffix(domain)
-		if err != nil {
-			return nil, err
-		}
-
-		res = &models.Apex{
-			ID:             s.ids.apexes,
-			Apex:           domain.apex.normal,
-			TldID:          ps.TldID,
-			PublicSuffixID: ps.ID,
-		}
-
-		s.cache.apexByName.Add(domain.apex.normal, res)
-		s.inserts.apexes[res.ID] = res
-		s.ids.apexes++
-
-		// update anonymized model (if it exists)
-		anon, err := s.getApexAnonFromCacheOrDB(domain)
-		if err == nil { // It is in cache or DB
-			anon.ApexID = res.ID
-			s.updates.apexesAnon[anon.ID] = anon
-		}
-	}
-	return res, nil
-}
-
-func (s *Store) getOrCreateApexAnon(domain *domain) (*models.ApexAnon, error) {
-	if err := s.ensureAnonymized(domain); err != nil {
-		return nil, err
-	}
-
-	res, err := s.getApexAnonFromCacheOrDB(domain)
-	if err != nil { // It is not in cache or DB
-		ps, err := s.getOrCreatePublicSuffixAnon(domain)
-		if err != nil {
-			return nil, err
-		}
-
-		apexId := uint(0)
-		apex, err := s.getApexFromCacheOrDB(domain)
-		if err == nil { // It is in cache or DB
-			apexId = apex.ID
-		}
-
-		res = &models.ApexAnon{
-			Apex: models.Apex{
-				ID:             s.ids.apexesAnon,
-				Apex:           domain.apex.anon,
-				TldID:          ps.TldID,
-				PublicSuffixID: ps.ID,
-			},
-			ApexID: apexId,
-		}
-
-		s.cache.apexByNameAnon.Add(domain.apex.anon, res)
-		s.inserts.apexesAnon[res.ID] = res
-		s.ids.apexesAnon++
-	}
-	return res, nil
-}
-
-func (s *Store) getFqdnFromCacheOrDB(domain *domain) (*models.Fqdn, error) {
-	fqdnI, ok := s.cache.fqdnByName.Get(domain.fqdn.normal)
-	if !ok {
-		if s.cache.fqdnByName.Len() < s.cacheOpts.FQDNSize {
-			s.influxService.StoreHit("cache-insert", "fqdn", 1)
-			return nil, cacheNotFull
-		}
-		var fqdn models.Fqdn
-		if err := s.db.Model(&fqdn).Where("fqdn = ?", domain.fqdn.normal).First(); err != nil {
-			s.influxService.StoreHit("db-insert", "fqdn", 1)
-			return nil, err
-		}
-		s.influxService.StoreHit("db-hit", "fqdn", 1)
-		return &fqdn, nil //It is in DB
-	}
-	fqdn := fqdnI.(*models.Fqdn)
-	s.influxService.StoreHit("cache-hit", "fqdn", 1)
-	return fqdn, nil //It is in Cache
-}
-
-func (s *Store) getFqdnAnonFromCacheOrDB(domain *domain) (*models.FqdnAnon, error) {
-	fqdnI, ok := s.cache.fqdnByNameAnon.Get(domain.fqdn.anon)
-	if !ok {
-		if s.cache.fqdnByNameAnon.Len() < s.cacheOpts.FQDNSize {
-			s.influxService.StoreHit("cache-insert", "fqdn-anon", 1)
-			return nil, cacheNotFull
-		}
-		var fqdnAnon models.FqdnAnon
-		if err := s.db.Model(&fqdnAnon).Where("fqdn = ?", domain.fqdn.anon).First(); err != nil {
-			s.influxService.StoreHit("db-insert", "fqdn-anon", 1)
-			return nil, err
-		}
-		s.influxService.StoreHit("db-hit", "fqdn-anon", 1)
-		return &fqdnAnon, nil //It is in DB
-	}
-	fqdnAnon := fqdnI.(*models.FqdnAnon)
-	s.influxService.StoreHit("cache-hit", "fqdn-anon", 1)
-	return fqdnAnon, nil //It is in Cache
-}
-
-func (s *Store) getOrCreateFqdn(domain *domain) (*models.Fqdn, error) {
-	if err := s.ensureAnonymized(domain); err != nil {
-		return nil, err
-	}
-
-	res, err := s.getFqdnFromCacheOrDB(domain)
-	if err != nil { // It is not in cache or DB
-		a, err := s.getOrCreateApex(domain)
-		if err != nil {
-			return nil, err
-		}
-
-		res = &models.Fqdn{
-			ID:             s.ids.fqdns,
-			Fqdn:           domain.fqdn.normal,
-			ApexID:         a.ID,
-			TldID:          a.TldID,
-			PublicSuffixID: a.PublicSuffixID,
-		}
-		s.inserts.fqdns = append(s.inserts.fqdns, res)
-		s.cache.fqdnByName.Add(domain.fqdn.normal, res)
-		s.ids.fqdns++
-
-		// update anonymized model (if it exists)
-		anon, err := s.getFqdnAnonFromCacheOrDB(domain)
-		if err == nil { // It is in cache or DB
-			anon.FqdnID = res.ID
-			s.updates.fqdnsAnon = append(s.updates.fqdnsAnon, anon)
-		}
-		return res, nil
-	}
-	return res, nil
-}
-
-func (s *Store) getOrCreateFqdnAnon(domain *domain) (*models.FqdnAnon, error) {
-	if err := s.ensureAnonymized(domain); err != nil {
-		return nil, err
-	}
-
-	res, err := s.getFqdnAnonFromCacheOrDB(domain)
-	if err != nil { // It is not in cache or DB
-		apex, err := s.getOrCreateApexAnon(domain)
-		if err != nil {
-			return nil, err
-		}
-
-		fqdnId := uint(0)
-		fqdn, err := s.getFqdnFromCacheOrDB(domain)
-		if err == nil { // It is  in cache or DB
-			fqdnId = fqdn.ID
-		}
-
-		res = &models.FqdnAnon{
-			Fqdn: models.Fqdn{
-				ID:             s.ids.fqdnsAnon,
-				Fqdn:           domain.fqdn.anon,
+			res := &models.Fqdn{
+				ID:             s.ids.fqdns,
+				TldID:          tld.ID,
+				PublicSuffixID: suffix.ID,
 				ApexID:         apex.ID,
-				TldID:          apex.TldID,
-				PublicSuffixID: apex.PublicSuffixID,
-			},
-			FqdnID: fqdnId,
+				Fqdn:           k,
+			}
+			str.obj = res
+			s.inserts.fqdns = append(s.inserts.fqdns, res)
+			s.batchEntities.fqdnByName[k] = str
+			s.ids.fqdns++
+			s.cache.fqdnByName.Add(k, res)
+
+			// update anonymized fqdn if exists
+			fqdnstr := s.batchEntities.fqdnByNameAnon[str.domain.fqdn.anon]
+			if fqdnstr.obj != nil {
+				fqdnAnon := fqdnstr.obj.(*models.FqdnAnon)
+				fqdnAnon.FqdnID = res.ID
+				s.updates.fqdnsAnon = append(s.updates.fqdnsAnon, fqdnAnon)
+			}
 		}
-		s.inserts.fqdnsAnon = append(s.inserts.fqdnsAnon, res)
-		s.cache.fqdnByNameAnon.Add(domain.fqdn.anon, res)
-		s.ids.fqdnsAnon++
-		return res, nil
 	}
-	return res, nil
+}
+
+func (s *Store) forpropTldAnon() {
+	for k, str := range s.batchEntities.tldAnonByName {
+		if str.obj == nil && str.create {
+			res := &models.TldAnon{
+				Tld: models.Tld{
+					ID:  s.ids.tldsAnon,
+					Tld: k,
+				},
+			}
+
+			tldstr := s.batchEntities.tldByName[str.domain.tld.normal]
+
+			if tldstr.obj != nil {
+				tld := tldstr.obj.(*models.Tld)
+				res.TldID = tld.ID
+			}
+
+			s.inserts.tldAnon = append(s.inserts.tldAnon, res)
+			str.obj = res
+			s.batchEntities.tldAnonByName[k] = str
+			s.ids.tldsAnon++
+			s.cache.tldAnonByName.Add(k, res)
+		}
+	}
+}
+
+func (s *Store) forpropPublicSuffixAnon() {
+	for k, str := range s.batchEntities.publicSuffixAnonByName {
+		if str.obj == nil && str.create {
+			tldstr := s.batchEntities.tldAnonByName[str.domain.tld.anon]
+			tldAnon := tldstr.obj.(*models.TldAnon)
+
+			res := &models.PublicSuffixAnon{
+				PublicSuffix: models.PublicSuffix{
+					ID:           s.ids.suffixesAnon,
+					TldID:        tldAnon.ID,
+					PublicSuffix: k,
+				},
+			}
+
+			psuffixstr := s.batchEntities.publicSuffixByName[str.domain.publicSuffix.normal]
+			if psuffixstr.obj != nil {
+				psuffix := psuffixstr.obj.(*models.PublicSuffix)
+				res.PublicSuffixID = psuffix.ID
+			}
+
+			str.obj = res
+			s.inserts.publicSuffixAnon = append(s.inserts.publicSuffixAnon, res)
+			s.batchEntities.publicSuffixAnonByName[k] = str
+			s.ids.suffixesAnon++
+			s.cache.publicSuffixAnonByName.Add(k, res)
+		}
+	}
+}
+
+func (s *Store) forpropApexAnon() {
+	for k, str := range s.batchEntities.apexByNameAnon {
+		if str.obj == nil && str.create {
+			suffixstr := s.batchEntities.publicSuffixAnonByName[str.domain.publicSuffix.anon]
+			suffixAnon := suffixstr.obj.(*models.PublicSuffixAnon)
+
+			res := &models.ApexAnon{
+				Apex: models.Apex{
+					ID:             s.ids.apexesAnon,
+					Apex:           k,
+					TldID:          suffixAnon.TldID,
+					PublicSuffixID: suffixAnon.ID,
+				},
+			}
+
+			apexstr := s.batchEntities.apexByName[str.domain.apex.normal]
+			if apexstr.obj != nil {
+				apex := apexstr.obj.(*models.Apex)
+				res.ApexID = apex.ID
+
+			}
+
+			str.obj = res
+			s.inserts.apexesAnon[res.ID] = res
+			s.batchEntities.apexByNameAnon[k] = str
+			s.ids.apexesAnon++
+			s.cache.apexByNameAnon.Add(k, res)
+		}
+	}
+}
+
+func (s *Store) forpropFqdnAnon() {
+	for k, str := range s.batchEntities.fqdnByNameAnon {
+
+		if str.obj == nil && str.create {
+			apexstr := s.batchEntities.apexByNameAnon[str.domain.apex.anon]
+			apexAnon := apexstr.obj.(*models.ApexAnon)
+
+			res := &models.FqdnAnon{
+				Fqdn: models.Fqdn{
+					ID:             s.ids.fqdnsAnon,
+					Fqdn:           k,
+					TldID:          apexAnon.TldID,
+					PublicSuffixID: apexAnon.PublicSuffixID,
+					ApexID:         apexAnon.ID,
+				},
+			}
+
+			fqdnstr := s.batchEntities.fqdnByName[str.domain.fqdn.normal]
+			if fqdnstr.obj != nil {
+				fqdn := fqdnstr.obj.(*models.Fqdn)
+				res.FqdnID = fqdn.ID
+			}
+
+			str.obj = res
+			s.inserts.fqdnsAnon = append(s.inserts.fqdnsAnon, res)
+			s.batchEntities.fqdnByNameAnon[k] = str
+			s.ids.fqdnsAnon++
+			s.cache.fqdnByNameAnon.Add(k, res)
+		}
+	}
 }

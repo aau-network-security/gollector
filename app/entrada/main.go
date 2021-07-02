@@ -94,14 +94,35 @@ func main() {
 		return nil
 	}
 
-	// todo: remove limit
 	src := entrada.NewSource(conf.Host, conf.Port)
-	entradaOpts := entrada.Options{
-		Query: fmt.Sprintf("SELECT qname, unixtime FROM dns.queries LIMIT %d", 10000),
-	}
 
-	if err := src.Process(ctx, entryFn, entradaOpts); err != nil {
-		log.Fatal().Msgf("error while processing impala source: %s", err)
+	startTime, err := time.Parse("2006-01-02", conf.TimeWindow.Start)
+	if err != nil {
+		log.Fatal().Msgf("failed to parse the start date: %s", err)
+	}
+	startTimeNano := startTime.Unix()
+
+	endTime, err := time.Parse("2006-01-02", conf.TimeWindow.End)
+	if err != nil {
+		log.Fatal().Msgf("failed to parse the end date: %s", err)
+	}
+	endTimeNano := endTime.Unix()
+
+	proceed := true
+	var offset int64
+	for proceed {
+		eopts := entrada.Options{
+			Query: fmt.Sprintf("SELECT qname, min(unixtime) FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname ORDER BY qname LIMIT %d OFFSET %d", startTimeNano, endTimeNano, conf.Limit, offset),
+		}
+		c, err := src.Process(ctx, entryFn, eopts)
+		if err != nil {
+			log.Fatal().Msgf("error while processing impala source: %s", err)
+		}
+		offset += c
+		log.Debug().Msgf("Processed %d entries so far (%d in current page)", offset, c)
+		if c < conf.Limit {
+			break
+		}
 	}
 
 	if err := bs.CloseSend(ctx); err != nil {

@@ -7,3 +7,7 @@ api-address:
 meta:
   host: <host that runs measurement, for meta info storage purposes>
   description: <description of measurement>
+time-window:
+  start: <yyyy-mm-dd>
+  end: <yyyy-mm-dd>
+limit: 500000

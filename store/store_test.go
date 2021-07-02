@@ -100,60 +100,6 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 	}
 }
 
-func TestSplunkEntryMap_Add(t *testing.T) {
-	tests := []struct {
-		name          string
-		queries       []string
-		queryTypes    []string
-		expectedCount int
-	}{
-		{
-			"single query",
-			[]string{"a.com"},
-			[]string{"A"},
-			1,
-		},
-		{
-			"multiple query types",
-			[]string{"a.com", "a.com"},
-			[]string{"A", "AAAA"},
-			2,
-		},
-		{
-			"multiple queries",
-			[]string{"a.com", "b.com"},
-			[]string{"A", "A"},
-			2,
-		},
-		{
-			"multiple queries, multile query types",
-			[]string{"a.com", "a.com", "b.com", "b.com"},
-			[]string{"A", "AAAA", "A", "AAAA"},
-			4,
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			if len(test.queries) != len(test.queryTypes) {
-				t.Fatalf("invalid test case (number of queries must match number of query types)!")
-			}
-
-			sem := newSplunkEntryMap()
-
-			pe := &models.PassiveEntry{}
-
-			for i := range test.queries {
-				sem.add(test.queries[i], test.queryTypes[i], pe)
-			}
-
-			if sem.len() != test.expectedCount {
-				t.Fatalf("expected length to be %d, but got %d", test.expectedCount, sem.len())
-			}
-		})
-	}
-}
-
 func TestStore_StoreSplunkEntry(t *testing.T) {
 	s, g, muid, err := OpenStore(TestConfig, TestOpts)
 	if err != nil {
@@ -257,11 +203,6 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 			"fqdnByName",
 			s.cache.fqdnByName.Len(),
 			3,
-		},
-		{
-			"passiveEntryByFqdn",
-			s.cache.passiveEntryByFqdn.len(),
-			4,
 		},
 		{
 			"recordTypeByName",
@@ -692,5 +633,245 @@ func TestConditionalPostHooks(t *testing.T) {
 	}
 	if s.batchEntities.Len() != 0 {
 		t.Fatalf("unexpected batch size: expected %d, but got %d", 0, s.batchEntities.Len())
+	}
+}
+
+func TestUpdateAnonymizedDomains(t *testing.T) {
+	opts := Opts{
+		BatchSize: 10,
+		CacheOpts: CacheOpts{
+			LogSize:       1,
+			TLDSize:       1,
+			PSuffSize:     1,
+			ApexSize:      1,
+			FQDNSize:      1,
+			CertSize:      1,
+			ZoneEntrySize: 1,
+		},
+		AllowedInterval: 10,
+	}
+	s, g, _, err := OpenStore(TestConfig, opts)
+	if err != nil {
+		t.Fatalf("failed to open store: %s", err)
+	}
+	a := NewAnonymizer(
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+	)
+	s = s.WithAnonymizer(a)
+
+	s.db.AddQueryHook(&qh{})
+
+	domain, err := NewDomain("www.example.co.uk")
+	if err != nil {
+		t.Fatalf("failed to create domain: %s", err)
+	}
+	s.anonymizer.Anonymize(domain)
+
+	// add anonymized domains
+	// add existing TLD
+	tld := &models.TldAnon{
+		Tld: models.Tld{
+			ID:  1,
+			Tld: domain.tld.anon, // uk
+		},
+	}
+	if err := g.Create(tld).Error; err != nil {
+		t.Fatalf("failed to create TLD: %s", err)
+	}
+	s.cache.tldAnonByName.Add(domain.tld.anon, tld)
+
+	// add existing public suffix
+	psuffix := &models.PublicSuffixAnon{
+		PublicSuffix: models.PublicSuffix{
+			PublicSuffix: domain.publicSuffix.anon, // co.uk
+			ID:           1,
+			TldID:        1,
+		},
+	}
+	if err := g.Create(psuffix).Error; err != nil {
+		t.Fatalf("failed to create public suffix: %s", err)
+	}
+	s.cache.publicSuffixAnonByName.Add(domain.publicSuffix.anon, psuffix)
+
+	// add existing apex
+	apex := &models.ApexAnon{
+		Apex: models.Apex{
+			Apex:           domain.apex.anon, // example.co.uk
+			ID:             1,
+			TldID:          1,
+			PublicSuffixID: 1,
+		},
+	}
+	if err := g.Create(apex).Error; err != nil {
+		t.Fatalf("failed to create apex: %s", err)
+	}
+	s.cache.apexByNameAnon.Add(domain.apex.anon, apex)
+
+	// add existing apex
+	fqdn := &models.FqdnAnon{
+		Fqdn: models.Fqdn{
+			Fqdn:           domain.fqdn.anon, // www.example.co.uk
+			ID:             1,
+			TldID:          1,
+			PublicSuffixID: 1,
+			ApexID:         1,
+		},
+	}
+	if err := g.Create(fqdn).Error; err != nil {
+		t.Fatalf("failed to create apex: %s", err)
+	}
+	s.cache.fqdnByNameAnon.Add(domain.fqdn.anon, fqdn)
+
+	// create unanonymized FQDNs
+	s.batchEntities.fqdnByName[domain.fqdn.normal] = &domainstruct{
+		create: true,
+		domain: domain,
+	}
+	s.batchEntities.apexByName[domain.apex.normal] = &domainstruct{
+		create: true,
+		domain: domain,
+	}
+	s.batchEntities.publicSuffixByName[domain.publicSuffix.normal] = &domainstruct{
+		create: true,
+		domain: domain,
+	}
+	s.batchEntities.tldByName[domain.tld.normal] = &domainstruct{
+		create: true,
+		domain: domain,
+	}
+
+	// add anonymized FQDNs to batch entities
+	s.batchEntities.fqdnByNameAnon[domain.fqdn.anon] = &domainstruct{
+		create: false,
+		domain: domain,
+	}
+	s.batchEntities.apexByNameAnon[domain.apex.anon] = &domainstruct{
+		create: false,
+		domain: domain,
+	}
+	s.batchEntities.publicSuffixAnonByName[domain.publicSuffix.anon] = &domainstruct{
+		create: false,
+		domain: domain,
+	}
+	s.batchEntities.tldAnonByName[domain.tld.anon] = &domainstruct{
+		create: false,
+		domain: domain,
+	}
+
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("failed to run post hooks: %s", err)
+	}
+}
+
+func TestStoreDifferentEntries(t *testing.T) {
+	opts := Opts{
+		BatchSize: 10,
+		CacheOpts: CacheOpts{
+			LogSize:       1,
+			TLDSize:       1,
+			PSuffSize:     1,
+			ApexSize:      1,
+			FQDNSize:      1,
+			CertSize:      1,
+			ZoneEntrySize: 1,
+		},
+		AllowedInterval: 10,
+	}
+	s, g, muid, err := OpenStore(TestConfig, opts)
+	if err != nil {
+		t.Fatalf("failed to open store: %s", err)
+	}
+	a := NewAnonymizer(
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+	)
+	s = s.WithAnonymizer(a)
+
+	s.db.AddQueryHook(&qh{})
+
+	domain := "www.example.co.uk"
+	ts := time.Now()
+	// passive entry
+	if err := s.StorePassiveEntry(muid, domain, ts); err != nil {
+		t.Fatalf("failed to create passive store entry: %s", err)
+	}
+	// ENTRADA entry
+	if err := s.StoreEntradaEntry(muid, domain, ts); err != nil {
+		t.Fatalf("failed to create passive store entry: %s", err)
+	}
+	// zone entry
+	if err := s.StoreZoneEntry(muid, ts, domain, false); err != nil {
+		t.Fatalf("failed to create passive store entry: %s", err)
+	}
+	// log entry
+	raw, err := selfSignedCert(ts, ts.Add(10*time.Minute), []string{domain})
+	if err != nil {
+		t.Fatalf("failed to create self-signe cert: %s", err)
+	}
+
+	cert, err := x509.ParseCertificate(raw)
+	if err != nil {
+		t.Fatalf("unexpected error while parsing certificate: %s", err)
+	}
+
+	logEntry := LogEntry{
+		Cert:      cert,
+		IsPrecert: false,
+		Index:     0,
+		Ts:        ts,
+		Log: ct.Log{
+			Description:       "Test log",
+			Key:               "No key",
+			Url:               "localhost",
+			MaximumMergeDelay: 10,
+			OperatedBy:        []int{1},
+			DnsApiEndpoint:    "aau.dk",
+		},
+	}
+
+	if err := s.StoreLogEntry(muid, logEntry); err != nil {
+		t.Fatalf("failed to create passive store entry: %s", err)
+	}
+
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("failed to run post hooks: %s", err)
+	}
+
+	counts := []struct {
+		count uint
+		model interface{}
+	}{
+		{1, &models.Tld{}},
+		{1, &models.TldAnon{}},
+		{1, &models.PublicSuffix{}},
+		{1, &models.PublicSuffixAnon{}},
+		{1, &models.Apex{}},
+		{1, &models.ApexAnon{}},
+		{1, &models.Fqdn{}},
+		{1, &models.FqdnAnon{}},
+		{1, &models.Certificate{}},
+		{1, &models.CertificateToFqdn{}},
+		{1, &models.LogEntry{}},
+		{1, &models.PassiveEntry{}},
+		{1, &models.ZonefileEntry{}},
+		{1, &models.EntradaEntry{}},
+	}
+
+	for _, tc := range counts {
+		var count uint
+
+		if err := g.Model(tc.model).Count(&count).Error; err != nil {
+			t.Fatalf("failed to retrieve model count: %s", err)
+		}
+
+		if count != tc.count {
+			n := reflect.TypeOf(tc.model)
+			t.Fatalf("expected %d %s elements, but got %d", tc.count, n, count)
+		}
 	}
 }

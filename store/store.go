@@ -73,33 +73,68 @@ func (c *Config) DSN() string {
 }
 
 type ModelSet struct {
-	zoneEntries      []*models.ZonefileEntry
 	fqdns            []*models.Fqdn
 	fqdnsAnon        []*models.FqdnAnon
 	apexes           map[uint]*models.Apex
 	apexesAnon       map[uint]*models.ApexAnon
-	certs            []*models.Certificate
-	logEntries       []*models.LogEntry
-	certToFqdns      []*models.CertificateToFqdn
-	passiveEntries   []*models.PassiveEntry
-	entradaEntries   []*models.EntradaEntry
-	tld              []*models.Tld
-	tldAnon          []*models.TldAnon
 	publicSuffix     []*models.PublicSuffix
 	publicSuffixAnon []*models.PublicSuffixAnon
+	tld              []*models.Tld
+	tldAnon          []*models.TldAnon
+	certs            []*models.Certificate
+	certToFqdns      []*models.CertificateToFqdn
+	zoneEntries      []*models.ZonefileEntry
+	logEntries       []*models.LogEntry
+	passiveEntries   []*models.PassiveEntry
+	entradaEntries   []*models.EntradaEntry
 }
 
-func (ms *ModelSet) Len() int {
-	return len(ms.zoneEntries) +
-		len(ms.fqdns) +
-		len(ms.fqdnsAnon) +
-		len(ms.apexes) +
-		len(ms.apexesAnon) +
-		len(ms.certs) +
-		len(ms.logEntries) +
-		len(ms.certToFqdns) +
-		len(ms.passiveEntries) +
-		len(ms.entradaEntries)
+func (ms *ModelSet) Description() string {
+	res := "[\n"
+	if len(ms.fqdns) > 0 {
+		res += fmt.Sprintf("fqdns: %d\n", len(ms.fqdns))
+	}
+	if len(ms.fqdnsAnon) > 0 {
+		res += fmt.Sprintf("fqdnsAnon: %d\n", len(ms.fqdnsAnon))
+	}
+	if len(ms.apexes) > 0 {
+		res += fmt.Sprintf("apexes: %d\n", len(ms.apexes))
+	}
+	if len(ms.apexesAnon) > 0 {
+		res += fmt.Sprintf("apexesAnon: %d\n", len(ms.apexesAnon))
+	}
+	if len(ms.publicSuffix) > 0 {
+		res += fmt.Sprintf("publicSuffix: %d\n", len(ms.publicSuffix))
+	}
+	if len(ms.publicSuffixAnon) > 0 {
+		res += fmt.Sprintf("publicSuffixAnon: %d\n", len(ms.publicSuffixAnon))
+	}
+	if len(ms.tld) > 0 {
+		res += fmt.Sprintf("tld: %d\n", len(ms.tld))
+	}
+	if len(ms.tldAnon) > 0 {
+		res += fmt.Sprintf("tldAnon: %d\n", len(ms.tldAnon))
+	}
+	if len(ms.certs) > 0 {
+		res += fmt.Sprintf("certs: %d\n", len(ms.certs))
+	}
+	if len(ms.certToFqdns) > 0 {
+		res += fmt.Sprintf("certToFqdns: %d\n", len(ms.certToFqdns))
+	}
+	if len(ms.zoneEntries) > 0 {
+		res += fmt.Sprintf("zoneEntries: %d\n", len(ms.zoneEntries))
+	}
+	if len(ms.logEntries) > 0 {
+		res += fmt.Sprintf("logEntries: %d\n", len(ms.logEntries))
+	}
+	if len(ms.passiveEntries) > 0 {
+		res += fmt.Sprintf("passiveEntries: %d\n", len(ms.passiveEntries))
+	}
+	if len(ms.entradaEntries) > 0 {
+		res += fmt.Sprintf("entradaEntries: %d\n", len(ms.entradaEntries))
+	}
+	res += "]"
+	return res
 }
 
 func (ms *ModelSet) zoneEntryList() []*models.ZonefileEntry {
@@ -617,7 +652,7 @@ func NewStore(conf Config, opts Opts) (*Store, error) {
 	log.Debug().Msgf("unlogging db tables..")
 
 	//make the table unlogged to improve performance
-	tableList := []string{"apexes", "certificate_to_fqdns", "certificates", "fqdns", "log_entries", "public_suffixes", "tlds", "zonefile_entries", "passive_entries"}
+	tableList := []string{"apexes", "certificate_to_fqdns", "certificates", "fqdns", "log_entries", "public_suffixes", "tlds", "zonefile_entries", "passive_entries", "entrada_entries"}
 
 	// check which columns are already unlogged
 	type item struct {
@@ -670,56 +705,70 @@ func propagationPosthook() postHook {
 	return func(s *Store) error {
 		// backprop all (but zone entries)
 		log.Debug().Msgf("propagating backwards..")
-		if err := s.backpropCert(); err != nil {
-			return errs.Wrap(err, "back prop certs")
+		backprops := []struct {
+			name string
+			f    func() error
+		}{
+			{"certs", s.backpropCert},
+			{"fqdns", s.backpropFqdn},
+			{"apexes", s.backpropApex},
+			{"public suffixes", s.backpropPublicSuffix},
+			{"tlds", s.backpropTld},
+			{"fqdn anon", s.backpropFqdnAnon},
+			{"apexes anon", s.backpropApexAnon},
+			{"public suffixes anon", s.backpropPublicSuffixAnon},
+			{"tlds anon", s.backpropTldAnon},
 		}
-		log.Debug().Msgf("(1/5)")
 
-		if err := s.backpropFqdn(); err != nil {
-			return errs.Wrap(err, "back prop fqdns")
+		for i, backprop := range backprops {
+			if err := backprop.f(); err != nil {
+				return errs.Wrap(err, fmt.Sprintf("back prop %s", backprop.name))
+			}
+			log.Debug().Msgf("(%d/%d)", i+1, len(backprops))
 		}
-		log.Debug().Msgf("(2/5)")
-
-		if err := s.backpropApex(); err != nil {
-			return errs.Wrap(err, "back prop apexes")
-		}
-		log.Debug().Msgf("(3/5)")
-
-		if err := s.backpropPublicSuffix(); err != nil {
-			return errs.Wrap(err, "back prop public suffixes")
-		}
-		log.Debug().Msgf("(4/5)")
-
-		if err := s.backpropTld(); err != nil {
-			return errs.Wrap(err, "back prop tlds")
-		}
-		log.Debug().Msgf("(5/5)")
 
 		// forward prop all (but zone entries)
 		log.Debug().Msgf("propagating forwards..")
 		s.forpropTld()
-		log.Debug().Msgf("(1/6)")
+		log.Debug().Msgf("(1/12)")
 		s.forpropPublicSuffix()
-		log.Debug().Msgf("(2/6)")
+		log.Debug().Msgf("(2/12)")
 		s.forpropApex()
-		log.Debug().Msgf("(3/6)")
+		log.Debug().Msgf("(3/12)")
 		s.forpropFqdn()
-		log.Debug().Msgf("(4/6)")
+		log.Debug().Msgf("(4/12)")
+		s.forpropTldAnon()
+		log.Debug().Msgf("(5/12)")
+		s.forpropPublicSuffixAnon()
+		log.Debug().Msgf("(6/12)")
+		s.forpropApexAnon()
+		log.Debug().Msgf("(7/12)")
+		s.forpropFqdnAnon()
+		log.Debug().Msgf("(8/12)")
+
 		if err := s.forpropCerts(); err != nil {
 			return err
 		}
+		log.Debug().Msgf("(9/12)")
 		s.forpropZoneEntries()
-		log.Debug().Msgf("(5/6)")
+		log.Debug().Msgf("(10/12)")
 		s.forpropPassiveEntries()
-		log.Debug().Msgf("(6/6)")
+		log.Debug().Msgf("(11/12)")
+		s.forpropEntradaEntries()
+		log.Debug().Msgf("(12/12)")
 
 		s.influxService.StoreHit("db-insert", "tld", len(s.inserts.tld))
+		s.influxService.StoreHit("db-insert", "tld-anon", len(s.inserts.tldAnon))
 		s.influxService.StoreHit("db-insert", "public-suffix", len(s.inserts.publicSuffix))
+		s.influxService.StoreHit("db-insert", "public-suffix-anon", len(s.inserts.publicSuffixAnon))
 		s.influxService.StoreHit("db-insert", "apex", len(s.inserts.apexes))
+		s.influxService.StoreHit("db-insert", "apex-anon", len(s.inserts.apexesAnon))
 		s.influxService.StoreHit("db-insert", "fqdn", len(s.inserts.fqdns))
+		s.influxService.StoreHit("db-insert", "fqdn-anon", len(s.inserts.fqdnsAnon))
 		s.influxService.StoreHit("db-insert", "cert", len(s.inserts.certs))
 		s.influxService.StoreHit("db-insert", "zone-entry", len(s.inserts.zoneEntries))
 		s.influxService.StoreHit("db-insert", "passive-entry", len(s.inserts.passiveEntries))
+		s.influxService.StoreHit("db-insert", "entrada-entry", len(s.inserts.entradaEntries))
 
 		return nil
 	}
@@ -733,136 +782,162 @@ func storeCachedValuePosthook() postHook {
 		}
 		defer tx.Rollback()
 
+		apexInsertList := s.inserts.apexList()
+		apexAnonInsertList := s.inserts.apexAnonList()
+
+		inserts := []struct {
+			name   string
+			models interface{}
+			length int
+		}{
+			{
+				name:   "fqdns",
+				models: &s.inserts.fqdns,
+				length: len(s.inserts.fqdns),
+			},
+			{
+				name:   "anon fqdns",
+				models: &s.inserts.fqdnsAnon,
+				length: len(s.inserts.fqdnsAnon),
+			},
+			{
+				name:   "apexes",
+				models: &apexInsertList,
+				length: len(s.inserts.apexes),
+			},
+			{
+				name:   "apexes fqdns",
+				models: &apexAnonInsertList,
+				length: len(s.inserts.apexesAnon),
+			},
+			{
+				name:   "public suffixes",
+				models: &s.inserts.publicSuffix,
+				length: len(s.inserts.publicSuffix),
+			},
+			{
+				name:   "anon public suffixes",
+				models: &s.inserts.publicSuffixAnon,
+				length: len(s.inserts.publicSuffixAnon),
+			},
+			{
+				name:   "tlds",
+				models: &s.inserts.tld,
+				length: len(s.inserts.tld),
+			},
+			{
+				name:   "anon tlds",
+				models: &s.inserts.tldAnon,
+				length: len(s.inserts.tldAnon),
+			},
+			{
+				name:   "zone entries",
+				models: &s.inserts.zoneEntries,
+				length: len(s.inserts.zoneEntries),
+			},
+			{
+				name:   "log entries",
+				models: &s.inserts.logEntries,
+				length: len(s.inserts.logEntries),
+			},
+			{
+				name:   "certs",
+				models: &s.inserts.certs,
+				length: len(s.inserts.certs),
+			},
+			{
+				name:   "cert-to-fqdns",
+				models: &s.inserts.certToFqdns,
+				length: len(s.inserts.certToFqdns),
+			},
+			{
+				name:   "passive entries",
+				models: &s.inserts.passiveEntries,
+				length: len(s.inserts.passiveEntries),
+			},
+			{
+				name:   "entrada entries",
+				models: &s.inserts.entradaEntries,
+				length: len(s.inserts.entradaEntries),
+			},
+		}
+
 		log.Debug().Msgf("storing cached values")
-		// inserts
-		if len(s.inserts.fqdns) > 0 {
-			if err := tx.Insert(&s.inserts.fqdns); err != nil {
-				return errs.Wrap(err, "insert fqdns")
+		for i, insert := range inserts {
+			if insert.length > 0 {
+				if err := tx.Insert(insert.models); err != nil {
+					return errs.Wrap(err, fmt.Sprintf("insert %s", insert.name))
+				}
 			}
+			log.Debug().Msgf("(%d/%d)", i+1, len(inserts))
 		}
-		log.Debug().Msgf("(1/14)")
-
-		if len(s.inserts.fqdnsAnon) > 0 {
-			if err := tx.Insert(&s.inserts.fqdnsAnon); err != nil {
-				return errs.Wrap(err, "insert anon fqdns")
-			}
-		}
-		log.Debug().Msgf("(2/14)")
-
-		if len(s.inserts.apexes) > 0 {
-			a := s.inserts.apexList()
-			if err := tx.Insert(&a); err != nil {
-				return errs.Wrap(err, "insert apexes")
-			}
-		}
-		log.Debug().Msgf("(3/14)")
-
-		if len(s.inserts.apexesAnon) > 0 {
-			a := s.inserts.apexAnonList()
-			if err := tx.Insert(&a); err != nil {
-				return errs.Wrap(err, "insert anon apexes")
-			}
-		}
-		log.Debug().Msgf("(4/14)")
-
-		if len(s.inserts.publicSuffix) > 0 {
-			if err := tx.Insert(&s.inserts.publicSuffix); err != nil {
-				return errs.Wrap(err, "insert public suffix")
-			}
-		}
-		log.Debug().Msgf("(5/14)")
-
-		if len(s.inserts.publicSuffixAnon) > 0 {
-			if err := tx.Insert(&s.inserts.publicSuffixAnon); err != nil {
-				return errs.Wrap(err, "insert anon public suffix")
-			}
-		}
-		log.Debug().Msgf("(6/14)")
-
-		if len(s.inserts.tld) > 0 {
-			if err := tx.Insert(&s.inserts.tld); err != nil {
-				return errs.Wrap(err, "insert tld")
-			}
-		}
-		log.Debug().Msgf("(7/14)")
-
-		if len(s.inserts.tldAnon) > 0 {
-			if err := tx.Insert(&s.inserts.tldAnon); err != nil {
-				return errs.Wrap(err, "insert tld")
-			}
-		}
-		log.Debug().Msgf("(8/14)")
-
-
-		if len(s.inserts.zoneEntries) > 0 {
-			if err := tx.Insert(&s.inserts.zoneEntries); err != nil {
-				return errs.Wrap(err, "insert zone entries")
-			}
-		}
-		log.Debug().Msgf("(9/14)")
-
-
-		if len(s.inserts.logEntries) > 0 {
-			if err := tx.Insert(&s.inserts.logEntries); err != nil {
-				return errs.Wrap(err, "insert log entries")
-			}
-		}
-		log.Debug().Msgf("(10/14)")
-
-		if len(s.inserts.certs) > 0 {
-			if err := tx.Insert(&s.inserts.certs); err != nil {
-				return errs.Wrap(err, "insert certs")
-			}
-		}
-		log.Debug().Msgf("(11/14)")
-
-		if len(s.inserts.certToFqdns) > 0 {
-			if err := tx.Insert(&s.inserts.certToFqdns); err != nil {
-				return errs.Wrap(err, "insert cert-to-fqdns")
-			}
-		}
-		log.Debug().Msgf("(12/14)")
-
-		if len(s.inserts.passiveEntries) > 0 {
-			if err := tx.Insert(&s.inserts.passiveEntries); err != nil {
-				return errs.Wrap(err, "insert passive entries")
-			}
-		}
-		log.Debug().Msgf("(13/14)")
-
-		if len(s.inserts.entradaEntries) > 0 {
-			if err := tx.Insert(&s.inserts.entradaEntries); err != nil {
-				return errs.Wrap(err, "insert entrada entries")
-			}
-		}
-		log.Debug().Msgf("(14/14)")
 
 		// updates
-		log.Debug().Msgf("updating cached values")
-		if len(s.updates.apexes) > 0 {
-			a := s.updates.apexList()
-			if err := tx.Update(&a); err != nil {
-				return errs.Wrap(err, "update apexes")
-			}
+		apexAnonUpdateList := s.updates.apexAnonList()
+
+		updates := []struct {
+			name   string
+			length int
+			models interface{}
+			column string
+		}{
+			{
+				name:   "anonymous tlds",
+				models: &s.updates.tldAnon,
+				length: len(s.updates.tldAnon),
+				column: "tld_id",
+			},
+			{
+				name:   "anonymous public suffixes",
+				models: &s.updates.publicSuffixAnon,
+				length: len(s.updates.publicSuffixAnon),
+				column: "public_suffix_id",
+			},
+			{
+				name:   "anonymous apexes",
+				models: &apexAnonUpdateList,
+				length: len(s.updates.apexesAnon),
+				column: "apex_id",
+			},
+			{
+				name:   "anonymous fqdns",
+				models: &s.updates.fqdnsAnon,
+				length: len(s.updates.fqdnsAnon),
+				column: "fqdn_id",
+			},
 		}
-		log.Debug().Msgf("(1/1)")
+		log.Debug().Msgf("updating cached values")
+		for i, update := range updates {
+			if update.length > 0 {
+				if _, err := tx.Model(update.models).Column(update.column).Update(); err != nil {
+					return errs.Wrap(err, fmt.Sprintf("update %s", update.name))
+				}
+			}
+			log.Debug().Msgf("(%d/%d)", i+1, len(updates))
+		}
 
 		if err := tx.Commit(); err != nil {
 			return errs.Wrap(err, "committing transaction")
 		}
 		log.Debug().Msgf("transaction committed!")
 
+		log.Debug().Msgf("inserted the following number of entities: %s", s.inserts.Description())
+		log.Debug().Msgf("updated the following number of entities: %s", s.updates.Description())
+
 		s.updates = NewModelSet()
 		s.inserts = NewModelSet()
 		s.batchEntities.Reset()
 
-		// TODO: add anonymized
 		// write size of cache to influx
 		s.influxService.CacheSize("cert", s.cache.certByFingerprint, s.cacheOpts.CertSize)
 		s.influxService.CacheSize("fqdn", s.cache.fqdnByName, s.cacheOpts.FQDNSize)
+		s.influxService.CacheSize("fqdn-anon", s.cache.fqdnByNameAnon, s.cacheOpts.FQDNSize)
 		s.influxService.CacheSize("apex", s.cache.apexByName, s.cacheOpts.ApexSize)
-		s.influxService.CacheSize("public-suffix", s.cache.publicSuffixByName, s.cacheOpts.ApexSize)
+		s.influxService.CacheSize("apex-anon", s.cache.apexByNameAnon, s.cacheOpts.ApexSize)
+		s.influxService.CacheSize("public-suffix", s.cache.publicSuffixByName, s.cacheOpts.PSuffSize)
+		s.influxService.CacheSize("public-suffix-anon", s.cache.publicSuffixAnonByName, s.cacheOpts.PSuffSize)
 		s.influxService.CacheSize("tld", s.cache.tldByName, s.cacheOpts.TLDSize)
+		s.influxService.CacheSize("tld-anon", s.cache.tldAnonByName, s.cacheOpts.TLDSize)
 		s.influxService.CacheSize("zone-entry", s.cache.zoneEntriesByApexName, s.cacheOpts.ZoneEntrySize)
 
 		log.Debug().Msgf("finished storing batch")
