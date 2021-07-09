@@ -108,21 +108,33 @@ func main() {
 	}
 	endTimeNano := endTime.Unix()
 
-	proceed := true
-	var offset int64
-	for proceed {
+	// do rely on a limit
+	if conf.Limit > 0 {
+		proceed := true
+		var offset int64
+		for proceed {
+			eopts := entrada.Options{
+				Query: fmt.Sprintf("SELECT qname, min(unixtime) FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname ORDER BY qname LIMIT %d OFFSET %d", startTimeNano, endTimeNano, conf.Limit, offset),
+			}
+			c, err := src.Process(ctx, entryFn, eopts)
+			if err != nil {
+				log.Fatal().Msgf("error while processing impala source: %s", err)
+			}
+			offset += c
+			log.Debug().Msgf("Processed %d entries so far (%d in current page)", offset, c)
+			if c < conf.Limit {
+				break
+			}
+		}
+	} else {
 		eopts := entrada.Options{
-			Query: fmt.Sprintf("SELECT qname, min(unixtime) FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname ORDER BY qname LIMIT %d OFFSET %d", startTimeNano, endTimeNano, conf.Limit, offset),
+			Query: fmt.Sprintf("SELECT qname, min(unixtime) FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname"),
 		}
 		c, err := src.Process(ctx, entryFn, eopts)
 		if err != nil {
 			log.Fatal().Msgf("error while processing impala source: %s", err)
 		}
-		offset += c
-		log.Debug().Msgf("Processed %d entries so far (%d in current page)", offset, c)
-		if c < conf.Limit {
-			break
-		}
+		log.Debug().Msgf("Processed %d entries", c)
 	}
 
 	if err := bs.CloseSend(ctx); err != nil {
