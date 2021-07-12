@@ -90,6 +90,7 @@ message SplunkEntry {
 
 service EntradaApi {
     rpc StoreEntradaEntry(stream EntradaEntryBatch) returns (stream Result) {}
+    rpc GetOffset(Empty) returns (Offset) {}
 }
 
 message EntradaEntryBatch {
@@ -99,4 +100,8 @@ message EntradaEntryBatch {
 message EntradaEntry {
     string Fqdn = 1;
     int64 Timestamp = 2;
+}
+
+message Offset {
+    int64 Offset = 1;
 }

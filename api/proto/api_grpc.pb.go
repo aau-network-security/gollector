@@ -604,6 +604,7 @@ var SplunkApi_ServiceDesc = grpc.ServiceDesc{
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type EntradaApiClient interface {
 	StoreEntradaEntry(ctx context.Context, opts ...grpc.CallOption) (EntradaApi_StoreEntradaEntryClient, error)
+	GetOffset(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Offset, error)
 }
 
 type entradaApiClient struct {
@@ -645,11 +646,21 @@ func (x *entradaApiStoreEntradaEntryClient) Recv() (*Result, error) {
 	return m, nil
 }
 
+func (c *entradaApiClient) GetOffset(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Offset, error) {
+	out := new(Offset)
+	err := c.cc.Invoke(ctx, "/EntradaApi/GetEntradaOffset", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // EntradaApiServer is the server API for EntradaApi service.
 // All implementations must embed UnimplementedEntradaApiServer
 // for forward compatibility
 type EntradaApiServer interface {
 	StoreEntradaEntry(EntradaApi_StoreEntradaEntryServer) error
+	GetOffset(context.Context, *Empty) (*Offset, error)
 	mustEmbedUnimplementedEntradaApiServer()
 }
 
@@ -659,6 +670,9 @@ type UnimplementedEntradaApiServer struct {
 
 func (UnimplementedEntradaApiServer) StoreEntradaEntry(EntradaApi_StoreEntradaEntryServer) error {
 	return status.Errorf(codes.Unimplemented, "method StoreEntradaEntry not implemented")
+}
+func (UnimplementedEntradaApiServer) GetOffset(context.Context, *Empty) (*Offset, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetEntradaOffset not implemented")
 }
 func (UnimplementedEntradaApiServer) mustEmbedUnimplementedEntradaApiServer() {}
 
@@ -699,13 +713,36 @@ func (x *entradaApiStoreEntradaEntryServer) Recv() (*EntradaEntryBatch, error) {
 	return m, nil
 }
 
+func _EntradaApi_GetOffset_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(Empty)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(EntradaApiServer).GetOffset(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/EntradaApi/GetEntradaOffset",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(EntradaApiServer).GetOffset(ctx, req.(*Empty))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // EntradaApi_ServiceDesc is the grpc.ServiceDesc for EntradaApi service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
 var EntradaApi_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "EntradaApi",
 	HandlerType: (*EntradaApiServer)(nil),
-	Methods:     []grpc.MethodDesc{},
+	Methods: []grpc.MethodDesc{
+		{
+			MethodName: "GetEntradaOffset",
+			Handler:    _EntradaApi_GetOffset_Handler,
+		},
+	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "StoreEntradaEntry",

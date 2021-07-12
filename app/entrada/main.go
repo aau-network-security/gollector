@@ -112,6 +112,16 @@ func main() {
 	if conf.Limit > 0 {
 		proceed := true
 		var offset int64
+		if conf.ResumeFromDb {
+			offsetObj, err := prt.NewEntradaApiClient(cc).GetOffset(ctx, &prt.Empty{})
+			if err != nil {
+				log.Fatal().Msgf("error while obtaining offset: %s", err)
+			}
+			if offsetObj.Offset > 0 {
+				log.Info().Msgf("resuming from state in database: offset = %d", offsetObj.Offset)
+			}
+			offset = offsetObj.Offset
+		}
 		for proceed {
 			eopts := entrada.Options{
 				Query: fmt.Sprintf("SELECT qname, min(unixtime) FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname ORDER BY qname LIMIT %d OFFSET %d", startTimeNano, endTimeNano, conf.Limit, offset),

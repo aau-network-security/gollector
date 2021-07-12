@@ -91,3 +91,11 @@ func (s *Store) forpropEntradaEntries() {
 	}
 	log.Debug().Msgf("forward propagating entrada entries.. done!")
 }
+
+func (s *Store) GetEntradaOffset() (int64, error) {
+	var offset int64
+	if _, err := s.db.QueryOne(&offset, "SELECT count(distinct(fqdn_id)) FROM entrada_entries"); err != nil {
+		return 0, err
+	}
+	return offset, nil
+}

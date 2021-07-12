@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	api "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/app"
 	"github.com/rs/zerolog/log"
@@ -68,4 +69,12 @@ func (s *Server) StoreEntradaEntry(str api.EntradaApi_StoreEntradaEntryServer) e
 	wg.Wait()
 
 	return nil
+}
+
+func (s *Server) GetOffset(context.Context, *api.Empty) (*api.Offset, error) {
+	offset, err := s.Store.GetEntradaOffset()
+	if err != nil {
+		return nil, err
+	}
+	return &api.Offset{Offset: offset}, nil
 }

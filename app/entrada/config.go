@@ -13,12 +13,13 @@ type TimeWindow struct {
 }
 
 type config struct {
-	Host       string      `yaml:"host"`
-	Port       string      `yaml:"port"`
-	ApiAddr    app.Address `yaml:"api-address"`
-	Meta       app.Meta    `yaml:"meta"`
-	TimeWindow TimeWindow  `yaml:"time-window"`
-	Limit      int64       `yaml:"limit"`
+	Host         string      `yaml:"host"`
+	Port         string      `yaml:"port"`
+	ApiAddr      app.Address `yaml:"api-address"`
+	Meta         app.Meta    `yaml:"meta"`
+	TimeWindow   TimeWindow  `yaml:"time-window"`
+	Limit        int64       `yaml:"limit"`
+	ResumeFromDb bool        `yaml:"resume-from-db"`
 }
 
 func (c *config) isValid() error {
