@@ -11,3 +11,4 @@ time-window:
   start: <yyyy-mm-dd>
   end: <yyyy-mm-dd>
 limit: 500000
+resume-from-db: true
