@@ -4,6 +4,7 @@ import (
 	"github.com/getsentry/sentry-go"
 	"github.com/rs/zerolog"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -61,15 +62,19 @@ func (hub *SentryHub) GetLogger(tags map[string]string) *sentryLogger {
 	}
 	h := sentry.NewHub(hub.client, scope)
 	return &sentryLogger{
+		m: sync.Mutex{},
 		h: h,
 	}
 }
 
 type sentryLogger struct {
+	m sync.Mutex
 	h *sentry.Hub
 }
 
 func (l *sentryLogger) Log(err error, opts LogOptions) {
+	l.m.Lock()
+	defer l.m.Unlock()
 	scope := l.h.PushScope()
 	defer l.h.PopScope()
 	for k, v := range opts.Tags {
