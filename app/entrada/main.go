@@ -11,6 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/metadata"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -110,7 +111,6 @@ func main() {
 
 	// do rely on a limit
 	if conf.Limit > 0 {
-		proceed := true
 		var offset int64
 		if conf.ResumeFromDb {
 			offsetObj, err := prt.NewEntradaApiClient(cc).GetOffset(ctx, &prt.Empty{})
@@ -122,10 +122,43 @@ func main() {
 			}
 			offset = offsetObj.Offset
 		}
-		for proceed {
+		// pagination
+		type entradaEntryStr struct {
+			fqdn string
+			time time.Time
+		}
+		q := make(chan entradaEntryStr)
+
+		wg := sync.WaitGroup{}
+		go func() {
+			wg.Add(1)
+			defer wg.Done()
+			for el := range q {
+				ts := el.time.UnixNano() / 1e06
+
+				ee := prt.EntradaEntry{
+					Fqdn:      el.fqdn,
+					Timestamp: ts,
+				}
+				if bs.Send(ctx, &ee); err != nil {
+					log.Debug().Msgf("failed to store entry: %s", err)
+				}
+			}
+		}()
+
+		entryFn = func(fqdn string, t time.Time) error {
+			q <- entradaEntryStr{
+				fqdn: fqdn,
+				time: t,
+			}
+			return nil
+		}
+
+		for {
 			eopts := entrada.Options{
 				Query: fmt.Sprintf("SELECT qname, min(unixtime) FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname ORDER BY qname LIMIT %d OFFSET %d", startTimeNano, endTimeNano, conf.Limit, offset),
 			}
+			log.Debug().Msgf("Querying impala db for %d rows with offset %d", conf.Limit, offset)
 			c, err := src.Process(ctx, entryFn, eopts)
 			if err != nil {
 				log.Fatal().Msgf("error while processing impala source: %s", err)
@@ -136,6 +169,8 @@ func main() {
 				break
 			}
 		}
+		close(q)
+		wg.Wait()
 	} else {
 		eopts := entrada.Options{
 			Query: fmt.Sprintf("SELECT qname, min(unixtime) FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname"),
