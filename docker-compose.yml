@@ -78,6 +78,7 @@ services:
   db:
     container_name: gollector-db
     image: postgres
+    shm_size: 5g
     restart: always
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASS?err}
