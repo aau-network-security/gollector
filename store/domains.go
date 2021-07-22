@@ -592,8 +592,11 @@ func (s *Store) forpropFqdn() {
 			suffixstr := s.batchEntities.publicSuffixByName[str.domain.publicSuffix.normal]
 			suffix := suffixstr.obj.(*models.PublicSuffix)
 
-			apexstr := s.batchEntities.apexByName[str.domain.apex.normal]
-			apex := apexstr.obj.(*models.Apex)
+			apexstr, ok := s.batchEntities.apexByName[str.domain.apex.normal]
+			apex := &models.Apex{ID: 0}
+			if ok {
+				apex = apexstr.obj.(*models.Apex)
+			}
 
 			res := &models.Fqdn{
 				ID:             s.ids.fqdns,
