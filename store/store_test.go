@@ -47,6 +47,7 @@ func selfSignedCert(notBefore, notAfter time.Time, sans []string) ([]byte, error
 }
 
 // check if storing a zone entry creates the correct db models
+// TODO: realying on outdated models, change up!
 func TestStore_StoreZoneEntry(t *testing.T) {
 	s, g, muid, err := OpenStore(TestConfig, TestOpts)
 	if err != nil {
@@ -54,17 +55,16 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 	}
 
 	iterations := 3
+	copies_per_timestamp := 2
 	for i := 0; i < iterations; i++ {
-		for j := 0; j < 2; j++ {
+		for j := 0; j < copies_per_timestamp; j++ {
 			// this should only update the "last_seen" field of the current active zonefile entry
-			go func() {
-				if err := s.StoreZoneEntry(muid, time.Now(), "example.org", true); err != nil {
-					t.Fatalf("error while storing entry: %s", err)
-				}
-			}()
+			if err := s.StoreZoneEntry(muid, time.Now(), "example.org", true); err != nil {
+				t.Fatalf("error while storing entry: %s", err)
+			}
 		}
 		// this should enforce to create a new zonefile entry in the next loop iteration
-		time.Sleep(15 * time.Millisecond)
+		time.Sleep(30 * time.Millisecond)
 	}
 	if err := s.RunPostHooks(); err != nil {
 		t.Fatalf("error while running post hooks: %s", err)
@@ -78,7 +78,7 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 		{1, &models.Tld{}, ""},
 		{1, &models.PublicSuffix{}, ""},
 		{1, &models.Apex{}, ""},
-		{uint(iterations), &models.ZonefileEntry{}, ""},
+		{uint(iterations) * uint(copies_per_timestamp), &models.ZonefileEntry{}, ""},
 		{1, &models.ZonefileEntry{}, "active = true"},
 	}
 
@@ -163,8 +163,8 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 		{2, &models.Tld{}},
 		{2, &models.Apex{}},
 		{3, &models.Fqdn{}},
-		{4, &models.PassiveEntry{}},
-		{2, &models.RecordType{}},
+		{6, &models.PassiveEntry{}},
+		{0, &models.RecordType{}}, // TODO: this is not used at all!
 	}
 
 	for _, tc := range counts {
@@ -174,7 +174,7 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 		}
 
 		if count != tc.count {
-			t.Fatalf("expected %d elements, but got %d", tc.count, count)
+			t.Fatalf("expected %d elements of %s, but got %d", tc.count, reflect.TypeOf(tc.model).String(), count)
 		}
 	}
 
@@ -207,7 +207,7 @@ func TestStore_StoreSplunkEntry(t *testing.T) {
 		{
 			"recordTypeByName",
 			s.cache.recordTypeByName.Len(),
-			2,
+			0, // TODO: this is not used at all!
 		},
 	}
 	for _, c := range comparisons {
@@ -245,12 +245,13 @@ func TestInit(t *testing.T) {
 	opts := Opts{
 		BatchSize: 10,
 		CacheOpts: CacheOpts{
-			LogSize:   3,
-			TLDSize:   3,
-			PSuffSize: 3,
-			ApexSize:  5,
-			FQDNSize:  5,
-			CertSize:  5,
+			LogSize:       3,
+			TLDSize:       3,
+			PSuffSize:     3,
+			ApexSize:      5,
+			FQDNSize:      5,
+			CertSize:      5,
+			ZoneEntrySize: 5,
 		},
 		AllowedInterval: 10 * time.Millisecond,
 	}
@@ -272,19 +273,20 @@ func TestHashMap(t *testing.T) {
 		Password: "postgres",
 		DBName:   "domains",
 		Host:     "localhost",
-		Port:     10001,
+		Port:     5432,
 	}
 
 	// check initialization of new store
 	opts := Opts{
 		BatchSize: 10,
 		CacheOpts: CacheOpts{
-			LogSize:   1000,
-			TLDSize:   1,
-			PSuffSize: 5000,
-			ApexSize:  20000,
-			FQDNSize:  20000,
-			CertSize:  20,
+			LogSize:       1000,
+			TLDSize:       1,
+			PSuffSize:     5000,
+			ApexSize:      20000,
+			FQDNSize:      20000,
+			CertSize:      20,
+			ZoneEntrySize: 10,
 		},
 		AllowedInterval: 10 * time.Millisecond,
 	}
@@ -397,7 +399,7 @@ func TestResetDB(t *testing.T) {
 		Password: "postgres",
 		DBName:   "domains",
 		Host:     "localhost",
-		Port:     10001,
+		Port:     5432,
 	}
 
 	g, err := conf.Open()
@@ -496,10 +498,10 @@ func TestInitWithExistingDb(t *testing.T) {
 	}
 	s.Ready.Wait()
 
-	for _, cache := range []*lru.Cache{s.cache.zoneEntriesByApexName, s.cache.apexByName, s.cache.tldByName, s.cache.publicSuffixByName} {
+	for _, cache := range []*lru.Cache{s.cache.apexByName, s.cache.tldByName, s.cache.publicSuffixByName} {
 		l := cache.Len()
 		if l != 1 {
-			t.Fatalf("unexpected amount of entries in the cache: got %d, but expected %d", l, 1)
+			t.Fatalf("unexpected amount of %s entries in the cache: got %d, but expected %d", reflect.TypeOf(cache).String(), l, 1)
 		}
 	}
 }

@@ -1,8 +1,8 @@
 package store
 
 import (
-	"errors"
 	"github.com/aau-network-security/gollector/store/models"
+	"github.com/pkg/errors"
 )
 
 type domainstruct struct {
@@ -48,6 +48,54 @@ type BatchEntities struct {
 	zoneEntries            []*zoneentrystruct
 	passiveEntries         []*passiveentrystruct
 	entradaEntries         []*entradaentrystruct
+}
+
+func (be *BatchEntities) AddFqdn(domain *domain, anon bool) {
+	be.fqdnByName[domain.fqdn.normal] = &domainstruct{
+		domain: domain,
+		create: !anon,
+	}
+	be.fqdnByNameAnon[domain.fqdn.anon] = &domainstruct{
+		domain: domain,
+		create: anon,
+	}
+	be.AddApex(domain, anon)
+}
+
+func (be *BatchEntities) AddApex(domain *domain, anon bool) {
+	be.apexByName[domain.apex.normal] = &domainstruct{
+		domain: domain,
+		create: !anon,
+	}
+	be.apexByNameAnon[domain.apex.anon] = &domainstruct{
+		domain: domain,
+		create: anon,
+	}
+	be.AddPublicSuffix(domain, anon)
+
+}
+
+func (be *BatchEntities) AddPublicSuffix(domain *domain, anon bool) {
+	be.publicSuffixByName[domain.publicSuffix.normal] = &domainstruct{
+		domain: domain,
+		create: !anon,
+	}
+	be.publicSuffixAnonByName[domain.publicSuffix.anon] = &domainstruct{
+		domain: domain,
+		create: anon,
+	}
+	be.AddTld(domain, anon)
+}
+
+func (be *BatchEntities) AddTld(domain *domain, anon bool) {
+	be.tldByName[domain.tld.normal] = &domainstruct{
+		domain: domain,
+		create: !anon,
+	}
+	be.tldAnonByName[domain.tld.anon] = &domainstruct{
+		domain: domain,
+		create: anon,
+	}
 }
 
 // used to determine if the batch is full, which depends on the number of zone entries or the number of log entries (measured by certs)

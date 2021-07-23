@@ -21,43 +21,12 @@ func (s *Store) StorePassiveEntry(muid string, query string, t time.Time) error 
 	}
 
 	query = strings.ToLower(query)
-
 	domain, err := NewDomain(query)
 	if err != nil {
 		return errors.Wrap(err, "failed to create domain")
 	}
-	s.batchEntities.fqdnByNameAnon[domain.fqdn.anon] = &domainstruct{
-		domain: domain,
-		create: false,
-	}
-	s.batchEntities.fqdnByName[domain.fqdn.normal] = &domainstruct{
-		domain: domain,
-		create: true,
-	}
-	s.batchEntities.apexByNameAnon[domain.apex.anon] = &domainstruct{
-		domain: domain,
-		create: false,
-	}
-	s.batchEntities.apexByName[domain.apex.normal] = &domainstruct{
-		domain: domain,
-		create: true,
-	}
-	s.batchEntities.publicSuffixAnonByName[domain.publicSuffix.anon] = &domainstruct{
-		domain: domain,
-		create: false,
-	}
-	s.batchEntities.publicSuffixByName[domain.publicSuffix.normal] = &domainstruct{
-		domain: domain,
-		create: true,
-	}
-	s.batchEntities.tldAnonByName[domain.tld.anon] = &domainstruct{
-		domain: domain,
-		create: false,
-	}
-	s.batchEntities.tldByName[domain.tld.normal] = &domainstruct{
-		domain: domain,
-		create: true,
-	}
+
+	s.batchEntities.AddFqdn(domain, false)
 
 	pe := &passiveentrystruct{
 		pe: &models.PassiveEntry{

@@ -87,38 +87,8 @@ func (s *Store) StoreLogEntry(muid string, entry LogEntry) error {
 		if err != nil {
 			continue
 		}
-		s.batchEntities.fqdnByNameAnon[domain.fqdn.anon] = &domainstruct{
-			create: false,
-			domain: domain,
-		}
-		s.batchEntities.fqdnByName[domain.fqdn.normal] = &domainstruct{
-			create: true,
-			domain: domain,
-		}
-		s.batchEntities.apexByNameAnon[domain.apex.anon] = &domainstruct{
-			create: false,
-			domain: domain,
-		}
-		s.batchEntities.apexByName[domain.apex.normal] = &domainstruct{
-			create: true,
-			domain: domain,
-		}
-		s.batchEntities.publicSuffixAnonByName[domain.publicSuffix.anon] = &domainstruct{
-			create: false,
-			domain: domain,
-		}
-		s.batchEntities.publicSuffixByName[domain.publicSuffix.normal] = &domainstruct{
-			create: true,
-			domain: domain,
-		}
-		s.batchEntities.tldAnonByName[domain.tld.anon] = &domainstruct{
-			create: false,
-			domain: domain,
-		}
-		s.batchEntities.tldByName[domain.tld.normal] = &domainstruct{
-			create: true,
-			domain: domain,
-		}
+
+		s.batchEntities.AddFqdn(domain, false)
 	}
 	return s.conditionalPostHooks()
 }

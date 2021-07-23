@@ -27,38 +27,7 @@ func (s *Store) StoreEntradaEntry(muid string, fqdn string, t time.Time) error {
 	}
 	s.anonymizer.Anonymize(domain)
 
-	s.batchEntities.fqdnByName[domain.fqdn.normal] = &domainstruct{
-		domain: domain,
-		create: false,
-	}
-	s.batchEntities.fqdnByNameAnon[domain.fqdn.anon] = &domainstruct{
-		domain: domain,
-		create: true,
-	}
-	s.batchEntities.apexByName[domain.apex.normal] = &domainstruct{
-		domain: domain,
-		create: false,
-	}
-	s.batchEntities.apexByNameAnon[domain.apex.anon] = &domainstruct{
-		domain: domain,
-		create: true,
-	}
-	s.batchEntities.publicSuffixByName[domain.publicSuffix.normal] = &domainstruct{
-		domain: domain,
-		create: false,
-	}
-	s.batchEntities.publicSuffixAnonByName[domain.publicSuffix.anon] = &domainstruct{
-		domain: domain,
-		create: true,
-	}
-	s.batchEntities.tldByName[domain.tld.normal] = &domainstruct{
-		domain: domain,
-		create: false,
-	}
-	s.batchEntities.tldAnonByName[domain.tld.anon] = &domainstruct{
-		domain: domain,
-		create: true,
-	}
+	s.batchEntities.AddFqdn(domain, true)
 
 	ee := &entradaentrystruct{
 		ee: &models.EntradaEntry{

@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"github.com/pingcap/errors"
 	"strings"
 	"sync"
 	"time"
@@ -17,12 +18,13 @@ import (
 
 var (
 	DefaultCacheOpts = CacheOpts{
-		LogSize:   1000,
-		TLDSize:   2000,
-		PSuffSize: 4000,
-		ApexSize:  10000,
-		FQDNSize:  20000,
-		CertSize:  50000,
+		LogSize:       1000,
+		TLDSize:       2000,
+		PSuffSize:     4000,
+		ApexSize:      10000,
+		FQDNSize:      20000,
+		CertSize:      50000,
+		ZoneEntrySize: 10000,
 	}
 	DefaultOpts = Opts{
 		BatchSize:       20000,
@@ -208,7 +210,6 @@ type cache struct {
 	apexById               *lru.Cache //map[uint]*models.Apex
 	fqdnByName             *lru.Cache //map[string]*models.Fqdn
 	fqdnByNameAnon         *lru.Cache //map[string]*models.FqdnAnon
-	zoneEntriesByApexName  *lru.Cache //map[string]*models.ZonefileEntry
 	certByFingerprint      *lru.Cache //map[string]*models.Certificate
 	logByUrl               *lru.Cache //map[string]*models.Log
 	recordTypeByName       *lru.Cache //map[string]*models.RecordType
@@ -224,7 +225,6 @@ func (c *cache) describe() {
 	log.Debug().Msgf("apexes (anon):   %d", c.apexByNameAnon.Len())
 	log.Debug().Msgf("fqdns:           %d", c.fqdnByName.Len())
 	log.Debug().Msgf("fqdns (anon):    %d", c.fqdnByNameAnon.Len())
-	log.Debug().Msgf("zone entries:    %d", c.zoneEntriesByApexName.Len())
 	log.Debug().Msgf("certificates:    %d", c.certByFingerprint.Len())
 	log.Debug().Msgf("logs:            %d", c.logByUrl.Len())
 	log.Debug().Msgf("record types:    %d", c.recordTypeByName.Len())
@@ -241,19 +241,18 @@ func newLRUCache(cacheSize int) *lru.Cache {
 
 func newCache(opts CacheOpts) cache {
 	return cache{
-		tldByName:              newLRUCache(opts.TLDSize),       //make(map[string]*models.Tld)
-		tldAnonByName:          newLRUCache(opts.TLDSize),       //make(map[string]*models.TldAnon),
-		publicSuffixByName:     newLRUCache(opts.PSuffSize),     //make(map[string]*models.PublicSuffix),
-		publicSuffixAnonByName: newLRUCache(opts.PSuffSize),     //make(map[string]*models.PublicSuffixAnon),
-		apexByName:             newLRUCache(opts.ApexSize),      //make(map[string]*models.Apex),
-		apexByNameAnon:         newLRUCache(opts.ApexSize),      //make(map[string]*models.ApexAnon),
-		apexById:               newLRUCache(opts.ApexSize),      //make(map[uint]*models.Apex),
-		fqdnByName:             newLRUCache(opts.FQDNSize),      //make(map[string]*models.Fqdn),
-		fqdnByNameAnon:         newLRUCache(opts.FQDNSize),      //make(map[string]*models.FqdnAnon),
-		zoneEntriesByApexName:  newLRUCache(opts.ZoneEntrySize), //make(map[string]*models.ZonefileEntry),
-		logByUrl:               newLRUCache(opts.LogSize),       //make(map[string]*models.Log),
-		certByFingerprint:      newLRUCache(opts.CertSize),      //make(map[string]*models.Certificate),
-		recordTypeByName:       newLRUCache(opts.TLDSize),       //make(map[string]*models.RecordType),
+		tldByName:              newLRUCache(opts.TLDSize),   //make(map[string]*models.Tld)
+		tldAnonByName:          newLRUCache(opts.TLDSize),   //make(map[string]*models.TldAnon),
+		publicSuffixByName:     newLRUCache(opts.PSuffSize), //make(map[string]*models.PublicSuffix),
+		publicSuffixAnonByName: newLRUCache(opts.PSuffSize), //make(map[string]*models.PublicSuffixAnon),
+		apexByName:             newLRUCache(opts.ApexSize),  //make(map[string]*models.Apex),
+		apexByNameAnon:         newLRUCache(opts.ApexSize),  //make(map[string]*models.ApexAnon),
+		apexById:               newLRUCache(opts.ApexSize),  //make(map[uint]*models.Apex),
+		fqdnByName:             newLRUCache(opts.FQDNSize),  //make(map[string]*models.Fqdn),
+		fqdnByNameAnon:         newLRUCache(opts.FQDNSize),  //make(map[string]*models.FqdnAnon),
+		logByUrl:               newLRUCache(opts.LogSize),   //make(map[string]*models.Log),
+		certByFingerprint:      newLRUCache(opts.CertSize),  //make(map[string]*models.Certificate),
+		recordTypeByName:       newLRUCache(opts.TLDSize),   //make(map[string]*models.RecordType),
 	}
 }
 
@@ -583,10 +582,24 @@ type CacheOpts struct {
 	ZoneEntrySize int
 }
 
+func (co *CacheOpts) Verify() error {
+	if !(co.LogSize > 0 && co.TLDSize > 0 && co.PSuffSize > 0 && co.ApexSize > 0 && co.FQDNSize > 0 && co.CertSize > 0 && co.ZoneEntrySize > 0) {
+		return errors.New("all cache sizes must be positive integers")
+	}
+	return nil
+}
+
 type Opts struct {
 	BatchSize       int
 	CacheOpts       CacheOpts
 	AllowedInterval time.Duration
+}
+
+func (o *Opts) Verify() error {
+	if err := o.CacheOpts.Verify(); err != nil {
+		return err
+	}
+	return nil
 }
 
 type debugHook struct{}
@@ -602,6 +615,10 @@ func (hook *debugHook) BeforeQuery(qe *pg.QueryEvent) {
 func (hook *debugHook) AfterQuery(qe *pg.QueryEvent) {}
 
 func NewStore(conf Config, opts Opts) (*Store, error) {
+	if err := opts.Verify(); err != nil {
+		return nil, errors.Wrap(err, "provided options are not valid")
+	}
+
 	pgOpts := pg.Options{
 		User:     conf.User,
 		Password: conf.Password,
@@ -956,7 +973,6 @@ func storeCachedValuePosthook() postHook {
 		s.influxService.CacheSize("public-suffix-anon", s.cache.publicSuffixAnonByName, s.cacheOpts.PSuffSize)
 		s.influxService.CacheSize("tld", s.cache.tldByName, s.cacheOpts.TLDSize)
 		s.influxService.CacheSize("tld-anon", s.cache.tldAnonByName, s.cacheOpts.TLDSize)
-		s.influxService.CacheSize("zone-entry", s.cache.zoneEntriesByApexName, s.cacheOpts.ZoneEntrySize)
 
 		log.Debug().Msgf("finished storing batch")
 

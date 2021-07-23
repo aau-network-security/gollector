@@ -47,6 +47,7 @@ require (
 	github.com/otiai10/copy v1.0.1 // indirect
 	github.com/otiai10/curr v0.0.0-20190513014714-f5a3d24e5776 // indirect
 	github.com/pelletier/go-toml v1.4.0 // indirect
+	github.com/pingcap/errors v0.11.1
 	github.com/pkg/errors v0.9.1
 	github.com/rogpeppe/go-internal v1.3.2 // indirect
 	github.com/rs/zerolog v1.15.0

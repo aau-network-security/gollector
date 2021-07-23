@@ -14,7 +14,7 @@ func TestMeasurement(t *testing.T) {
 		Host:     "localhost",
 		User:     "postgres",
 		Password: "postgres",
-		Port:     10001,
+		Port:     5432,
 		DBName:   "domains",
 	}
 
@@ -30,12 +30,13 @@ func TestMeasurement(t *testing.T) {
 	opts := Opts{
 		BatchSize: 10,
 		CacheOpts: CacheOpts{
-			LogSize:   3,
-			TLDSize:   3,
-			PSuffSize: 3,
-			ApexSize:  5,
-			FQDNSize:  5,
-			CertSize:  5,
+			LogSize:       3,
+			TLDSize:       3,
+			PSuffSize:     3,
+			ApexSize:      5,
+			FQDNSize:      5,
+			CertSize:      5,
+			ZoneEntrySize: 5,
 		},
 		AllowedInterval: 10 * time.Millisecond,
 	}
