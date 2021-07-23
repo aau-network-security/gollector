@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/go-pg/pg"
+	"github.com/rs/zerolog/log"
 	"net"
 	"strings"
 
@@ -593,6 +594,10 @@ func (s *Store) forpropFqdn() {
 			suffix := suffixstr.obj.(*models.PublicSuffix)
 
 			apexstr := s.batchEntities.apexByName[str.domain.apex.normal]
+			// TODO: remove (for debugging purposes only)!
+			if apexstr == nil {
+				log.Debug().Msgf("for fqdn '%s', could not find the apex '%s' in the entity batch", str.domain.fqdn, str.domain.apex.normal)
+			}
 			apex := apexstr.obj.(*models.Apex)
 
 			res := &models.Fqdn{
@@ -693,7 +698,6 @@ func (s *Store) forpropApexAnon() {
 			if apexstr.obj != nil {
 				apex := apexstr.obj.(*models.Apex)
 				res.ApexID = apex.ID
-
 			}
 
 			str.obj = res
