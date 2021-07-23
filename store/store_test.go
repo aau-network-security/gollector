@@ -877,3 +877,95 @@ func TestStoreDifferentEntries(t *testing.T) {
 		}
 	}
 }
+
+func TestExistingAnonymized(t *testing.T) {
+	opts := Opts{
+		BatchSize: 10,
+		CacheOpts: CacheOpts{
+			LogSize:       1,
+			TLDSize:       1,
+			PSuffSize:     1,
+			ApexSize:      1,
+			FQDNSize:      1,
+			CertSize:      1,
+			ZoneEntrySize: 1,
+		},
+		AllowedInterval: 10,
+	}
+	s, _, muid, err := OpenStore(TestConfig, opts)
+	if err != nil {
+		t.Fatalf("failed to open store: %s", err)
+	}
+	a := NewAnonymizer(
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+	)
+	s = s.WithAnonymizer(a)
+
+	domain := "www.example.co.uk"
+	ts := time.Now()
+
+	if err := s.StoreEntradaEntry(muid, domain, ts); err != nil {
+		t.Fatalf("failed to store entrada entry: %s", err)
+	}
+
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("failed to run post hooks: %s", err)
+	}
+
+	if err := s.StorePassiveEntry(muid, domain, ts); err != nil {
+		t.Fatalf("failed to run post hooks: %s", err)
+	}
+
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("failed to run post hooks: %s", err)
+	}
+}
+
+func TestExistingNonAnonymized(t *testing.T) {
+	opts := Opts{
+		BatchSize: 10,
+		CacheOpts: CacheOpts{
+			LogSize:       1,
+			TLDSize:       1,
+			PSuffSize:     1,
+			ApexSize:      1,
+			FQDNSize:      1,
+			CertSize:      1,
+			ZoneEntrySize: 1,
+		},
+		AllowedInterval: 10,
+	}
+	s, _, muid, err := OpenStore(TestConfig, opts)
+	if err != nil {
+		t.Fatalf("failed to open store: %s", err)
+	}
+	a := NewAnonymizer(
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+	)
+	s = s.WithAnonymizer(a)
+
+	domain := "www.example.co.uk"
+	ts := time.Now()
+
+	if err := s.StorePassiveEntry(muid, domain, ts); err != nil {
+		t.Fatalf("failed to run post hooks: %s", err)
+	}
+
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("failed to run post hooks: %s", err)
+	}
+
+	if err := s.StoreEntradaEntry(muid, domain, ts); err != nil {
+		t.Fatalf("failed to store entrada entry: %s", err)
+	}
+
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("failed to run post hooks: %s", err)
+	}
+}

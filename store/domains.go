@@ -595,7 +595,7 @@ func (s *Store) forpropFqdn() {
 
 			apexstr := s.batchEntities.apexByName[str.domain.apex.normal]
 			// TODO: remove (for debugging purposes only)!
-			if apexstr == nil {
+			if apexstr.obj == nil {
 				log.Debug().Msgf("for fqdn '%s', could not find the apex '%s' in the entity batch", str.domain.fqdn, str.domain.apex.normal)
 			}
 			apex := apexstr.obj.(*models.Apex)

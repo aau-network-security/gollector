@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"github.com/aau-network-security/gollector/api"
 	prt "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/collectors/entrada"
@@ -11,7 +10,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/metadata"
 	"os"
-	"sync"
 	"time"
 )
 
@@ -108,79 +106,87 @@ func main() {
 		log.Fatal().Msgf("failed to parse the end date: %s", err)
 	}
 	endTimeNano := endTime.Unix()
+	_, _, _ = startTimeNano, endTimeNano, src
 
-	// do rely on a limit
-	if conf.Limit > 0 {
-		var offset int64
-		if conf.ResumeFromDb {
-			offsetObj, err := prt.NewEntradaApiClient(cc).GetOffset(ctx, &prt.Empty{})
-			if err != nil {
-				log.Fatal().Msgf("error while obtaining offset: %s", err)
-			}
-			if offsetObj.Offset > 0 {
-				log.Info().Msgf("resuming from state in database: offset = %d", offsetObj.Offset)
-			}
-			offset = offsetObj.Offset
-		}
-		// pagination
-		type entradaEntryStr struct {
-			fqdn string
-			time time.Time
-		}
-		q := make(chan entradaEntryStr)
-
-		wg := sync.WaitGroup{}
-		go func() {
-			wg.Add(1)
-			defer wg.Done()
-			for el := range q {
-				ts := el.time.UnixNano() / 1e06
-
-				ee := prt.EntradaEntry{
-					Fqdn:      el.fqdn,
-					Timestamp: ts,
-				}
-				if bs.Send(ctx, &ee); err != nil {
-					log.Debug().Msgf("failed to store entry: %s", err)
-				}
-			}
-		}()
-
-		entryFn = func(fqdn string, t time.Time) error {
-			q <- entradaEntryStr{
-				fqdn: fqdn,
-				time: t,
-			}
-			return nil
-		}
-
-		for {
-			eopts := entrada.Options{
-				Query: fmt.Sprintf("SELECT qname, min(unixtime) FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname ORDER BY qname LIMIT %d OFFSET %d", startTimeNano, endTimeNano, conf.Limit, offset),
-			}
-			log.Debug().Msgf("Querying impala db for %d rows with offset %d", conf.Limit, offset)
-			c, err := src.Process(ctx, entryFn, eopts)
-			if err != nil {
-				log.Fatal().Msgf("error while processing impala source: %s", err)
-			}
-			offset += c
-			log.Debug().Msgf("Processed %d entries so far (%d in current page)", offset, c)
-			if c < conf.Limit {
-				break
-			}
-		}
-		close(q)
-		wg.Wait()
-	} else {
-		eopts := entrada.Options{
-			Query: fmt.Sprintf("SELECT qname, min(unixtime) FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname"),
-		}
-		c, err := src.Process(ctx, entryFn, eopts)
-		if err != nil {
-			log.Fatal().Msgf("error while processing impala source: %s", err)
-		}
-		log.Debug().Msgf("Processed %d entries", c)
+	ts := time.Now().UnixNano() / 1e06
+	ee := prt.EntradaEntry{
+		Fqdn:      "google.com",
+		Timestamp: ts,
 	}
+	bs.Send(ctx, ee)
+
+	//// do rely on a limit
+	//if conf.Limit > 0 {
+	//	var offset int64
+	//	if conf.ResumeFromDb {
+	//		offsetObj, err := prt.NewEntradaApiClient(cc).GetOffset(ctx, &prt.Empty{})
+	//		if err != nil {
+	//			log.Fatal().Msgf("error while obtaining offset: %s", err)
+	//		}
+	//		if offsetObj.Offset > 0 {
+	//			log.Info().Msgf("resuming from state in database: offset = %d", offsetObj.Offset)
+	//		}
+	//		offset = offsetObj.Offset
+	//	}
+	//	// pagination
+	//	type entradaEntryStr struct {
+	//		fqdn string
+	//		time time.Time
+	//	}
+	//	q := make(chan entradaEntryStr)
+	//
+	//	wg := sync.WaitGroup{}
+	//	go func() {
+	//		wg.Add(1)
+	//		defer wg.Done()
+	//		for el := range q {
+	//			ts := el.time.UnixNano() / 1e06
+	//
+	//			ee := prt.EntradaEntry{
+	//				Fqdn:      el.fqdn,
+	//				Timestamp: ts,
+	//			}
+	//			if bs.Send(ctx, &ee); err != nil {
+	//				log.Debug().Msgf("failed to store entry: %s", err)
+	//			}
+	//		}
+	//	}()
+	//
+	//	entryFn = func(fqdn string, t time.Time) error {
+	//		q <- entradaEntryStr{
+	//			fqdn: fqdn,
+	//			time: t,
+	//		}
+	//		return nil
+	//	}
+	//
+	//	for {
+	//		eopts := entrada.Options{
+	//			Query: fmt.Sprintf("SELECT qname, min(unixtime) FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname ORDER BY qname LIMIT %d OFFSET %d", startTimeNano, endTimeNano, conf.Limit, offset),
+	//		}
+	//		log.Debug().Msgf("Querying impala db for %d rows with offset %d", conf.Limit, offset)
+	//		c, err := src.Process(ctx, entryFn, eopts)
+	//		if err != nil {
+	//			log.Fatal().Msgf("error while processing impala source: %s", err)
+	//		}
+	//		offset += c
+	//		log.Debug().Msgf("Processed %d entries so far (%d in current page)", offset, c)
+	//		if c < conf.Limit {
+	//			break
+	//		}
+	//	}
+	//	close(q)
+	//	wg.Wait()
+	//} else {
+	//	eopts := entrada.Options{
+	//		Query: fmt.Sprintf("SELECT qname, min(unixtime) FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname"),
+	//	}
+	//	c, err := src.Process(ctx, entryFn, eopts)
+	//	if err != nil {
+	//		log.Fatal().Msgf("error while processing impala source: %s", err)
+	//	}
+	//	log.Debug().Msgf("Processed %d entries", c)
+	//}
 
 	if err := bs.CloseSend(ctx); err != nil {
 		log.Fatal().Msgf("error while closing connection to server: %s", err)
