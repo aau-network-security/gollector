@@ -35,7 +35,7 @@ func readConfig(path string) (config, error) {
 	}
 	conf.Start = ts
 
-	ts, err = time.Parse("2006-01-02", conf.StartString)
+	ts, err = time.Parse("2006-01-02", conf.EndString)
 	if err != nil {
 		return conf, errors.Wrap(err, "end time")
 	}
