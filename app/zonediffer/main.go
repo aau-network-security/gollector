@@ -86,6 +86,8 @@ func main() {
 		log.Fatal().Msgf("failed to create buffered stream to api: %s", err)
 	}
 
+	log.Info().Msgf("considering zone files between '%s' and '%s", conf.Start.String(), conf.End.String())
+
 	log.Debug().Msgf("creating zone file provider")
 	zfp, err := zone.NewZonefileProvider(conf.InputDir, conf.Start, conf.End)
 	if err != nil {
