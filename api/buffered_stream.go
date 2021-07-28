@@ -58,6 +58,7 @@ func (bs *bufferedStream) Send(ctx context.Context, el interface{}) error {
 }
 
 func (bs *bufferedStream) flush(ctx context.Context) error {
+	log.Debug().Msgf("flushing buffered stream (%d)", len(bs.buffer))
 	batch := deepcopy.Copy(bs.template).(Batch)
 
 	for _, el := range bs.buffer {

@@ -138,6 +138,7 @@ func main() {
 						log.Warn().Msgf("failed to send entry to backend: %s", err)
 					}
 				}
+				log.Debug().Msgf("first seen: %d", len(curDomains))
 
 				prevDomains = curDomains
 				curDomains = make(map[string]interface{})
