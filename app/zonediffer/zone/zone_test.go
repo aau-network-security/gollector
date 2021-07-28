@@ -2,10 +2,21 @@ package zone
 
 import (
 	"io"
-	"reflect"
 	"testing"
 	"time"
 )
+
+func StringListEquals(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := 0; i < len(a); i++ {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
 
 func TestNewZoneFileProvider(t *testing.T) {
 	dir := "resources/"
@@ -41,7 +52,7 @@ func TestNewZoneFileProvider(t *testing.T) {
 	actualTlds := zfp.Tlds()
 	expectedTlds := []string{"test"}
 
-	if !reflect.DeepEqual(actualTlds, expectedTlds) {
+	if !StringListEquals(actualTlds, expectedTlds) {
 		t.Fatalf("expected tlds to be %v, but got %v", expectedTlds, actualTlds)
 	}
 
@@ -61,6 +72,18 @@ func TestNewZoneFileProvider(t *testing.T) {
 			"example.test",
 		},
 	}
+	expectedExpiredList := [][]string{
+		{},
+		{"example2.test"},
+	}
+	expectedRegisteredList := [][]string{
+		{"example2.test"},
+		{},
+	}
+
+	prevDomains := make(map[string]interface{})
+	curDomains := make(map[string]interface{})
+
 	i := 0
 	for {
 		zf, err := zfp.Next("test")
@@ -88,10 +111,33 @@ func TestNewZoneFileProvider(t *testing.T) {
 				break
 			}
 			actualEntries = append(actualEntries, zfe.Domain)
+			// using a map also ensures that duplicate domains are only counted once
+			curDomains[zfe.Domain] = nil
 		}
-		if !reflect.DeepEqual(expectedEntries, actualEntries) {
+		if !StringListEquals(expectedEntries, actualEntries) {
 			t.Fatalf("expected zone file entries to be %v, but got %v", expectedEntries, actualEntries)
 		}
+
+		if i == 0 {
+			prevDomains = curDomains
+			curDomains = make(map[string]interface{})
+			i++
+			continue
+		}
+
+		actualExpired, actualRegistered := Compare(prevDomains, curDomains)
+		expectedRegistered := expectedRegisteredList[i-1]
+		expectedExpired := expectedExpiredList[i-1]
+		if !StringListEquals(actualRegistered, expectedRegistered) {
+			t.Fatalf("expected registered to be %v, but got %v", expectedRegistered, actualRegistered)
+		}
+		if !StringListEquals(actualExpired, expectedExpired) {
+			t.Fatalf("expected expired to be %v, but got %v", expectedExpired, actualExpired)
+		}
+
+		prevDomains = curDomains
+		curDomains = make(map[string]interface{})
+
 		i++
 	}
 }
