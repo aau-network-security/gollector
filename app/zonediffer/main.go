@@ -87,7 +87,7 @@ func main() {
 	}
 
 	log.Debug().Msgf("creating zone file provider")
-	zfp, err := zone.NewZonefileProvider(conf.InputDir)
+	zfp, err := zone.NewZonefileProvider(conf.InputDir, conf.Start, conf.End)
 	if err != nil {
 		log.Fatal().Msgf("error while creating zone file provider: %s", err)
 	}

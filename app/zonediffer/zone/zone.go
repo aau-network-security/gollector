@@ -198,7 +198,7 @@ func (zfp *ZonefileProvider) Count(tld string) int {
 	return len(l)
 }
 
-func NewZonefileProvider(dir string) (*ZonefileProvider, error) {
+func NewZonefileProvider(dir string, start, end time.Time) (*ZonefileProvider, error) {
 	// read all files in dir
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
@@ -223,6 +223,11 @@ func NewZonefileProvider(dir string) (*ZonefileProvider, error) {
 		ts, err := time.Parse("2006-01-02", tsStr)
 		if err != nil {
 			return nil, err
+		}
+
+		// ignore files outside
+		if ts.Before(start) || ts.After(end) {
+			continue
 		}
 
 		l, ok := zonefiles[tld]
