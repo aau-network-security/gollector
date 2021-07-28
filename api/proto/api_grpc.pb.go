@@ -648,7 +648,7 @@ func (x *entradaApiStoreEntradaEntryClient) Recv() (*Result, error) {
 
 func (c *entradaApiClient) GetOffset(ctx context.Context, in *Empty, opts ...grpc.CallOption) (*Offset, error) {
 	out := new(Offset)
-	err := c.cc.Invoke(ctx, "/EntradaApi/GetEntradaOffset", in, out, opts...)
+	err := c.cc.Invoke(ctx, "/EntradaApi/GetOffset", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -672,7 +672,7 @@ func (UnimplementedEntradaApiServer) StoreEntradaEntry(EntradaApi_StoreEntradaEn
 	return status.Errorf(codes.Unimplemented, "method StoreEntradaEntry not implemented")
 }
 func (UnimplementedEntradaApiServer) GetOffset(context.Context, *Empty) (*Offset, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetEntradaOffset not implemented")
+	return nil, status.Errorf(codes.Unimplemented, "method GetOffset not implemented")
 }
 func (UnimplementedEntradaApiServer) mustEmbedUnimplementedEntradaApiServer() {}
 
@@ -723,7 +723,7 @@ func _EntradaApi_GetOffset_Handler(srv interface{}, ctx context.Context, dec fun
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/EntradaApi/GetEntradaOffset",
+		FullMethod: "/EntradaApi/GetOffset",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(EntradaApiServer).GetOffset(ctx, req.(*Empty))
@@ -739,7 +739,7 @@ var EntradaApi_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*EntradaApiServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "GetEntradaOffset",
+			MethodName: "GetOffset",
 			Handler:    _EntradaApi_GetOffset_Handler,
 		},
 	},

@@ -128,6 +128,17 @@ func main() {
 
 			// skip first file of each TLD, as there is not comparison material
 			if fileIdx == 0 {
+				for domain := range curDomains {
+					entry := prt.ZoneEntry{
+						Apex:      domain,
+						Timestamp: zf.Timestamp().UnixNano() / 1e06,
+						Type:      prt.ZoneEntry_FIRST_SEEN,
+					}
+					if err := bs.Send(ctx, &entry); err != nil {
+						log.Warn().Msgf("failed to send entry to backend: %s", err)
+					}
+				}
+
 				prevDomains = curDomains
 				curDomains = make(map[string]interface{})
 				fileIdx++
@@ -144,9 +155,9 @@ func main() {
 
 			for _, domain := range expired {
 				entry := prt.ZoneEntry{
-					Apex:       domain,
-					Timestamp:  zf.Timestamp().UnixNano() / 1e06,
-					Registered: false,
+					Apex:      domain,
+					Timestamp: zf.Timestamp().UnixNano() / 1e06,
+					Type:      prt.ZoneEntry_EXPIRATION,
 				}
 				if err := bs.Send(ctx, &entry); err != nil {
 					log.Warn().Msgf("failed to send entry to backend: %s", err)
@@ -155,9 +166,9 @@ func main() {
 
 			for _, domain := range registered {
 				entry := prt.ZoneEntry{
-					Apex:       domain,
-					Timestamp:  zf.Timestamp().UnixNano() / 1e06,
-					Registered: true,
+					Apex:      domain,
+					Timestamp: zf.Timestamp().UnixNano() / 1e06,
+					Type:      prt.ZoneEntry_REGISTRATION,
 				}
 				if err := bs.Send(ctx, &entry); err != nil {
 					log.Warn().Msgf("failed to send entry to backend: %s", err)
