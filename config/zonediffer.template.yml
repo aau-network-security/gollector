@@ -7,3 +7,5 @@ meta:
   host: <host that runs measurement, for meta info storage purposes>
   description: <description of measurement>
 log-level: <debug | info | warn | error>
+start: 1970-01-01
+end: 2020-12-31

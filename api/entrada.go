@@ -18,7 +18,13 @@ func (s *Server) StoreEntradaEntry(str api.EntradaApi_StoreEntradaEntryServer) e
 	}
 
 	log.Debug().Str("muid", muid).Msgf("connection opened for entrada entries")
-	defer log.Debug().Str("muid", muid).Msgf("connection closed for entrada entries")
+	defer func() {
+		log.Debug().Str("muid", muid).Msgf("connection closed for entrada entries")
+		// should *not* be necessary
+		if err := s.Store.RunPostHooks(); err != nil {
+			log.Fatal().Str("muid", muid).Msgf("failed to run post hooks: %s", err)
+		}
+	}()
 
 	wg := sync.WaitGroup{}
 

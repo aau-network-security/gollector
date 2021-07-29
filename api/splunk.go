@@ -23,7 +23,6 @@ func (s *Server) StorePassiveEntry(str api.SplunkApi_StorePassiveEntryServer) er
 		if err := s.Store.RunPostHooks(); err != nil {
 			log.Fatal().Str("muid", muid).Msgf("failed to run post hooks: %s", err)
 		}
-		s.Store.RunPostHooks()
 	}()
 
 	wg := sync.WaitGroup{}

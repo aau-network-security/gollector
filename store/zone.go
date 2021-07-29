@@ -9,7 +9,6 @@ import (
 
 func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string, zoneEntryType prt.ZoneEntry_ZoneEntryType) error {
 	s.m.Lock()
-	s.m.Lock()
 	defer s.m.Unlock()
 
 	s.ensureReady()
