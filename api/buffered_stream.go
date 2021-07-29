@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc/status"
 	"io"
 	"sync"
+	"time"
 )
 
 type Stream interface {
@@ -43,6 +44,10 @@ func (bs *bufferedStream) recv() (*api.Result, error) {
 func (bs *bufferedStream) Send(ctx context.Context, el interface{}) error {
 	bs.l.Lock()
 	defer bs.l.Unlock()
+
+	// add timeout for testing
+	ctx, cancel := context.WithTimeout(ctx, 1 * time.Second)
+	defer cancel()
 
 	if err := bs.sem.Acquire(ctx, 1); err != nil {
 		return err
