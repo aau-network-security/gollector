@@ -1,12 +1,14 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"flag"
 	"fmt"
 	"github.com/aau-network-security/gollector/api"
 	prt "github.com/aau-network-security/gollector/api/proto"
 	"github.com/aau-network-security/gollector/app/zonediffer/zone"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc/metadata"
@@ -14,6 +16,62 @@ import (
 	"os"
 	"time"
 )
+
+// ensures a TLDs file exists, and truncates it in case this run does not resume from a prior run
+func prepareTldsFile(fname string, resume bool) error {
+	// make sure file exists
+	_, err := os.Stat(fname)
+	if os.IsNotExist(err) {
+		// create file
+		f, err := os.Create(fname)
+		if err != nil {
+			return err
+		}
+		f.Close()
+	} else if err != nil {
+		return err
+	} else if !resume {
+		// file exists, truncate if not resume
+		if err := os.Truncate(fname, 0); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// read a set of TLDs from a file and return it as a map
+func readTldsFromFile(fname string) (map[string]interface{}, error) {
+	f, err := os.Open(fname)
+	if err != nil {
+		return nil, errors.Wrap(err, "opening file failed")
+	}
+
+	res := make(map[string]interface{})
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		tld := scanner.Text()
+		res[tld] = nil
+	}
+
+	if err := scanner.Err(); err != nil {
+		return nil, errors.Wrap(err, "scanning file failed")
+	}
+
+	return res, nil
+}
+
+func finishTld(fname, tld string) error {
+	f, err := os.OpenFile(fname, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if _, err := f.WriteString(fmt.Sprintf("%s\n", tld)); err != nil {
+		return err
+	}
+	return nil
+}
 
 func main() {
 	ctx := context.Background()
@@ -36,6 +94,14 @@ func main() {
 		log.Fatal().Msgf("error while parsing log level: %s", err)
 	}
 	zerolog.SetGlobalLevel(logLevel)
+
+	if err := prepareTldsFile(conf.Resume.FinishedTldsFile, conf.Resume.Enabled); err != nil {
+		log.Fatal().Msgf("error while preparing tlds file: %s", err)
+	}
+	ignoredTlds, err := readTldsFromFile(conf.Resume.FinishedTldsFile)
+	if err != nil {
+		log.Fatal().Msgf("error while reading file of ignored TLDs: %s")
+	}
 
 	cc, err := conf.ApiAddr.Dial()
 	if err != nil {
@@ -96,6 +162,16 @@ func main() {
 
 	tldCount := len(zfp.Tlds())
 	for tldIdx, tld := range zfp.Tlds() {
+		if _, ok := ignoredTlds[tld]; ok {
+			log.Debug().Msgf("ignoring tld '%s'", tld)
+
+			log.Debug().
+				Str("tld", tld).
+				Str("progress", fmt.Sprintf("%d/%d", tldIdx+1, tldCount)).
+				Msgf("done")
+			continue
+		}
+
 		prevDomains := make(map[string]interface{})
 		curDomains := make(map[string]interface{})
 
@@ -181,6 +257,11 @@ func main() {
 
 			fileIdx++
 		}
+
+		if err := finishTld(conf.Resume.FinishedTldsFile, tld); err != nil {
+			log.Warn().Msgf("failed to write finished tld to file: %s", err)
+		}
+
 		log.Debug().
 			Str("tld", tld).
 			Str("progress", fmt.Sprintf("%d/%d", tldIdx+1, tldCount)).

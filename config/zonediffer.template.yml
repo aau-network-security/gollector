@@ -9,3 +9,6 @@ meta:
 log-level: <debug | info | warn | error>
 start: 1970-01-01
 end: 2020-12-31
+resume:
+  enabled: <true | false>
+  finished-tlds-file: <path to line-separated tlds>

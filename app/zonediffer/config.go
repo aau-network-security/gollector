@@ -8,6 +8,11 @@ import (
 	"time"
 )
 
+type Resume struct {
+	Enabled          bool   `yaml:"enabled"`
+	FinishedTldsFile string `yaml:"finished-tlds-file"`
+}
+
 type config struct {
 	InputDir    string      `yaml:"input-dir"`
 	ApiAddr     app.Address `yaml:"api-address"`
@@ -17,6 +22,7 @@ type config struct {
 	StartString string      `yaml:"start"`
 	End         time.Time   `yaml:"-"`
 	EndString   string      `yaml:"end"`
+	Resume      Resume      `yaml:"resume"`
 }
 
 func readConfig(path string) (config, error) {
