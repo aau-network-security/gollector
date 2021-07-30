@@ -100,8 +100,9 @@ func main() {
 	}
 
 	opts := api.BufferedStreamOpts{
-		BatchSize:  1000,
-		WindowSize: 10000,
+		BatchSize:        1000,
+		WindowSize:       10000,
+		AcceptedFailures: 10,
 	}
 
 	bs, err := api.NewBufferedStream(str, &tmpl, opts)

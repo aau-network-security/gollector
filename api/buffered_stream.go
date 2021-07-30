@@ -96,8 +96,9 @@ func (bs *bufferedStream) CloseSend(ctx context.Context) error {
 }
 
 type BufferedStreamOpts struct {
-	BatchSize  int
-	WindowSize int64
+	BatchSize        int
+	WindowSize       int64
+	AcceptedFailures int
 }
 
 func NewBufferedStream(str Stream, tmpl Batch, opts BufferedStreamOpts) (*bufferedStream, error) {
@@ -115,6 +116,7 @@ func NewBufferedStream(str Stream, tmpl Batch, opts BufferedStreamOpts) (*buffer
 
 	// asynchronously read messages from stream and output
 	go func() {
+		consecutiveErrors := 0
 		for {
 			res, err := bs.recv()
 			if err == io.EOF {
@@ -127,8 +129,13 @@ func NewBufferedStream(str Stream, tmpl Batch, opts BufferedStreamOpts) (*buffer
 				if msg == "transport is closing" {
 					break
 				}
+				consecutiveErrors++
+				if consecutiveErrors == opts.AcceptedFailures {
+					break
+				}
 				continue
 			}
+			consecutiveErrors = 0
 			if !res.Ok {
 				log.Error().Msgf("error while processing batch entry: %s", res.Error)
 			}

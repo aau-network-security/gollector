@@ -142,8 +142,9 @@ func main() {
 	}
 
 	opts := api.BufferedStreamOpts{
-		BatchSize:  1000,
-		WindowSize: 10000,
+		BatchSize:        1000,
+		WindowSize:       10000,
+		AcceptedFailures: 10,
 	}
 
 	log.Debug().Msgf("creating buffered stream")
