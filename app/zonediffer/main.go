@@ -178,6 +178,8 @@ func main() {
 
 		fileCount := zfp.Count(tld)
 		fileIdx := 0
+
+		log.Debug().Msgf("starting '%s' with %d zone files", tld, fileCount)
 		for {
 			zf, err := zfp.Next(tld)
 			if err == io.EOF {
