@@ -161,7 +161,7 @@ func (s *Store) backpropFqdn() error {
 
 	// fetch ids from database
 	var fqdnFoundInDB []*models.Fqdn
-	if err := s.db.Model(&fqdnFoundInDB).Where("fqdn in (?)", pg.In(fqndNotFoundInCache)).Select(); err != nil {
+	if err := s.db.Model(&fqdnFoundInDB).Column("id", "fqdn").Where("fqdn in (?)", pg.In(fqndNotFoundInCache)).Select(); err != nil {
 		return err
 	}
 
@@ -208,7 +208,7 @@ func (s *Store) backpropApex() error {
 
 	// fetch ids from database
 	var apexFoundInDB []*models.Apex
-	if err := s.db.Model(&apexFoundInDB).Where("apex in (?)", pg.In(apexNotFoundInCache)).Select(); err != nil {
+	if err := s.db.Model(&apexFoundInDB).Column("id", "apex").Where("apex in (?)", pg.In(apexNotFoundInCache)).Select(); err != nil {
 		return err
 	}
 
@@ -255,7 +255,7 @@ func (s *Store) backpropPublicSuffix() error {
 
 	// fetch ids from database
 	var psFoundInDB []*models.PublicSuffix
-	if err := s.db.Model(&psFoundInDB).Where("public_suffix in (?)", pg.In(psNotFoundInCache)).Select(); err != nil {
+	if err := s.db.Model(&psFoundInDB).Column("id", "public_suffix").Where("public_suffix in (?)", pg.In(psNotFoundInCache)).Select(); err != nil {
 		return err
 	}
 
@@ -301,7 +301,7 @@ func (s *Store) backpropTld() error {
 
 	// fetch ids from database
 	var tldFoundInDB []*models.Tld
-	if err := s.db.Model(&tldFoundInDB).Where("tld in (?)", pg.In(tldNotFoundInCache)).Select(); err != nil {
+	if err := s.db.Model(&tldFoundInDB).Column("id", "tld").Where("tld in (?)", pg.In(tldNotFoundInCache)).Select(); err != nil {
 		return err
 	}
 
