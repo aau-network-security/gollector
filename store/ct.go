@@ -121,7 +121,7 @@ func (s *Store) backpropCert() error {
 
 	// fetch ids from database
 	var certsFoundInDB []*models.Certificate
-	if err := s.db.Model(&certsFoundInDB).Where("sha256_fingerprint in (?)", pg.In(certsNotFoundInCache)).Select(); err != nil {
+	if err := s.db.Model(&certsFoundInDB).Column("id", "sha256_fingerprint").Where("sha256_fingerprint in (?)", pg.In(certsNotFoundInCache)).Select(); err != nil {
 		return err
 	}
 
