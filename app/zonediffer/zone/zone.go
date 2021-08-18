@@ -3,7 +3,6 @@ package zone
 import (
 	"bufio"
 	"compress/gzip"
-	"fmt"
 	"github.com/miekg/dns"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -75,7 +74,7 @@ func (zf *standardZonefile) Timestamp() *time.Time {
 	return zf.ts
 }
 
-func newStandardZonefile(path, tld string, ts *time.Time) (*standardZonefile, error) {
+func newStandardZonefile(path, tld string, ts *time.Time) (ZoneFile, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -198,24 +197,26 @@ func (zfp *ZonefileProvider) Count(tld string) int {
 	return len(l)
 }
 
-func NewZonefileProvider(dir string) (*ZonefileProvider, error) {
+func NewZonefileProvider(dir string, start, end time.Time) (*ZonefileProvider, error) {
 	// read all files in dir
 	files, err := ioutil.ReadDir(dir)
 	if err != nil {
 		return nil, err
 	}
-	log.Debug().Msgf("identified %d zone files to process", len(files))
+	log.Debug().Msgf("identified %d files to process", len(files))
 
 	zonefiles := make(map[string][]ZoneFile)
 	p := int(math.Ceil(float64(len(files)) / float64(20)))
 
+	zfcount := 0
 	for i, info := range files {
 		fname := info.Name()
 		ext := filepath.Ext(fname)
 		basename := fname[:len(fname)-len(ext)]
 		splitted := strings.Split(basename, ".")
 		if len(splitted) != 2 {
-			return nil, errors.New(fmt.Sprintf("invalid filename structure: %s", fname))
+			//return nil, errors.New(fmt.Sprintf("invalid filename structure: %s", fname))
+			continue
 		}
 
 		tld := splitted[0]
@@ -223,6 +224,11 @@ func NewZonefileProvider(dir string) (*ZonefileProvider, error) {
 		ts, err := time.Parse("2006-01-02", tsStr)
 		if err != nil {
 			return nil, err
+		}
+
+		// ignore files outside
+		if ts.Before(start) || ts.After(end) {
+			continue
 		}
 
 		l, ok := zonefiles[tld]
@@ -243,6 +249,7 @@ func NewZonefileProvider(dir string) (*ZonefileProvider, error) {
 
 		l = append(l, zf)
 		zonefiles[tld] = l
+		zfcount += 1
 
 		if i%p == 0 {
 			perc := float64(i) / float64(len(files)) * float64(100)
@@ -250,6 +257,8 @@ func NewZonefileProvider(dir string) (*ZonefileProvider, error) {
 		}
 
 	}
+
+	log.Debug().Msgf("identified %d zone files (for %d TLD(s)) to process", zfcount, len(zonefiles))
 
 	zfp := ZonefileProvider{
 		zonefiles: zonefiles,

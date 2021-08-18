@@ -27,8 +27,14 @@ func (s *Server) StoreLogEntries(str api.CtApi_StoreLogEntriesServer) error {
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	log.Debug().Str("muid", muid).Msgf("connection opened for log entries")
-	defer log.Debug().Str("muid", muid).Msgf("connection closed for log entries")
+	log.Debug().Str("muid", muid).Msgf("connection opened for ct log entries")
+	defer func() {
+		log.Debug().Str("muid", muid).Msgf("connection closed for ct log entries")
+		// should *not* be necessary
+		if err := s.Store.RunPostHooks(); err != nil {
+			log.Fatal().Str("muid", muid).Msgf("failed to run post hooks: %s", err)
+		}
+	}()
 
 	wg := sync.WaitGroup{}
 

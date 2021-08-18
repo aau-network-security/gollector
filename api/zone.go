@@ -23,7 +23,6 @@ func (s *Server) StoreZoneEntry(str prt.ZoneFileApi_StoreZoneEntryServer) error 
 		if err := s.Store.RunPostHooks(); err != nil {
 			log.Fatal().Str("muid", muid).Msgf("failed to run post hooks: %s", err)
 		}
-		s.Store.RunPostHooks()
 	}()
 
 	wg := sync.WaitGroup{}
@@ -44,7 +43,7 @@ func (s *Server) StoreZoneEntry(str prt.ZoneFileApi_StoreZoneEntryServer) error 
 				Ok:    true,
 				Error: "",
 			}
-			if err := s.Store.StoreZoneEntry(muid, ts, ze.Apex, ze.Registered); err != nil {
+			if err := s.Store.StoreZoneEntry(muid, ts, ze.Apex, ze.Type); err != nil {
 				s.Log.Log(err, app.LogOptions{
 					Msg: "failed to store zone entry",
 				})

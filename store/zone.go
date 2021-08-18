@@ -1,12 +1,13 @@
 package store
 
 import (
+	prt "github.com/aau-network-security/gollector/api/proto"
 	"time"
 
 	"github.com/aau-network-security/gollector/store/models"
 )
 
-func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string, registered bool) error {
+func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string, zoneEntryType prt.ZoneEntry_ZoneEntryType) error {
 	s.m.Lock()
 	defer s.m.Unlock()
 
@@ -29,10 +30,12 @@ func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string, registered
 	ze := &models.ZonefileEntry{
 		StageID: sid,
 	}
-	if registered {
-		ze.Registered = t
-	} else {
+	if zoneEntryType == prt.ZoneEntry_EXPIRATION {
 		ze.Expired = t
+	} else if zoneEntryType == prt.ZoneEntry_REGISTRATION {
+		ze.Registered = t
+	} else if zoneEntryType == prt.ZoneEntry_FIRST_SEEN {
+		// don't fill in any of the timestamp
 	}
 
 	s.batchEntities.zoneEntries = append(s.batchEntities.zoneEntries, &zoneentrystruct{

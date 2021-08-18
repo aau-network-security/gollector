@@ -5,28 +5,37 @@ services:
     build:
       context: .
       dockerfile: app/cache/Dockerfile
-    command: [ "--config", "/config/cache.yml" ]
     volumes:
       - ./config:/config:ro # configuration files
     ports:
       - "${GRPC_PORT}:${GRPC_PORT}"
       - "${PPROF_PORT}:${PPROF_PORT}"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: 5G
+        max-file: "10"
+    command: [ "--config", "/config/cache.yml" ]
   entrada:
     container_name: gollector-entrada
     build:
       context: .
       dockerfile: app/entrada/Dockerfile
-    command: [ "--config", "/config/entrada.yml" ]
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./config:/config:ro # configuration files
+    logging:
+      driver: "json-file"
+      options:
+        max-size: 5G
+        max-file: "10"
+    command: [ "--config", "/config/entrada.yml" ]
   zones:
     container_name: gollector-zones
     build:
       context: .
       dockerfile: app/zones/Dockerfile
-    command: [ "--config", "/config/zones.yml" ]
     environment:
       - COM_FTP_PASS=${COM_FTP_PASS}
       - CZDS_PASS=${CZDS_PASS}
@@ -35,21 +44,31 @@ services:
       - ./config:/config:ro # configuration files
       - ${SSH_DIR}:/ssh:ro  # ssh keys
       - ${ZONEFILE_DIR}:/zonefiles # directory to store zone files
+    logging:
+      driver: "json-file"
+      options:
+        max-size: 5G
+        max-file: "10"
+    command: [ "--config", "/config/zones.yml" ]
   zonediffer:
     container_name: gollector-zonediffer
     build:
       context: .
       dockerfile: app/zonediffer/Dockerfile
-    command: [ "--config", "/config/zonediffer.yml" ]
     volumes:
       - ./config:/config:ro # configuration files
       - ${ZONEFILE_DIR}:/zonefiles:ro  # ssh keys
+    logging:
+      driver: "json-file"
+      options:
+        max-size: 5G
+        max-file: "10"
+    command: [ "--config", "/config/zonediffer.yml" ]
   zones-test:
     container_name: gollector-zones-test
     build:
       context: .
       dockerfile: app/zones/Dockerfile
-    command: [ "--config", "/config/zones-test.yml" ]
     environment:
       - COM_FTP_PASS=${COM_FTP_PASS}
       - CZDS_PASS=${CZDS_PASS}
@@ -58,23 +77,39 @@ services:
       - ./config:/config:ro # configuration files
       - ${SSH_DIR}:/ssh:ro  # ssh keys
       - ${ZONEFILE_DIR}:/zonefiles # directory to store zone files
+    logging:
+      driver: "json-file"
+      options:
+        max-file: "10"
+        max-size: 5G
+    command: [ "--config", "/config/zones-test.yml" ]
   ct:
     container_name: gollector-ct
     build:
       context: .
       dockerfile: app/ct/Dockerfile
-    command: [ "--config", "/config/ct.yml", "-logtostderr" ]
     volumes:
       - ./config:/config:ro # configuration files
+    logging:
+      driver: "json-file"
+      options:
+        max-size: 5G
+        max-file: "10"
+    command: [ "--config", "/config/ct.yml", "-logtostderr" ]
   splunk:
     container_name: gollector-splunk
     build:
       context: .
       dockerfile: app/splunk/Dockerfile
-    command: [ "--config", "/config/splunk.yml", "-logtostderr" ]
     volumes:
       - ./config:/config:ro # configuration files
       - ${SPLUNK_DIR}:/splunk # directory containing Splunk JSON logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: 5G
+        max-file: "10"
+    command: [ "--config", "/config/splunk.yml", "-logtostderr" ]
   db:
     container_name: gollector-db
     image: postgres:12
@@ -88,4 +123,9 @@ services:
       - ${DB_VOLUME?err}:/var/lib/postgresql/data  # persistent storage of database
     ports:
       - "${POSTGRES_HOST?err}:${POSTGRES_PORT?err}:5432"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: 5G
+        max-file: "10"
     command: [ "-c", "config_file=/etc/postgresql.conf" ]

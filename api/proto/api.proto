@@ -67,7 +67,12 @@ message ZoneEntryBatch {
 message ZoneEntry {
     string Apex = 1;
     int64 Timestamp = 2;
-    bool Registered = 3;
+    enum ZoneEntryType {
+        FIRST_SEEN = 0;
+        REGISTRATION = 1;
+        EXPIRATION = 2;
+    }
+    ZoneEntryType Type = 3;
 }
 
 message Result {
