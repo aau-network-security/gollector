@@ -348,7 +348,7 @@ func (s *Store) backpropFqdnAnon() error {
 
 	// fetch ids from database
 	var foundInDB []*models.FqdnAnon
-	if err := s.db.Model(&foundInDB).Where("fqdn in (?)", pg.In(notFoundInCache)).Select(); err != nil {
+	if err := s.db.Model(&foundInDB).Column("id", "fqdn").Where("fqdn in (?)", pg.In(notFoundInCache)).Select(); err != nil {
 		return err
 	}
 
@@ -390,7 +390,7 @@ func (s *Store) backpropApexAnon() error {
 
 	// fetch ids from database
 	var foundInDB []*models.ApexAnon
-	if err := s.db.Model(&foundInDB).Where("apex in (?)", pg.In(notFoundInCache)).Select(); err != nil {
+	if err := s.db.Model(&foundInDB).Column("id", "apex").Where("apex in (?)", pg.In(notFoundInCache)).Select(); err != nil {
 		return err
 	}
 
@@ -437,7 +437,7 @@ func (s *Store) backpropPublicSuffixAnon() error {
 
 	// fetch ids from database
 	var foundInDB []*models.PublicSuffixAnon
-	if err := s.db.Model(&foundInDB).Where("public_suffix in (?)", pg.In(notFoundInCache)).Select(); err != nil {
+	if err := s.db.Model(&foundInDB).Column("id", "public_suffix").Where("public_suffix in (?)", pg.In(notFoundInCache)).Select(); err != nil {
 		return err
 	}
 
@@ -483,7 +483,7 @@ func (s *Store) backpropTldAnon() error {
 
 	// fetch ids from database
 	var foundInDB []*models.TldAnon
-	if err := s.db.Model(&foundInDB).Where("tld in (?)", pg.In(notFoundInCache)).Select(); err != nil {
+	if err := s.db.Model(&foundInDB).Column("id", "tld").Where("tld in (?)", pg.In(notFoundInCache)).Select(); err != nil {
 		return err
 	}
 
