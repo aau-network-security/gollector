@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"fmt"
+	api "github.com/aau-network-security/gollector/api/proto"
 	testing2 "github.com/aau-network-security/gollector/testing"
 	"github.com/go-pg/pg"
 	lru "github.com/hashicorp/golang-lru"
@@ -58,8 +59,7 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 	copies_per_timestamp := 2
 	for i := 0; i < iterations; i++ {
 		for j := 0; j < copies_per_timestamp; j++ {
-			// this should only update the "last_seen" field of the current active zonefile entry
-			if err := s.StoreZoneEntry(muid, time.Now(), "example.org", true); err != nil {
+			if err := s.StoreZoneEntry(muid, time.Now(), "example.org", api.ZoneEntry_FIRST_SEEN); err != nil {
 				t.Fatalf("error while storing entry: %s", err)
 			}
 		}
@@ -79,7 +79,7 @@ func TestStore_StoreZoneEntry(t *testing.T) {
 		{1, &models.PublicSuffix{}, ""},
 		{1, &models.Apex{}, ""},
 		{uint(iterations) * uint(copies_per_timestamp), &models.ZonefileEntry{}, ""},
-		{1, &models.ZonefileEntry{}, "active = true"},
+		{1, &models.ZonefileEntry{}, ""},
 	}
 
 	for _, tc := range counts {
@@ -483,7 +483,7 @@ func TestInitWithExistingDb(t *testing.T) {
 	}
 
 	now := time.Now()
-	if err := s.StoreZoneEntry(muid, now, "example.org", true); err != nil {
+	if err := s.StoreZoneEntry(muid, now, "example.org", api.ZoneEntry_FIRST_SEEN); err != nil {
 		t.Fatalf("failed to store zone entry: %s", err)
 	}
 
@@ -581,7 +581,7 @@ func TestConditionalPostHooks(t *testing.T) {
 		t.Fatalf("failed to create store: %s", err)
 	}
 	ts := time.Now()
-	if err := s.StoreZoneEntry(muid, ts, "example.org", true); err != nil {
+	if err := s.StoreZoneEntry(muid, ts, "example.org", api.ZoneEntry_FIRST_SEEN); err != nil {
 		t.Fatalf("unexpected error while storing zone entry: %s", err)
 	}
 
@@ -807,7 +807,7 @@ func TestStoreDifferentEntries(t *testing.T) {
 		t.Fatalf("failed to create passive store entry: %s", err)
 	}
 	// zone entry
-	if err := s.StoreZoneEntry(muid, ts, domain, false); err != nil {
+	if err := s.StoreZoneEntry(muid, ts, domain, api.ZoneEntry_FIRST_SEEN); err != nil {
 		t.Fatalf("failed to create passive store entry: %s", err)
 	}
 	// log entry
@@ -882,13 +882,13 @@ func TestExistingAnonymized(t *testing.T) {
 	opts := Opts{
 		BatchSize: 10,
 		CacheOpts: CacheOpts{
-			LogSize:       1,
-			TLDSize:       1,
-			PSuffSize:     1,
-			ApexSize:      1,
-			FQDNSize:      1,
-			CertSize:      1,
-			ZoneEntrySize: 1,
+			LogSize:       5,
+			TLDSize:       5,
+			PSuffSize:     5,
+			ApexSize:      5,
+			FQDNSize:      5,
+			CertSize:      5,
+			ZoneEntrySize: 5,
 		},
 		AllowedInterval: 10,
 	}
@@ -904,19 +904,31 @@ func TestExistingAnonymized(t *testing.T) {
 	)
 	s = s.WithAnonymizer(a)
 
-	domain := "www.example.co.uk"
+	domainSuffix1 := "example.co.uk"
+	domainSuffix2 := "google.co.uk"
+	domainSuffix3 := "google.com"
 	ts := time.Now()
 
-	if err := s.StoreEntradaEntry(muid, domain, ts); err != nil {
-		t.Fatalf("failed to store entrada entry: %s", err)
+	for i := 0; i < 100; i++ {
+		for _, suffix := range []string{domainSuffix1, domainSuffix2, domainSuffix3} {
+			domain := fmt.Sprintf("%d.%s", i, suffix)
+			if err := s.StoreEntradaEntry(muid, domain, ts); err != nil {
+				t.Fatalf("failed to store entrada entry: %s", err)
+			}
+		}
 	}
 
 	if err := s.RunPostHooks(); err != nil {
 		t.Fatalf("failed to run post hooks: %s", err)
 	}
 
-	if err := s.StorePassiveEntry(muid, domain, ts); err != nil {
-		t.Fatalf("failed to run post hooks: %s", err)
+	for i := 0; i < 100; i++ {
+		for _, suffix := range []string{domainSuffix1, domainSuffix2, domainSuffix3} {
+			domain := fmt.Sprintf("%d.%s", i, suffix)
+			if err := s.StorePassiveEntry(muid, domain, ts); err != nil {
+				t.Fatalf("failed to run post hooks: %s", err)
+			}
+		}
 	}
 
 	if err := s.RunPostHooks(); err != nil {
@@ -928,13 +940,13 @@ func TestExistingNonAnonymized(t *testing.T) {
 	opts := Opts{
 		BatchSize: 10,
 		CacheOpts: CacheOpts{
-			LogSize:       1,
-			TLDSize:       1,
-			PSuffSize:     1,
-			ApexSize:      1,
-			FQDNSize:      1,
-			CertSize:      1,
-			ZoneEntrySize: 1,
+			LogSize:       5,
+			TLDSize:       5,
+			PSuffSize:     5,
+			ApexSize:      5,
+			FQDNSize:      5,
+			CertSize:      5,
+			ZoneEntrySize: 5,
 		},
 		AllowedInterval: 10,
 	}
@@ -950,19 +962,32 @@ func TestExistingNonAnonymized(t *testing.T) {
 	)
 	s = s.WithAnonymizer(a)
 
-	domain := "www.example.co.uk"
+	domainSuffix1 := "example.co.uk"
+	domainSuffix2 := "google.co.uk"
+	domainSuffix3 := "google.com"
+
 	ts := time.Now()
 
-	if err := s.StorePassiveEntry(muid, domain, ts); err != nil {
-		t.Fatalf("failed to run post hooks: %s", err)
+	for i := 0; i < 100; i++ {
+		for _, suffix := range []string{domainSuffix1, domainSuffix2, domainSuffix3} {
+			domain := fmt.Sprintf("%d.%s", i, suffix)
+			if err := s.StorePassiveEntry(muid, domain, ts); err != nil {
+				t.Fatalf("failed to run post hooks: %s", err)
+			}
+		}
 	}
 
 	if err := s.RunPostHooks(); err != nil {
 		t.Fatalf("failed to run post hooks: %s", err)
 	}
 
-	if err := s.StoreEntradaEntry(muid, domain, ts); err != nil {
-		t.Fatalf("failed to store entrada entry: %s", err)
+	for i := 0; i < 100; i++ {
+		for _, suffix := range []string{domainSuffix1, domainSuffix2, domainSuffix3} {
+			domain := fmt.Sprintf("%d.%s", i, suffix)
+			if err := s.StoreEntradaEntry(muid, domain, ts); err != nil {
+				t.Fatalf("failed to store entrada entry: %s", err)
+			}
+		}
 	}
 
 	if err := s.RunPostHooks(); err != nil {

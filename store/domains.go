@@ -5,12 +5,11 @@ import (
 	"fmt"
 	"github.com/aau-network-security/gollector/store/models"
 	"github.com/go-pg/pg"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
+	"github.com/weppos/publicsuffix-go/net/publicsuffix"
 	"net"
 	"strings"
-
-	"github.com/pkg/errors"
-	"github.com/weppos/publicsuffix-go/net/publicsuffix"
 )
 
 var (
