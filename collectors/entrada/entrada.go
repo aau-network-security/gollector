@@ -11,11 +11,11 @@ import (
 
 var (
 	DefaultOptions = Options{
-		Query: "SELECT qname, min(unixtime) FROM dns.queries GROUP BY qname",
+		Query: "SELECT qname, min(unixtime), max(unixtime), count(*) as count FROM dns.queries GROUP BY qname",
 	}
 )
 
-type EntryFunc func(fqdn string, t time.Time) error
+type EntryFunc func(fqdn string, minTime time.Time, maxTime time.Time, count int64) error
 
 type unixTime struct {
 	unix int64
@@ -26,8 +26,10 @@ func (ut *unixTime) toTime() time.Time {
 }
 
 type row struct {
-	qname    string
-	unixTime unixTime
+	qname       string
+	minUnixTime unixTime
+	maxUnixTime unixTime
+	count       int64
 }
 
 type Options struct {
@@ -53,10 +55,10 @@ func (src *Source) Process(ctx context.Context, entryFn EntryFunc, opts Options)
 	for rows.Next() {
 		count += 1
 		r := row{}
-		if err := rows.Scan(&r.qname, &r.unixTime.unix); err != nil {
+		if err := rows.Scan(&r.qname, &r.minUnixTime.unix, &r.maxUnixTime.unix, &r.count); err != nil {
 			return 0, err
 		}
-		if err := entryFn(r.qname, r.unixTime.toTime()); err != nil {
+		if err := entryFn(r.qname, r.minUnixTime.toTime(), r.maxUnixTime.toTime(), r.count); err != nil {
 			log.Warn().Msgf("failed to process qname: %s", err)
 		}
 	}

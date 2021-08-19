@@ -83,12 +83,15 @@ func main() {
 		log.Fatal().Msgf("failed to obtain stream to api: %s", err)
 	}
 
-	entryFn := func(fqdn string, t time.Time) error {
-		ts := t.UnixNano() / 1e06
+	entryFn := func(fqdn string, minTime time.Time, maxTime time.Time, count int64) error {
+		tsMin := minTime.UnixNano() / 1e06
+		tsMax := maxTime.UnixNano() / 1e06
 
 		ee := prt.EntradaEntry{
-			Fqdn:      fqdn,
-			Timestamp: ts,
+			Fqdn:         fqdn,
+			MinTimestamp: tsMin,
+			MaxTimestamp: tsMax,
+			Count:        count,
 		}
 		if bs.Send(ctx, &ee); err != nil {
 			log.Debug().Msgf("failed to store entry: %s", err)
@@ -125,8 +128,10 @@ func main() {
 		}
 		// pagination
 		type entradaEntryStr struct {
-			fqdn string
-			time time.Time
+			fqdn    string
+			minTime time.Time
+			maxTime time.Time
+			count   int64
 		}
 		q := make(chan entradaEntryStr)
 
@@ -135,11 +140,14 @@ func main() {
 			wg.Add(1)
 			defer wg.Done()
 			for el := range q {
-				ts := el.time.UnixNano() / 1e06
+				tsMin := el.minTime.UnixNano() / 1e06
+				tsMax := el.maxTime.UnixNano() / 1e06
 
 				ee := prt.EntradaEntry{
-					Fqdn:      el.fqdn,
-					Timestamp: ts,
+					Fqdn:         el.fqdn,
+					MinTimestamp: tsMin,
+					MaxTimestamp: tsMax,
+					Count:        el.count,
 				}
 				if bs.Send(ctx, &ee); err != nil {
 					log.Debug().Msgf("failed to store entry: %s", err)
@@ -147,17 +155,19 @@ func main() {
 			}
 		}()
 
-		entryFn = func(fqdn string, t time.Time) error {
+		entryFn = func(fqdn string, minTime time.Time, maxTime time.Time, count int64) error {
 			q <- entradaEntryStr{
-				fqdn: fqdn,
-				time: t,
+				fqdn:    fqdn,
+				minTime: minTime,
+				maxTime: maxTime,
+				count:   count,
 			}
 			return nil
 		}
 
 		for {
 			eopts := entrada.Options{
-				Query: fmt.Sprintf("SELECT qname, min(unixtime) FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname ORDER BY qname LIMIT %d OFFSET %d", startTimeNano, endTimeNano, conf.Limit, offset),
+				Query: fmt.Sprintf("SELECT qname, min(unixtime), max(unixtime), count(*) as count FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname ORDER BY qname LIMIT %d OFFSET %d", startTimeNano, endTimeNano, conf.Limit, offset),
 			}
 			log.Debug().Msgf("Querying impala db for %d rows with offset %d", conf.Limit, offset)
 			c, err := src.Process(ctx, entryFn, eopts)

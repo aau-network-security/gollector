@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func (s *Store) StoreEntradaEntry(muid string, fqdn string, t time.Time) error {
+func (s *Store) StoreEntradaEntry(muid string, fqdn string, tsMin time.Time, tsMax time.Time, count int64) error {
 	s.m.Lock()
 	defer s.m.Unlock()
 
@@ -31,7 +31,9 @@ func (s *Store) StoreEntradaEntry(muid string, fqdn string, t time.Time) error {
 
 	ee := &entradaentrystruct{
 		ee: &models.EntradaEntry{
-			FirstSeen: t,
+			FirstSeen: tsMin,
+			LastSeen:  tsMax,
+			Count:     uint(count),
 			StageID:   sid,
 		},
 		fqdn: domain.fqdn.anon,

@@ -128,6 +128,8 @@ type EntradaEntry struct {
 	ID        uint `gorm:"primary_key" pg:",pk"`
 	FqdnID    uint
 	FirstSeen time.Time
+	LastSeen  time.Time
+	Count     uint
 	StageID   uint
 }
 

@@ -38,14 +38,15 @@ func (s *Server) StoreEntradaEntry(str api.EntradaApi_StoreEntradaEntryServer) e
 		}
 
 		for _, ee := range batch.EntradaEntries {
-			ts := timeFromUnix(ee.Timestamp)
+			tsMin := timeFromUnix(ee.MinTimestamp)
+			tsMax := timeFromUnix(ee.MaxTimestamp)
 
 			res := &api.Result{
 				Ok:    true,
 				Error: "",
 			}
 
-			if err := s.Store.StoreEntradaEntry(muid, ee.Fqdn, ts); err != nil {
+			if err := s.Store.StoreEntradaEntry(muid, ee.Fqdn, tsMin, tsMax, ee.Count); err != nil {
 				s.Log.Log(err, app.LogOptions{
 					Msg: "failed to store entrada entry",
 					Tags: map[string]string{
