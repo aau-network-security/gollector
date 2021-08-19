@@ -83,7 +83,7 @@ func main() {
 		log.Fatal().Msgf("failed to obtain stream to api: %s", err)
 	}
 
-	entryFn := func(fqdn string, minTime time.Time, maxTime time.Time, count int64) error {
+	entryFn := func(fqdn string, minTime time.Time, maxTime time.Time) error {
 		tsMin := minTime.UnixNano() / 1e06
 		tsMax := maxTime.UnixNano() / 1e06
 
@@ -91,7 +91,6 @@ func main() {
 			Fqdn:         fqdn,
 			MinTimestamp: tsMin,
 			MaxTimestamp: tsMax,
-			Count:        count,
 		}
 		if bs.Send(ctx, &ee); err != nil {
 			log.Debug().Msgf("failed to store entry: %s", err)
@@ -131,7 +130,6 @@ func main() {
 			fqdn    string
 			minTime time.Time
 			maxTime time.Time
-			count   int64
 		}
 		q := make(chan entradaEntryStr)
 
@@ -147,7 +145,6 @@ func main() {
 					Fqdn:         el.fqdn,
 					MinTimestamp: tsMin,
 					MaxTimestamp: tsMax,
-					Count:        el.count,
 				}
 				if bs.Send(ctx, &ee); err != nil {
 					log.Debug().Msgf("failed to store entry: %s", err)
@@ -155,19 +152,18 @@ func main() {
 			}
 		}()
 
-		entryFn = func(fqdn string, minTime time.Time, maxTime time.Time, count int64) error {
+		entryFn = func(fqdn string, minTime time.Time, maxTime time.Time) error {
 			q <- entradaEntryStr{
 				fqdn:    fqdn,
 				minTime: minTime,
 				maxTime: maxTime,
-				count:   count,
 			}
 			return nil
 		}
 
 		for {
 			eopts := entrada.Options{
-				Query: fmt.Sprintf("SELECT qname, min(unixtime), max(unixtime), count(*) as count FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname ORDER BY qname LIMIT %d OFFSET %d", startTimeNano, endTimeNano, conf.Limit, offset),
+				Query: fmt.Sprintf("SELECT qname, min(unixtime), max(unixtime) FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname ORDER BY qname LIMIT %d OFFSET %d", startTimeNano, endTimeNano, conf.Limit, offset),
 			}
 			log.Debug().Msgf("Querying impala db for %d rows with offset %d", conf.Limit, offset)
 			c, err := src.Process(ctx, entryFn, eopts)
@@ -184,7 +180,7 @@ func main() {
 		wg.Wait()
 	} else {
 		eopts := entrada.Options{
-			Query: fmt.Sprintf("SELECT qname, min(unixtime), max(unixtime), count(*) FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname"),
+			Query: fmt.Sprintf("SELECT qname, min(unixtime), max(unixtime) FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname"),
 		}
 		c, err := src.Process(ctx, entryFn, eopts)
 		if err != nil {

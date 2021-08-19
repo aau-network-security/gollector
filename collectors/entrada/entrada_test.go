@@ -50,9 +50,9 @@ help.me,4,4,1
 	s = s.WithAnonymizer(a)
 
 	c := 0
-	entryFn := func(fqdn string, minTime time.Time, maxTime time.Time, count int64) error {
+	entryFn := func(fqdn string, minTime time.Time, maxTime time.Time) error {
 		c++
-		return s.StoreEntradaEntry(muid, fqdn, minTime, maxTime, count)
+		return s.StoreEntradaEntry(muid, fqdn, minTime, maxTime)
 	}
 
 	// execute test

@@ -46,7 +46,7 @@ func (s *Server) StoreEntradaEntry(str api.EntradaApi_StoreEntradaEntryServer) e
 				Error: "",
 			}
 
-			if err := s.Store.StoreEntradaEntry(muid, ee.Fqdn, tsMin, tsMax, ee.Count); err != nil {
+			if err := s.Store.StoreEntradaEntry(muid, ee.Fqdn, tsMin, tsMax); err != nil {
 				s.Log.Log(err, app.LogOptions{
 					Msg: "failed to store entrada entry",
 					Tags: map[string]string{

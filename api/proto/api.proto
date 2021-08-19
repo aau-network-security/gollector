@@ -106,7 +106,6 @@ message EntradaEntry {
     string Fqdn = 1;
     int64 MinTimestamp = 2;
     int64 MaxTimestamp = 3;
-    int64 Count = 4;
 }
 
 message Offset {

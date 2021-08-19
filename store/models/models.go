@@ -129,7 +129,6 @@ type EntradaEntry struct {
 	FqdnID    uint
 	FirstSeen time.Time
 	LastSeen  time.Time
-	Count     uint
 	StageID   uint
 }
 

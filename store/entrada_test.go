@@ -28,7 +28,7 @@ func TestStoreEntradaEntry_NonExistingUnanonymized(t *testing.T) {
 	}
 	for _, fqdn := range fqdns {
 		ts := time.Now()
-		if err := s.StoreEntradaEntry(muid, fqdn, ts); err != nil {
+		if err := s.StoreEntradaEntry(muid, fqdn, ts, ts); err != nil {
 			t.Fatalf("failed to store ENTRADA entry: %s", err)
 		}
 	}
@@ -132,7 +132,7 @@ func TestStoreEntradaEntry_ExistingUnanonymized(t *testing.T) {
 	}
 	for _, fqdn := range fqdns {
 		ts := time.Now()
-		if err := s.StoreEntradaEntry(muid, fqdn, ts); err != nil {
+		if err := s.StoreEntradaEntry(muid, fqdn, ts, ts); err != nil {
 			t.Fatalf("failed to store ENTRADA entry: %s", err)
 		}
 	}

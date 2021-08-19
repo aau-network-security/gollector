@@ -803,7 +803,7 @@ func TestStoreDifferentEntries(t *testing.T) {
 		t.Fatalf("failed to create passive store entry: %s", err)
 	}
 	// ENTRADA entry
-	if err := s.StoreEntradaEntry(muid, domain, ts); err != nil {
+	if err := s.StoreEntradaEntry(muid, domain, ts, ts); err != nil {
 		t.Fatalf("failed to create passive store entry: %s", err)
 	}
 	// zone entry
@@ -912,7 +912,7 @@ func TestExistingAnonymized(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		for _, suffix := range []string{domainSuffix1, domainSuffix2, domainSuffix3} {
 			domain := fmt.Sprintf("%d.%s", i, suffix)
-			if err := s.StoreEntradaEntry(muid, domain, ts); err != nil {
+			if err := s.StoreEntradaEntry(muid, domain, ts, ts); err != nil {
 				t.Fatalf("failed to store entrada entry: %s", err)
 			}
 		}
@@ -984,7 +984,7 @@ func TestExistingNonAnonymized(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		for _, suffix := range []string{domainSuffix1, domainSuffix2, domainSuffix3} {
 			domain := fmt.Sprintf("%d.%s", i, suffix)
-			if err := s.StoreEntradaEntry(muid, domain, ts); err != nil {
+			if err := s.StoreEntradaEntry(muid, domain, ts, ts); err != nil {
 				t.Fatalf("failed to store entrada entry: %s", err)
 			}
 		}
