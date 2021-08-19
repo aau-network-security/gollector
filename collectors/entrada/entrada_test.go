@@ -13,20 +13,20 @@ func Test(t *testing.T) {
 	// create mock ENTRADA source
 	expected := 5
 	opts := Options{
-		Query: fmt.Sprintf("SELECT qname, unixtime FROM dns.queries LIMIT %d", expected),
+		Query: fmt.Sprintf("SELECT 1"), // it doesn't matter what the query is here
 	}
 
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("failed to create mock SQL")
 	}
-	csvString := `www.example.co.uk,1 
-a,2
-a,3
-1.2.3.4,3
-help.me,4
+	csvString := `www.example.co.uk,1,1,1 
+a,2,2,1
+a,3,3,1
+1.2.3.4,3,3,1
+help.me,4,4,1
 `
-	mock.ExpectQuery(opts.Query).WillReturnRows(sqlmock.NewRows([]string{"a", "b"}).FromCSVString(csvString))
+	mock.ExpectQuery(opts.Query).WillReturnRows(sqlmock.NewRows([]string{"a", "b", "c", "d"}).FromCSVString(csvString))
 
 	src := Source{
 		db: db,
@@ -50,9 +50,9 @@ help.me,4
 	s = s.WithAnonymizer(a)
 
 	c := 0
-	entryFn := func(qname string, unixTime time.Time) error {
+	entryFn := func(fqdn string, minTime time.Time, maxTime time.Time, count int64) error {
 		c++
-		return s.StoreEntradaEntry(muid, qname, unixTime)
+		return s.StoreEntradaEntry(muid, fqdn, minTime, maxTime, count)
 	}
 
 	// execute test

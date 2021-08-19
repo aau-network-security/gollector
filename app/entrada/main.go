@@ -184,7 +184,7 @@ func main() {
 		wg.Wait()
 	} else {
 		eopts := entrada.Options{
-			Query: fmt.Sprintf("SELECT qname, min(unixtime) FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname"),
+			Query: fmt.Sprintf("SELECT qname, min(unixtime), max(unixtime), count(*) FROM dns.queries WHERE unixtime >= %d AND unixtime < %d GROUP BY qname"),
 		}
 		c, err := src.Process(ctx, entryFn, eopts)
 		if err != nil {
