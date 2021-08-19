@@ -513,6 +513,7 @@ func (s *Store) forpropTld() {
 			// update anonymized TLD if exists
 			tldstr := s.batchEntities.tldAnonByName[str.domain.tld.anon]
 			if tldstr.obj != nil {
+				log.Debug().Msgf("found anonymized model for tld '%s'", str.domain.tld.normal)
 				tldAnon := tldstr.obj.(*models.TldAnon)
 				tldAnon.TldID = res.ID
 				s.updates.tldAnon = append(s.updates.tldAnon, tldAnon)
@@ -541,6 +542,7 @@ func (s *Store) forpropPublicSuffix() {
 			// update anonymized public suffix if exists
 			psuffixstr := s.batchEntities.publicSuffixAnonByName[str.domain.publicSuffix.anon]
 			if psuffixstr.obj != nil {
+				log.Debug().Msgf("found anonymized model for public suffix '%s'", str.domain.publicSuffix.normal)
 				psuffixAnon := psuffixstr.obj.(*models.PublicSuffixAnon)
 				psuffixAnon.PublicSuffixID = res.ID
 				s.updates.publicSuffixAnon = append(s.updates.publicSuffixAnon, psuffixAnon)
@@ -574,6 +576,7 @@ func (s *Store) forpropApex() {
 			// update anonymized apex if exists
 			apexstr := s.batchEntities.apexByNameAnon[str.domain.apex.anon]
 			if apexstr.obj != nil {
+				log.Debug().Msgf("found anonymized model for apex '%s'", str.domain.apex.normal)
 				apexAnon := apexstr.obj.(*models.ApexAnon)
 				apexAnon.ApexID = res.ID
 				s.updates.apexesAnon[res.ID] = apexAnon
@@ -593,10 +596,6 @@ func (s *Store) forpropFqdn() {
 			suffix := suffixstr.obj.(*models.PublicSuffix)
 
 			apexstr := s.batchEntities.apexByName[str.domain.apex.normal]
-			// TODO: remove (for debugging purposes only)!
-			if apexstr.obj == nil {
-				log.Debug().Msgf("for fqdn '%s', could not find the apex '%s' in the entity batch", str.domain.fqdn, str.domain.apex.normal)
-			}
 			apex := apexstr.obj.(*models.Apex)
 
 			res := &models.Fqdn{
@@ -615,6 +614,7 @@ func (s *Store) forpropFqdn() {
 			// update anonymized fqdn if exists
 			fqdnstr := s.batchEntities.fqdnByNameAnon[str.domain.fqdn.anon]
 			if fqdnstr.obj != nil {
+				log.Debug().Msgf("found anonymized model for fqdn '%s'", str.domain.fqdn.normal)
 				fqdnAnon := fqdnstr.obj.(*models.FqdnAnon)
 				fqdnAnon.FqdnID = res.ID
 				s.updates.fqdnsAnon = append(s.updates.fqdnsAnon, fqdnAnon)
@@ -635,7 +635,9 @@ func (s *Store) forpropTldAnon() {
 
 			tldstr := s.batchEntities.tldByName[str.domain.tld.normal]
 
+			// add foreign key to unanonymized tld
 			if tldstr.obj != nil {
+				log.Debug().Msgf("found unanonymized model for tld '%s'", str.domain.tld.anon)
 				tld := tldstr.obj.(*models.Tld)
 				res.TldID = tld.ID
 			}
@@ -663,8 +665,10 @@ func (s *Store) forpropPublicSuffixAnon() {
 				},
 			}
 
+			// add foreign key to unanonymized public suffix
 			psuffixstr := s.batchEntities.publicSuffixByName[str.domain.publicSuffix.normal]
 			if psuffixstr.obj != nil {
+				log.Debug().Msgf("found unanonymized model for public suffix '%s'", str.domain.publicSuffix.anon)
 				psuffix := psuffixstr.obj.(*models.PublicSuffix)
 				res.PublicSuffixID = psuffix.ID
 			}
@@ -693,8 +697,10 @@ func (s *Store) forpropApexAnon() {
 				},
 			}
 
+			// add foreign key to unanonymized apex
 			apexstr := s.batchEntities.apexByName[str.domain.apex.normal]
 			if apexstr.obj != nil {
+				log.Debug().Msgf("found unanonymized model for apex '%s'", str.domain.apex.anon)
 				apex := apexstr.obj.(*models.Apex)
 				res.ApexID = apex.ID
 			}
@@ -725,8 +731,10 @@ func (s *Store) forpropFqdnAnon() {
 				},
 			}
 
+			// add foreign key to unanonymized fqdn
 			fqdnstr := s.batchEntities.fqdnByName[str.domain.fqdn.normal]
 			if fqdnstr.obj != nil {
+				log.Debug().Msgf("found unanonymized model for fqdn '%s'", str.domain.fqdn.anon)
 				fqdn := fqdnstr.obj.(*models.Fqdn)
 				res.FqdnID = fqdn.ID
 			}

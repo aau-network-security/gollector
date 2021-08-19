@@ -87,6 +87,7 @@ func (s *Store) StoreLogEntry(muid string, entry LogEntry) error {
 		if err != nil {
 			continue
 		}
+		s.anonymizer.Anonymize(domain)
 
 		s.batchEntities.AddFqdn(domain, false)
 	}

@@ -25,6 +25,7 @@ func (s *Store) StorePassiveEntry(muid string, query string, t time.Time) error 
 	if err != nil {
 		return errors.Wrap(err, "failed to create domain")
 	}
+	s.anonymizer.Anonymize(domain)
 
 	s.batchEntities.AddFqdn(domain, false)
 

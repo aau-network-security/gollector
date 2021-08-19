@@ -22,6 +22,7 @@ func (s *Store) StoreZoneEntry(muid string, t time.Time, fqdn string, zoneEntryT
 	if err != nil {
 		return err
 	}
+	s.anonymizer.Anonymize(domain)
 
 	s.influxService.ZoneCount(domain.tld.normal)
 

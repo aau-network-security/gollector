@@ -909,7 +909,7 @@ func TestExistingAnonymized(t *testing.T) {
 	domainSuffix3 := "google.com"
 	ts := time.Now()
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 2; i++ {
 		for _, suffix := range []string{domainSuffix1, domainSuffix2, domainSuffix3} {
 			domain := fmt.Sprintf("%d.%s", i, suffix)
 			if err := s.StoreEntradaEntry(muid, domain, ts); err != nil {
@@ -922,7 +922,7 @@ func TestExistingAnonymized(t *testing.T) {
 		t.Fatalf("failed to run post hooks: %s", err)
 	}
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 2; i++ {
 		for _, suffix := range []string{domainSuffix1, domainSuffix2, domainSuffix3} {
 			domain := fmt.Sprintf("%d.%s", i, suffix)
 			if err := s.StorePassiveEntry(muid, domain, ts); err != nil {
@@ -968,7 +968,7 @@ func TestExistingNonAnonymized(t *testing.T) {
 
 	ts := time.Now()
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 2; i++ {
 		for _, suffix := range []string{domainSuffix1, domainSuffix2, domainSuffix3} {
 			domain := fmt.Sprintf("%d.%s", i, suffix)
 			if err := s.StorePassiveEntry(muid, domain, ts); err != nil {
@@ -981,7 +981,7 @@ func TestExistingNonAnonymized(t *testing.T) {
 		t.Fatalf("failed to run post hooks: %s", err)
 	}
 
-	for i := 0; i < 100; i++ {
+	for i := 0; i < 2; i++ {
 		for _, suffix := range []string{domainSuffix1, domainSuffix2, domainSuffix3} {
 			domain := fmt.Sprintf("%d.%s", i, suffix)
 			if err := s.StoreEntradaEntry(muid, domain, ts); err != nil {
