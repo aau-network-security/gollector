@@ -51,50 +51,106 @@ type BatchEntities struct {
 }
 
 func (be *BatchEntities) AddFqdn(domain *domain, anon bool) {
-	be.fqdnByName[domain.fqdn.normal] = &domainstruct{
-		domain: domain,
-		create: !anon,
+	existingFqdn, ok := be.fqdnByName[domain.fqdn.normal]
+	if ok {
+		existingFqdn.create = existingFqdn.create || !anon
+		be.fqdnByName[domain.fqdn.normal] = existingFqdn
+	} else {
+		be.fqdnByName[domain.fqdn.normal] = &domainstruct{
+			domain: domain,
+			create: !anon,
+		}
 	}
-	be.fqdnByNameAnon[domain.fqdn.anon] = &domainstruct{
-		domain: domain,
-		create: anon,
+
+	existingFqdnAnon, ok := be.fqdnByNameAnon[domain.fqdn.anon]
+	if ok {
+		existingFqdnAnon.create = existingFqdnAnon.create || anon
+		be.fqdnByNameAnon[domain.fqdn.anon] = existingFqdnAnon
+	} else {
+		be.fqdnByNameAnon[domain.fqdn.anon] = &domainstruct{
+			domain: domain,
+			create: anon,
+		}
 	}
+
 	be.AddApex(domain, anon)
 }
 
 func (be *BatchEntities) AddApex(domain *domain, anon bool) {
-	be.apexByName[domain.apex.normal] = &domainstruct{
-		domain: domain,
-		create: !anon,
+	existingApex, ok := be.apexByName[domain.apex.normal]
+	if ok {
+		existingApex.create = existingApex.create || !anon
+		be.apexByName[domain.apex.normal] = existingApex
+	} else {
+		be.apexByName[domain.apex.normal] = &domainstruct{
+			domain: domain,
+			create: !anon,
+		}
 	}
-	be.apexByNameAnon[domain.apex.anon] = &domainstruct{
-		domain: domain,
-		create: anon,
+
+	existingApexAnon, ok := be.apexByNameAnon[domain.apex.anon]
+	if ok {
+		existingApexAnon.create = existingApexAnon.create || anon
+		be.apexByNameAnon[domain.apex.anon] = existingApexAnon
+	} else {
+		be.apexByNameAnon[domain.apex.anon] = &domainstruct{
+			domain: domain,
+			create: anon,
+		}
 	}
+
 	be.AddPublicSuffix(domain, anon)
 
 }
 
 func (be *BatchEntities) AddPublicSuffix(domain *domain, anon bool) {
-	be.publicSuffixByName[domain.publicSuffix.normal] = &domainstruct{
-		domain: domain,
-		create: !anon,
+	existingPublicSuffix, ok := be.publicSuffixByName[domain.publicSuffix.normal]
+	if ok {
+		existingPublicSuffix.create = existingPublicSuffix.create || !anon
+		be.publicSuffixByName[domain.publicSuffix.normal] = existingPublicSuffix
+	} else {
+		be.publicSuffixByName[domain.publicSuffix.normal] = &domainstruct{
+			domain: domain,
+			create: !anon,
+		}
 	}
-	be.publicSuffixAnonByName[domain.publicSuffix.anon] = &domainstruct{
-		domain: domain,
-		create: anon,
+
+	existingPublicSuffixAnon, ok := be.publicSuffixAnonByName[domain.publicSuffix.anon]
+	if ok {
+		existingPublicSuffixAnon.create = existingPublicSuffixAnon.create || anon
+		be.publicSuffixAnonByName[domain.publicSuffix.anon] = existingPublicSuffixAnon
+	} else {
+		be.publicSuffixAnonByName[domain.publicSuffix.anon] = &domainstruct{
+			domain: domain,
+			create: anon,
+		}
 	}
+
 	be.AddTld(domain, anon)
 }
 
 func (be *BatchEntities) AddTld(domain *domain, anon bool) {
-	be.tldByName[domain.tld.normal] = &domainstruct{
-		domain: domain,
-		create: !anon,
+	existingTld, ok := be.tldByName[domain.tld.normal]
+	if ok {
+		// creation has precedence over not creating
+		existingTld.create = existingTld.create || !anon
+		be.tldByName[domain.tld.normal] = existingTld
+	} else {
+		be.tldByName[domain.tld.normal] = &domainstruct{
+			domain: domain,
+			create: !anon,
+		}
 	}
-	be.tldAnonByName[domain.tld.anon] = &domainstruct{
-		domain: domain,
-		create: anon,
+
+	existingTldAnon, ok := be.tldAnonByName[domain.tld.anon]
+	if ok {
+		existingTldAnon.create = existingTldAnon.create || anon
+		be.tldAnonByName[domain.tld.anon] = existingTldAnon
+	} else {
+		be.tldAnonByName[domain.tld.anon] = &domainstruct{
+			domain: domain,
+			create: anon,
+		}
 	}
 }
 

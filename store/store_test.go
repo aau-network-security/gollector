@@ -994,3 +994,45 @@ func TestExistingNonAnonymized(t *testing.T) {
 		t.Fatalf("failed to run post hooks: %s", err)
 	}
 }
+
+func TestAnonAndUnanonInSameBatch(t *testing.T) {
+	opts := Opts{
+		BatchSize: 10,
+		CacheOpts: CacheOpts{
+			LogSize:       5,
+			TLDSize:       5,
+			PSuffSize:     5,
+			ApexSize:      5,
+			FQDNSize:      5,
+			CertSize:      5,
+			ZoneEntrySize: 5,
+		},
+		AllowedInterval: 10,
+	}
+	s, _, muid, err := OpenStore(TestConfig, opts)
+	if err != nil {
+		t.Fatalf("failed to open store: %s", err)
+	}
+	a := NewAnonymizer(
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+		NewSha256LabelAnonymizer(""),
+	)
+	s = s.WithAnonymizer(a)
+
+	// this is anonymized
+	ts := time.Now()
+	if s.StoreEntradaEntry(muid, "www.example.org", ts, ts); err != nil {
+		t.Fatalf("unexpected error while store ENTRADA entry: %s", err)
+	}
+
+	// this is unanonymized
+	if s.StorePassiveEntry(muid, "www.example.org", ts); err != nil {
+		t.Fatalf("unexpected error while store passive entry: %s", err)
+	}
+
+	if err := s.RunPostHooks(); err != nil {
+		t.Fatalf("unexpected error while storing post hooks: %s", err)
+	}
+}
